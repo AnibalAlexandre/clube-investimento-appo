@@ -1,7 +1,12 @@
-FROM oven/bun:1-alpine
+FROM python:3.11-slim
+
 WORKDIR /app
-COPY package.json bun.lockb* ./
-RUN bun install --production || true
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
-EXPOSE 3000
-CMD ["bun", "run", "server.ts"]
+
+EXPOSE 10000
+
+CMD ["python", "app.py"]
