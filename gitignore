@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+appo.db
+appo.db-wal
+appo.db-shm
+.streamlit/secrets.toml
+.DS_Store
+*.log
