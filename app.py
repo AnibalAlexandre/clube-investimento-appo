@@ -28,6 +28,75 @@ st.set_page_config(
 )
 
 # =========================================================
+# IDENTIDADE VISUAL (CSS + logótipo em SVG, sem depender de imagens externas)
+# =========================================================
+CSS_APPO = """
+<style>
+div[data-testid="stMetric"] {
+    background: linear-gradient(135deg, #ffffff 0%, #F1F4F9 100%);
+    border: 1px solid #E2E8F0;
+    border-left: 4px solid #0B3D91;
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.appo-hero {
+    background: linear-gradient(120deg, #0B2E5E 0%, #0B3D91 55%, #1B6FBF 100%);
+    color: #FFFFFF;
+    border-radius: 14px;
+    padding: 26px 30px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+.appo-hero h1 { margin: 0; font-size: 1.7rem; line-height: 1.2; }
+.appo-hero p { margin: 4px 0 0 0; opacity: 0.85; font-size: 0.92rem; }
+.appo-badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.16);
+    padding: 3px 11px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    margin-top: 10px;
+    letter-spacing: 0.3px;
+}
+.appo-sidebar-title { display:flex; align-items:center; gap:10px; margin-bottom: 2px; }
+.appo-sidebar-title span { font-weight: 700; font-size: 1.15rem; color: #0B3D91; }
+</style>
+"""
+st.markdown(CSS_APPO, unsafe_allow_html=True)
+
+
+def logo_svg(tamanho: int = 42) -> str:
+    """Logótipo abstracto (onda/pomba), desenhado em SVG — não depende de nenhuma imagem externa."""
+    return f"""
+    <svg width="{tamanho}" height="{tamanho}" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 40 C18 22,34 15,60 6 C48 18,40 24,36 34 C46 32,54 34,60 40
+                 C48 38,40 40,32 46 C26 50,16 52,4 40 Z" fill="#E8B84B" opacity="0.9"/>
+        <path d="M4 40 C18 27,30 22,52 14 C42 22,34 28,30 36 C38 35,44 37,48 41
+                 C38 39,30 41,24 46 C18 50,10 50,4 40 Z" fill="#FFFFFF"/>
+    </svg>
+    """
+
+
+def hero(titulo: str, subtitulo: str, badge: str = "🇦🇴 BODIVA · Kwanzas (Kz)"):
+    st.markdown(
+        f"""
+        <div class="appo-hero">
+            {logo_svg(46)}
+            <div>
+                <h1>{titulo}</h1>
+                <p>{subtitulo}</p>
+                <span class="appo-badge">{badge}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =========================================================
 # CONSTANTES E SEGREDOS
 # =========================================================
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -65,6 +134,43 @@ def pct(valor) -> str:
         return f"{float(valor):+.2f}%"
     except (TypeError, ValueError):
         return "0.00%"
+
+
+def cor_variacao(v) -> str:
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return ""
+    if v > 0:
+        return "color:#16A34A; font-weight:600;"
+    if v < 0:
+        return "color:#DC2626; font-weight:600;"
+    return "color:#6B7280;"
+
+
+def tabela_cotacoes_estilizada(df_activos: pd.DataFrame):
+    """Recebe um DataFrame com colunas ticker/nome/tipo/preco/variacao e devolve um
+    pandas Styler pronto a passar ao st.dataframe, com o aspecto de um home broker:
+    ticker em monospace, preço formatado em Kz, variação a verde/vermelho."""
+    df_disp = df_activos[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
+    df_disp["mercado"] = "🇦🇴 BODIVA"
+    df_disp = df_disp.rename(
+        columns={
+            "ticker": "Ticker",
+            "nome": "Activo",
+            "tipo": "Tipo",
+            "preco": "Preço",
+            "variacao": "Variação",
+            "mercado": "Mercado",
+        }
+    )
+    df_disp = df_disp[["Ticker", "Activo", "Tipo", "Mercado", "Preço", "Variação"]]
+    return (
+        df_disp.style.format({"Preço": kz, "Variação": pct})
+        .applymap(cor_variacao, subset=["Variação"])
+        .set_properties(subset=["Ticker"], **{"font-family": "monospace", "letter-spacing": "0.4px"})
+        .set_properties(subset=["Preço"], **{"font-weight": "600"})
+    )
 
 
 def hash_password(password: str) -> str:
@@ -162,11 +268,12 @@ de preferência para reforçar a posição, em vez de a reduzir. Ao contrário d
 a própria BODIVA (enquanto empresa cotada) manteve-se resiliente ao anúncio desta OPV.
 """
 
+# (ticker, nome, tipo, preco, variacao)
 ACTIVOS_INICIAIS = [
-    ("Unitel", "Ação", 38000.0, 0.0),
-    ("Standard Bank Angola", "Ação", 45000.0, 0.0),
-    ("Banco de Fomento Angola (BFA)", "Ação", 12500.0, 0.0),
-    ("BODIVA", "Ação", 82400.0, 0.0),
+    ("UNTLAAAA", "Unitel", "Ação", 38000.0, 0.0),
+    ("SBAAAAAA", "Standard Bank Angola", "Ação", 45000.0, 0.0),
+    ("BFAAAAAA", "Banco de Fomento Angola (BFA)", "Ação", 12500.0, 0.0),
+    ("BDVAAAAA", "BODIVA", "Ação", 82400.0, 0.0),
 ]
 
 ARTIGOS_INICIAIS = [
@@ -178,7 +285,7 @@ ARTIGOS_INICIAIS = [
 ]
 
 # =========================================================
-# BASE DE DADOS (PostgreSQL via Neon)
+# BASE DE DADOS (PostgreSQL via Neon) — com reconexão automática
 # =========================================================
 @st.cache_resource
 def obter_ligacao():
@@ -187,22 +294,38 @@ def obter_ligacao():
     return conn
 
 
+def _com_reconexao(func):
+    """Corre func(conn); se a ligação tiver sido fechada pelo servidor (comum em bases
+    de dados gratuitas como a Neon após inactividade), reconecta e tenta uma vez mais."""
+    try:
+        return func(obter_ligacao())
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        obter_ligacao.clear()
+        return func(obter_ligacao())
+
+
 def executar(sql, parametros=None):
-    conn = obter_ligacao()
-    with conn.cursor() as cur:
-        cur.execute(sql, parametros or ())
+    def _run(conn):
+        with conn.cursor() as cur:
+            cur.execute(sql, parametros or ())
+
+    _com_reconexao(_run)
 
 
 def consultar_um(sql, parametros=None):
-    conn = obter_ligacao()
-    with conn.cursor() as cur:
-        cur.execute(sql, parametros or ())
-        return cur.fetchone()
+    def _run(conn):
+        with conn.cursor() as cur:
+            cur.execute(sql, parametros or ())
+            return cur.fetchone()
+
+    return _com_reconexao(_run)
 
 
 def consultar_df(sql, parametros=None) -> pd.DataFrame:
-    conn = obter_ligacao()
-    return pd.read_sql_query(sql, conn, params=parametros or ())
+    def _run(conn):
+        return pd.read_sql_query(sql, conn, params=parametros or ())
+
+    return _com_reconexao(_run)
 
 
 def inicializar_bd():
@@ -275,6 +398,8 @@ def inicializar_bd():
         )
         """
     )
+    # Migração: garante a coluna 'ticker' mesmo em bases de dados criadas antes desta versão.
+    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS ticker TEXT NOT NULL DEFAULT ''")
     executar(
         """
         CREATE TABLE IF NOT EXISTS artigos (
@@ -320,10 +445,17 @@ def inicializar_bd():
         )
 
     if consultar_um("SELECT COUNT(*) FROM activos")[0] == 0:
-        for nome, tipo, preco, var in ACTIVOS_INICIAIS:
+        for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
             executar(
-                "INSERT INTO activos (nome, tipo, preco, variacao) VALUES (%s, %s, %s, %s)",
-                (nome, tipo, preco, var),
+                "INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)",
+                (nome, tipo, preco, var, ticker),
+            )
+    else:
+        # Preenche o ticker em activos já existentes (criados antes desta versão) que ainda não o têm.
+        for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
+            executar(
+                "UPDATE activos SET ticker = %s WHERE nome = %s AND (ticker IS NULL OR ticker = '')",
+                (ticker, nome),
             )
 
     if consultar_um("SELECT COUNT(*) FROM artigos")[0] == 0:
@@ -431,7 +563,7 @@ def obter_movimentos() -> pd.DataFrame:
 # ---------------- Activos ----------------
 def obter_activos() -> pd.DataFrame:
     return consultar_df(
-        "SELECT id, nome, tipo, preco, variacao, actualizado_em FROM activos ORDER BY nome"
+        "SELECT id, ticker, nome, tipo, preco, variacao, actualizado_em FROM activos ORDER BY nome"
     )
 
 
@@ -444,9 +576,10 @@ def substituir_activos(df: pd.DataFrame):
         tipo = str(linha.get("tipo", "Ação")).strip() or "Ação"
         preco = float(linha.get("preco", 0) or 0)
         variacao = float(linha.get("variacao", 0) or 0)
+        ticker = str(linha.get("ticker", "") or "").strip().upper()
         executar(
-            "INSERT INTO activos (nome, tipo, preco, variacao) VALUES (%s, %s, %s, %s)",
-            (nome, tipo, preco, variacao),
+            "INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)",
+            (nome, tipo, preco, variacao, ticker),
         )
 
 
@@ -564,8 +697,18 @@ if st.session_state["autenticado"] and st.session_state["login_timestamp"]:
 def pagina_login():
     col_esq, col_centro, col_dir = st.columns([1, 1.4, 1])
     with col_centro:
-        st.markdown("## 📊 Clube de Investimento APPO")
-        st.caption("Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios")
+        st.markdown(
+            f"""<div style="text-align:center; margin-top:24px;">{logo_svg(64)}</div>""",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<h2 style='text-align:center; margin-bottom:0;'>Clube de Investimento APPO</h2>",
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "<div style='text-align:center;'>Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios</div>",
+            unsafe_allow_html=True,
+        )
         st.markdown("#### Acesso reservado a sócios")
         with st.form("form_login"):
             email = st.text_input("E-mail")
@@ -594,7 +737,15 @@ if not st.session_state["autenticado"]:
 # =========================================================
 # BARRA LATERAL / NAVEGAÇÃO
 # =========================================================
-st.sidebar.title("📊 Clube APPO")
+st.sidebar.markdown(
+    f"""
+    <div class="appo-sidebar-title">
+        {logo_svg(34)}
+        <span>Clube APPO</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 st.sidebar.caption(f"Sessão: {st.session_state['conta_nome']} ({st.session_state['conta_email']})")
 st.sidebar.divider()
 
@@ -625,9 +776,7 @@ st.sidebar.caption(f"Última actualização da página: {agora()}")
 # PÁGINA: INÍCIO & ANÁLISES
 # =========================================================
 if pagina == "🏠 Início & Análises":
-    st.title("Clube de Investimento APPO")
-    st.caption("Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios")
-    st.divider()
+    hero("Clube de Investimento APPO", "Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios")
 
     resumo = obter_resumo_patrimonial()
     total_patrimonio = resumo["capital_social"] + resumo["investimentos"] + resumo["reservas"]
@@ -650,26 +799,16 @@ if pagina == "🏠 Início & Análises":
     st.bar_chart(df_patrimonio)
 
     st.divider()
-    st.subheader("Cotações em destaque")
+    st.subheader("📌 Cotações em destaque")
     df_activos = obter_activos()
     if not df_activos.empty:
-        df_exibir = df_activos[["nome", "tipo", "preco", "variacao"]].copy()
-        df_exibir["preco"] = df_exibir["preco"].apply(kz)
-        df_exibir["variacao"] = df_exibir["variacao"].apply(pct)
-        st.dataframe(
-            df_exibir.rename(
-                columns={"nome": "Activo", "tipo": "Tipo", "preco": "Preço", "variacao": "Variação"}
-            ),
-            hide_index=True,
-        )
+        st.dataframe(tabela_cotacoes_estilizada(df_activos), hide_index=True)
 
 # =========================================================
 # PÁGINA: COTAÇÕES & ACTIVOS
 # =========================================================
 elif pagina == "📈 Cotações & Activos":
-    st.title("Cotações & Activos")
-    st.caption("Instrumentos financeiros cotados na BODIVA acompanhados pelo Clube")
-    st.divider()
+    hero("Cotações & Activos", "Instrumentos financeiros cotados na BODIVA acompanhados pelo Clube", "🇦🇴 BODIVA DIRECTA")
 
     df_activos = obter_activos()
     if df_activos.empty:
@@ -679,21 +818,9 @@ elif pagina == "📈 Cotações & Activos":
         filtro_tipo = st.selectbox("Filtrar por tipo de activo", tipos)
         df_filtrado = df_activos if filtro_tipo == "Todos" else df_activos[df_activos["tipo"] == filtro_tipo]
 
-        df_exibir = df_filtrado[["nome", "tipo", "preco", "variacao", "actualizado_em"]].copy()
-        df_exibir["preco"] = df_exibir["preco"].apply(kz)
-        df_exibir["variacao"] = df_exibir["variacao"].apply(pct)
-        st.dataframe(
-            df_exibir.rename(
-                columns={
-                    "nome": "Activo",
-                    "tipo": "Tipo",
-                    "preco": "Preço",
-                    "variacao": "Variação",
-                    "actualizado_em": "Actualizado em",
-                }
-            ),
-            hide_index=True,
-        )
+        st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
+        st.caption(f"Última actualização: {df_filtrado['actualizado_em'].max()}")
+
         st.divider()
         st.subheader("Comparação de preços")
         st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": "Preço (Kz)"}))
@@ -702,9 +829,7 @@ elif pagina == "📈 Cotações & Activos":
 # PÁGINA: CONTABILIDADE & FINANÇAS
 # =========================================================
 elif pagina == "💰 Contabilidade & Finanças":
-    st.title("Contabilidade & Finanças")
-    st.subheader("Resumo Contabilístico e Patrimonial do Clube")
-    st.divider()
+    hero("Contabilidade & Finanças", "Resumo Contabilístico e Patrimonial do Clube")
 
     resumo = obter_resumo_patrimonial()
     df_resumo = pd.DataFrame(
@@ -738,9 +863,7 @@ elif pagina == "💰 Contabilidade & Finanças":
 # PÁGINA: HISTÓRICO & RELATÓRIOS
 # =========================================================
 elif pagina == "📊 Histórico & Relatórios":
-    st.title("Histórico & Relatórios")
-    st.caption("Evolução do património do Clube ao longo do tempo, e exportação de relatórios")
-    st.divider()
+    hero("Histórico & Relatórios", "Evolução do património do Clube ao longo do tempo, e exportação de relatórios")
 
     df_historico = obter_historico_patrimonio()
     if df_historico.empty or len(df_historico) < 2:
@@ -796,12 +919,11 @@ elif pagina == "📊 Histórico & Relatórios":
 # PÁGINA: REGRA 50/30/20 DO CLUBE
 # =========================================================
 elif pagina == "🧮 Regra 50/30/20":
-    st.title("Regra 50/30/20 do Clube")
-    st.caption(
-        "Princípio nº 8 do Clube: 50% Consumo · 30% Investimento · 20% Entesouramento — "
-        "aplicado ao teu rendimento mensal total, incluindo quaisquer extras."
+    hero(
+        "Regra 50/30/20 do Clube",
+        "Princípio nº 8: 50% Consumo · 30% Investimento · 20% Entesouramento",
+        "📐 Rendimento mensal total, incluindo extras",
     )
-    st.divider()
 
     rendimento = st.number_input(
         "Rendimento mensal total (Kz)", min_value=0.0, step=5000.0, value=250000.0, format="%.2f"
@@ -855,9 +977,7 @@ elif pagina == "🧮 Regra 50/30/20":
 # PÁGINA: BIBLIOTECA EDUCATIVA
 # =========================================================
 elif pagina == "📚 Biblioteca Educativa":
-    st.title("Biblioteca Educativa")
-    st.caption("Princípios do Clube e artigos sobre o mercado de capitais angolano")
-    st.divider()
+    hero("Biblioteca Educativa", "Princípios do Clube e artigos sobre o mercado de capitais angolano")
 
     df_artigos = obter_artigos()
     if df_artigos.empty:
@@ -877,9 +997,7 @@ elif pagina == "📚 Biblioteca Educativa":
 # PÁGINA: ADESÃO DE SÓCIOS
 # =========================================================
 elif pagina == "🧾 Adesão de Sócios":
-    st.title("Adesão de Sócios")
-    st.caption("Preenche o formulário para solicitar a tua adesão ao Clube de Investimento APPO")
-    st.divider()
+    hero("Adesão de Sócios", "Preenche o formulário para solicitar a tua adesão ao Clube de Investimento APPO")
 
     with st.form("form_adesao", clear_on_submit=True):
         nome = st.text_input("Nome completo *")
@@ -905,8 +1023,8 @@ elif pagina == "🧾 Adesão de Sócios":
 # PÁGINA: SOBRE NÓS & ESTATUTOS
 # =========================================================
 elif pagina == "ℹ️ Sobre Nós & Estatutos":
-    st.title("Sobre Nós & Estatutos")
-    st.divider()
+    hero("Sobre Nós & Estatutos", "A missão, os princípios e o enquadramento estatutário do Clube")
+
     st.subheader("Quem somos")
     st.markdown(
         "O **Clube de Investimento APPO** é uma associação de investidores angolanos que "
@@ -934,8 +1052,7 @@ elif pagina == "ℹ️ Sobre Nós & Estatutos":
 # PÁGINA: PAINEL DO ADMINISTRADOR
 # =========================================================
 elif pagina == "🔐 Painel do Administrador":
-    st.title("Painel do Administrador")
-    st.divider()
+    hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios e contas")
 
     aba_resumo, aba_activos, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca = st.tabs(
         ["Resumo Patrimonial", "Cotações & Activos", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança"]
@@ -957,13 +1074,14 @@ elif pagina == "🔐 Painel do Administrador":
 
     with aba_activos:
         st.subheader("Editar Cotações & Activos")
-        st.caption("Edita os valores directamente na tabela. Podes adicionar ou remover linhas.")
+        st.caption("Edita os valores directamente na tabela, incluindo o código do activo (ticker).")
         df_activos = obter_activos()
         df_editado = st.data_editor(
-            df_activos[["nome", "tipo", "preco", "variacao"]],
+            df_activos[["ticker", "nome", "tipo", "preco", "variacao"]],
             num_rows="dynamic",
             key="editor_activos",
             column_config={
+                "ticker": st.column_config.TextColumn("Ticker", max_chars=12),
                 "nome": "Nome do activo",
                 "tipo": "Tipo",
                 "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=100.0),
