@@ -59,6 +59,14 @@ def kz(valor) -> str:
     return f"{sinal}{texto} Kz"
 
 
+def pct(valor) -> str:
+    """Formata um número como percentagem, com sinal explícito."""
+    try:
+        return f"{float(valor):+.2f}%"
+    except (TypeError, ValueError):
+        return "0.00%"
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -96,6 +104,9 @@ Valores de Angola (BODIVA).
 6. **Decisões colectivas** — nenhum sócio actua unilateralmente em nome do Clube.
 7. **Gestão de risco activa** — mantém-se sempre uma reserva de liquidez para
    aproveitar oportunidades sem vender posições em momentos desfavoráveis.
+8. **Regra 50/30/20** — cada sócio é encorajado a não gastar mais de 50% do seu
+   rendimento mensal total (incluindo extras) em consumo, a alocar 30% a investimento,
+   e a reservar 20% para entesouramento.
 """
 
 TEXTO_EX_DIVIDENDO = """
@@ -117,18 +128,53 @@ milhões de acções colocadas à venda ultrapassou os 9 milhões de títulos �
 120% acima da oferta — pelo que se aplicou rateio.
 """
 
+TEXTO_OPV_UNITEL = """
+Em Julho de 2026, o Estado angolano, através do IGAPE, colocou à venda **15% do
+capital social da Unitel** através de uma OPV enquadrada no PROPRIV.
+
+**Números principais:**
+- Acções colocadas à venda: 7,5 milhões (13% ao público, 2% aos trabalhadores)
+- Intervalo de preço: 36.036 – 40.040 Kz por acção
+- Período de subscrição: 6 a 24 de Julho de 2026
+- Procura total: 9.054.299 títulos (~120% acima da oferta)
+- Montante encaixado pelo Estado: ~300,3 mil milhões de Kz
+
+**Contexto:** foi a maior OPV de sempre em Angola, e a primeira empresa de
+telecomunicações admitida à negociação na BODIVA. O arranque da operação provocou
+uma queda generalizada nas outras acções cotadas, por realocação de liquidez dos
+investidores.
+"""
+
+TEXTO_OPV_SBA = """
+A 11 de Setembro de 2026, o Estado angolano lançou a OPV de **34% do capital social
+do Standard Bank Angola (SBA)**, tornando-o a terceira instituição bancária angolana
+em bolsa.
+
+**Números principais:**
+- Acções colocadas à venda: 4,76 milhões (24% reservado ao Standard Bank Group, 10%
+  ao público)
+- Intervalo de preço para o público: 41.220 – 50.000 Kz por acção
+- Período de subscrição: 11 a 25 de Setembro de 2026
+- Valor bruto máximo estimado: ~208,5 mil milhões de Kz
+
+**Contexto:** o Standard Bank Group (accionista de referência) exerceu o seu direito
+de preferência para reforçar a posição, em vez de a reduzir. Ao contrário da Unitel,
+a própria BODIVA (enquanto empresa cotada) manteve-se resiliente ao anúncio desta OPV.
+"""
+
 ACTIVOS_INICIAIS = [
     ("Unitel", "Ação", 38000.0, 0.0),
     ("Standard Bank Angola", "Ação", 45000.0, 0.0),
     ("Banco de Fomento Angola (BFA)", "Ação", 12500.0, 0.0),
     ("BODIVA", "Ação", 82400.0, 0.0),
-    ("OT Kz 2027", "Obrigação do Tesouro", 100000.0, 0.0),
 ]
 
 ARTIGOS_INICIAIS = [
     ("Princípios e Filosofia de Investimento do Clube", "Institucional", TEXTO_PRINCIPIOS),
     ("O que é a Data Ex-Dividendo?", "Educação", TEXTO_EX_DIVIDENDO),
     ("O que é o Rateio?", "Educação", TEXTO_RATEIO),
+    ("Análise da OPV da Unitel (2026)", "Análise de Mercado", TEXTO_OPV_UNITEL),
+    ("Análise da OPV do Standard Bank Angola (2026)", "Análise de Mercado", TEXTO_OPV_SBA),
 ]
 
 # =========================================================
@@ -557,7 +603,7 @@ PAGINAS = [
     "📈 Cotações & Activos",
     "💰 Contabilidade & Finanças",
     "📊 Histórico & Relatórios",
-    "🧮 Orçamento Pessoal (Regra 50/30/20)",
+    "🧮 Regra 50/30/20",
     "📚 Biblioteca Educativa",
     "🧾 Adesão de Sócios",
     "ℹ️ Sobre Nós & Estatutos",
@@ -607,9 +653,12 @@ if pagina == "🏠 Início & Análises":
     st.subheader("Cotações em destaque")
     df_activos = obter_activos()
     if not df_activos.empty:
+        df_exibir = df_activos[["nome", "tipo", "preco", "variacao"]].copy()
+        df_exibir["preco"] = df_exibir["preco"].apply(kz)
+        df_exibir["variacao"] = df_exibir["variacao"].apply(pct)
         st.dataframe(
-            df_activos[["nome", "tipo", "preco", "variacao"]].rename(
-                columns={"nome": "Activo", "tipo": "Tipo", "preco": "Preço (Kz)", "variacao": "Variação (%)"}
+            df_exibir.rename(
+                columns={"nome": "Activo", "tipo": "Tipo", "preco": "Preço", "variacao": "Variação"}
             ),
             hide_index=True,
         )
@@ -630,13 +679,16 @@ elif pagina == "📈 Cotações & Activos":
         filtro_tipo = st.selectbox("Filtrar por tipo de activo", tipos)
         df_filtrado = df_activos if filtro_tipo == "Todos" else df_activos[df_activos["tipo"] == filtro_tipo]
 
+        df_exibir = df_filtrado[["nome", "tipo", "preco", "variacao", "actualizado_em"]].copy()
+        df_exibir["preco"] = df_exibir["preco"].apply(kz)
+        df_exibir["variacao"] = df_exibir["variacao"].apply(pct)
         st.dataframe(
-            df_filtrado[["nome", "tipo", "preco", "variacao", "actualizado_em"]].rename(
+            df_exibir.rename(
                 columns={
                     "nome": "Activo",
                     "tipo": "Tipo",
-                    "preco": "Preço (Kz)",
-                    "variacao": "Variação (%)",
+                    "preco": "Preço",
+                    "variacao": "Variação",
                     "actualizado_em": "Actualizado em",
                 }
             ),
@@ -697,6 +749,11 @@ elif pagina == "📊 Histórico & Relatórios":
             "actualizado no Painel do Administrador, este gráfico vai ganhando forma."
         )
     else:
+        st.caption(
+            "Cada ponto deste gráfico representa uma actualização do resumo patrimonial "
+            "(Capital Social + Investimentos + Reservas), feita no Painel do Administrador. "
+            "O eixo vertical está em Kwanzas (Kz)."
+        )
         df_grafico = df_historico.set_index("registado_em")[["total"]].rename(
             columns={"total": "Património Total (Kz)"}
         )
@@ -708,12 +765,14 @@ elif pagina == "📊 Histórico & Relatórios":
     if df_movimentos.empty:
         st.info("Ainda não existem movimentos registados.")
     else:
+        df_exibir = df_movimentos.copy()
+        df_exibir["montante"] = df_exibir["montante"].apply(kz)
         st.dataframe(
-            df_movimentos.rename(
+            df_exibir.rename(
                 columns={
                     "tipo": "Tipo",
                     "descricao": "Descrição",
-                    "montante": "Montante (Kz)",
+                    "montante": "Montante",
                     "data_movimento": "Data",
                     "criado_em": "Registado em",
                 }
@@ -734,30 +793,33 @@ elif pagina == "📊 Histórico & Relatórios":
         )
 
 # =========================================================
-# PÁGINA: ORÇAMENTO PESSOAL (REGRA 50/30/20)
+# PÁGINA: REGRA 50/30/20 DO CLUBE
 # =========================================================
-elif pagina == "🧮 Orçamento Pessoal (Regra 50/30/20)":
-    st.title("Orçamento Pessoal — Regra 50/30/20")
-    st.caption("50% Necessidades · 30% Desejos · 20% Poupança/Investimento")
+elif pagina == "🧮 Regra 50/30/20":
+    st.title("Regra 50/30/20 do Clube")
+    st.caption(
+        "Princípio nº 8 do Clube: 50% Consumo · 30% Investimento · 20% Entesouramento — "
+        "aplicado ao teu rendimento mensal total, incluindo quaisquer extras."
+    )
     st.divider()
 
     rendimento = st.number_input(
-        "Rendimento mensal líquido (Kz)", min_value=0.0, step=5000.0, value=250000.0, format="%.2f"
+        "Rendimento mensal total (Kz)", min_value=0.0, step=5000.0, value=250000.0, format="%.2f"
     )
-    alvo_necessidades = rendimento * 0.50
-    alvo_desejos = rendimento * 0.30
-    alvo_poupanca = rendimento * 0.20
+    alvo_consumo = rendimento * 0.50
+    alvo_investimento = rendimento * 0.30
+    alvo_entesouramento = rendimento * 0.20
 
     st.subheader("Alocação recomendada")
     col1, col2, col3 = st.columns(3)
-    col1.metric("Necessidades (50%)", kz(alvo_necessidades))
-    col2.metric("Desejos (30%)", kz(alvo_desejos))
-    col3.metric("Poupança/Investimento (20%)", kz(alvo_poupanca))
+    col1.metric("Consumo (50%)", kz(alvo_consumo))
+    col2.metric("Investimento (30%)", kz(alvo_investimento))
+    col3.metric("Entesouramento (20%)", kz(alvo_entesouramento))
 
     df_alvo = pd.DataFrame(
         {
-            "Categoria": ["Necessidades", "Desejos", "Poupança/Investimento"],
-            "Valor recomendado (Kz)": [alvo_necessidades, alvo_desejos, alvo_poupanca],
+            "Categoria": ["Consumo", "Investimento", "Entesouramento"],
+            "Valor recomendado (Kz)": [alvo_consumo, alvo_investimento, alvo_entesouramento],
         }
     ).set_index("Categoria")
     st.bar_chart(df_alvo)
@@ -766,21 +828,28 @@ elif pagina == "🧮 Orçamento Pessoal (Regra 50/30/20)":
     st.subheader("Compara com os teus gastos reais (opcional)")
     with st.form("form_orcamento_real"):
         col_a, col_b, col_c = st.columns(3)
-        real_necessidades = col_a.number_input("Gasto real — Necessidades (Kz)", min_value=0.0, step=1000.0)
-        real_desejos = col_b.number_input("Gasto real — Desejos (Kz)", min_value=0.0, step=1000.0)
-        real_poupanca = col_c.number_input("Poupança real (Kz)", min_value=0.0, step=1000.0)
+        real_consumo = col_a.number_input("Gasto real — Consumo (Kz)", min_value=0.0, step=1000.0)
+        real_investimento = col_b.number_input("Gasto real — Investimento (Kz)", min_value=0.0, step=1000.0)
+        real_entesouramento = col_c.number_input("Entesouramento real (Kz)", min_value=0.0, step=1000.0)
         comparar = st.form_submit_button("Comparar")
 
     if comparar:
         st.markdown("#### Resultado da comparação")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Necessidades", kz(real_necessidades), delta=kz(real_necessidades - alvo_necessidades), delta_color="inverse")
-        col2.metric("Desejos", kz(real_desejos), delta=kz(real_desejos - alvo_desejos), delta_color="inverse")
-        col3.metric("Poupança/Investimento", kz(real_poupanca), delta=kz(real_poupanca - alvo_poupanca), delta_color="normal")
-        if real_poupanca < alvo_poupanca:
-            st.warning("A tua poupança/investimento real está abaixo dos 20% recomendados.")
+        col1.metric("Consumo", kz(real_consumo), delta=kz(real_consumo - alvo_consumo), delta_color="inverse")
+        col2.metric(
+            "Investimento", kz(real_investimento), delta=kz(real_investimento - alvo_investimento), delta_color="normal"
+        )
+        col3.metric(
+            "Entesouramento",
+            kz(real_entesouramento),
+            delta=kz(real_entesouramento - alvo_entesouramento),
+            delta_color="normal",
+        )
+        if real_entesouramento < alvo_entesouramento:
+            st.warning("O teu entesouramento real está abaixo dos 20% recomendados pelo princípio do Clube.")
         else:
-            st.success("Estás a cumprir, ou a superar, a meta de poupança de 20%.")
+            st.success("Estás a cumprir, ou a superar, a meta de 20% de entesouramento.")
 
 # =========================================================
 # PÁGINA: BIBLIOTECA EDUCATIVA
@@ -797,7 +866,10 @@ elif pagina == "📚 Biblioteca Educativa":
         categorias = ["Todas"] + sorted(df_artigos["categoria"].unique().tolist())
         filtro_categoria = st.selectbox("Filtrar por categoria", categorias)
         for _, artigo in obter_artigos(filtro_categoria).iterrows():
-            with st.expander(f"{artigo['titulo']}  —  _{artigo['categoria']}_"):
+            with st.expander(
+                f"{artigo['titulo']}  —  _{artigo['categoria']}_",
+                key=f"artigo_exp_{artigo['id']}",
+            ):
                 st.caption(f"Publicado em {artigo['criado_em']}")
                 st.markdown(artigo["conteudo"])
 
@@ -816,7 +888,7 @@ elif pagina == "🧾 Adesão de Sócios":
         telefone = col2.text_input("Telefone / WhatsApp")
         bi = st.text_input("Número do Bilhete de Identidade")
         contribuicao = st.number_input("Contribuição inicial pretendida (Kz)", min_value=0.0, step=5000.0)
-        aceite = st.checkbox("Declaro que li e aceito os Estatutos do Clube de Investimento APPO *")
+        aceite = st.checkbox("Declaro que li e aceite os Estatutos do Clube de Investimento APPO *")
         enviar = st.form_submit_button("Submeter pedido de adesão")
 
     if enviar:
@@ -851,9 +923,11 @@ elif pagina == "ℹ️ Sobre Nós & Estatutos":
 - **Admissão de sócios:** sujeita a aprovação da Comissão de Gestão.
 - **Deliberações:** decisões de investimento relevantes exigem deliberação colectiva.
 - **Distribuição de resultados:** proporcional à quota de capital de cada sócio.
-
-*(Texto de referência — substituir pelos Estatutos formalmente aprovados e registados do Clube.)*
         """
+    )
+    st.caption(
+        "Nota interna: o texto acima é um modelo de referência, a substituir pelos "
+        "Estatutos formalmente aprovados e registados do Clube assim que estiverem disponíveis."
     )
 
 # =========================================================
@@ -883,6 +957,7 @@ elif pagina == "🔐 Painel do Administrador":
 
     with aba_activos:
         st.subheader("Editar Cotações & Activos")
+        st.caption("Edita os valores directamente na tabela. Podes adicionar ou remover linhas.")
         df_activos = obter_activos()
         df_editado = st.data_editor(
             df_activos[["nome", "tipo", "preco", "variacao"]],
@@ -918,7 +993,11 @@ elif pagina == "🔐 Painel do Administrador":
 
         st.divider()
         st.subheader("Movimentos existentes")
-        st.dataframe(obter_movimentos(), hide_index=True)
+        df_mov_admin = obter_movimentos()
+        if not df_mov_admin.empty:
+            df_mov_admin = df_mov_admin.copy()
+            df_mov_admin["montante"] = df_mov_admin["montante"].apply(kz)
+        st.dataframe(df_mov_admin, hide_index=True)
 
     with aba_biblioteca:
         st.subheader("Adicionar novo artigo")
@@ -961,14 +1040,16 @@ elif pagina == "🔐 Painel do Administrador":
         if df_socios.empty:
             st.info("Ainda não existem pedidos de adesão.")
         else:
+            df_socios_exibir = df_socios.copy()
+            df_socios_exibir["contribuicao_inicial"] = df_socios_exibir["contribuicao_inicial"].apply(kz)
             st.dataframe(
-                df_socios.rename(
+                df_socios_exibir.rename(
                     columns={
                         "nome": "Nome",
                         "email": "E-mail",
                         "telefone": "Telefone",
                         "bi": "Nº BI",
-                        "contribuicao_inicial": "Contribuição Inicial (Kz)",
+                        "contribuicao_inicial": "Contribuição Inicial",
                         "criado_em": "Submetido em",
                     }
                 ),
