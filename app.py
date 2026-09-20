@@ -1,188 +1,1022 @@
-import streamlit as st
-import pandas as pd
-from PIL import Image
-import os
+"""
+Clube de Investimento APPO
+Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios
+Aplicação web corporativa privada — Streamlit + PostgreSQL (Neon)
+"""
 
-# Configuração da página
+import os
+import secrets
+import time
+from datetime import datetime
+
+import bcrypt
+import pandas as pd
+import psycopg2
+import psycopg2.extras
+import streamlit as st
+from fpdf import FPDF
+from pypdf import PdfReader
+
+# =========================================================
+# CONFIGURAÇÃO DA PÁGINA
+# =========================================================
 st.set_page_config(
     page_title="Clube de Investimento APPO",
-    page_icon="📈",
+    page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# ---------------------------------------------------------
-# BARRA LATERAL E IDENTIDADE VISUAL
-# ---------------------------------------------------------
-st.sidebar.markdown("# Clube APPO")
-st.sidebar.markdown("---")
+# =========================================================
+# CONSTANTES E SEGREDOS
+# =========================================================
+DATABASE_URL = os.environ.get("DATABASE_URL")
+ADMIN_EMAIL_INICIAL = os.environ.get("ADMIN_EMAIL", "admin@appo.co.ao")
+ADMIN_PASSWORD_INICIAL = os.environ.get("ADMIN_PASSWORD_INICIAL", "MudarAgora123!")
+TEMPO_LIMITE_SESSAO_SEGUNDOS = 60 * 60  # 60 minutos de inactividade
 
-# Tentativa de carregar a logomarca se estiver presente no diretório
-logo_path = "image_244e62.png"  # Ajuste o nome se necessário
-if os.path.exists(logo_path):
+if not DATABASE_URL:
+    st.error(
+        "A variável de ambiente DATABASE_URL não está definida. "
+        "Configura-a nas definições do serviço na Render (ver guia de implementação)."
+    )
+    st.stop()
+
+
+def agora() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+def kz(valor) -> str:
+    """Formata um número como Kwanzas, ao estilo angolano (espaço como separador de milhar)."""
     try:
-        image = Image.open(logo_path)
-        st.sidebar.image(image, use_container_width=True)
-    except:
-        st.sidebar.info("Logomarca do Clube APPO")
-else:
-    st.sidebar.markdown("### 🕒 APPO")
+        inteiro = int(round(float(valor)))
+    except (TypeError, ValueError):
+        return "0 Kz"
+    sinal = "-" if inteiro < 0 else ""
+    inteiro = abs(inteiro)
+    texto = f"{inteiro:,}".replace(",", " ")
+    return f"{sinal}{texto} Kz"
 
-st.sidebar.markdown("### Navegação")
-menu = st.sidebar.radio(
-    "Escolha a secção:",
-    ["Painel Principal (Home)", "Orçamento & Rendimentos (50/30/20)", "Património & BODIVA", "Valuation & Análises", "Painel do Administrador"]
-)
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("**Estado do Sistema:** Operacional 🟢")
-st.sidebar.markdown("**Padrão:** Moeda em Kz (Kwanzas) | PT-AO")
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-# ---------------------------------------------------------
-# 1. PAINEL PRINCIPAL (HOME)
-# ---------------------------------------------------------
-if menu == "Painel Principal (Home)":
-    st.title("Clube de Investimento APPO")
-    st.subheader("Painel de Gestão, Controlo Patrimonial e Estratégia")
-    
-    st.markdown("""
-    Bem-vindo à plataforma oficial de gestão do **Clube de Investimento APPO**. 
-    Este espaço foi criado para centralizar o planeamento financeiro familiar e os investimentos nos mercados de capitais, com foco primordial no mercado angolano (**BODIVA**).
-    """)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(label="Património Global Estimado", value="16 238 319,90 Kz", delta="+12.4% este ano")
-    with col2:
-        st.metric(label="Investido na BODIVA", value="5 867 524,36 Kz", delta="Ativo na BFA Capital Markets")
-    with col3:
-        st.metric(label="Reserva / Entesouramento", value="3 247 663,98 Kz", delta="Liquidez Segura")
 
-    st.markdown("---")
-    st.markdown("### 👥 Membros Fundadores do Clube")
-    
-    df_membros = pd.DataFrame({
-        "Membro": ["Anibal Alexandre Pereira da Costa (Administrador)", "Cônjuge (Esposa)", "Filho 1", "Filho 2"],
-        "Papel / Contributo": ["Gestor / Fundador", "Co-Fundadora", "Membro", "Membro"],
-        "Quota Inicial (Kz)": ["5 000 000,00", "1 000 000,00", "500 000,00", "500 000,00"]
-    })
-    st.dataframe(df_membros, use_container_width=True)
+def verificar_password(password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except Exception:
+        return False
 
-# ---------------------------------------------------------
-# 2. ORÇAMENTO & RENDIMENTOS (50/30/20)
-# ---------------------------------------------------------
-elif menu == "Orçamento & Rendimentos (50/30/20)":
-    st.title("Planeamento de Rendimentos e Orçamento")
-    st.markdown("Gestão baseada no Título de Vencimento (Faculdade de Economia de Benguela / AFAN) aplicando a regra estrita de alocação: **50% Consumo, 30% Investimento, 20% Reserva**.")
 
-    # Dados base retirados do recibo de vencimento apresentado
-    salario_liquido = 878319.90
-    fundo_afan_pendente = 7500000.00 # A receber até ao final do ano da AFAN na Catumbela
+# =========================================================
+# CONTEÚDO EDUCATIVO INICIAL (usado apenas para semear a base de dados)
+# =========================================================
+TEXTO_PRINCIPIOS = """
+### Missão
 
-    st.markdown("### 📊 Análise do Vencimento Atual (Junho/2026)")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Total Líquido Mensal", f"{salario_liquido:,.2f} Kz")
-        consumo = salario_liquido * 0.50
-        investimento = salario_liquido * 0.30
-        reserva = salario_liquido * 0.20
-        
-        st.markdown(f"""
-        * **Consumo (50%):** `{consumo:,.2f} Kz`
-        * **Investimento BODIVA (30%):** `{investimento:,.2f} Kz`
-        * **Reserva / Entesouramento (20%):** `{reserva:,.2f} Kz`
-        """)
-    with col2:
-        st.markdown("### 🏛️ Crédito a Receber (AFAN - Catumbela)")
-        st.info(f"Montante devido pela Academia da Força Aérea: **{fundo_afan_pendente:,.2f} Kz** (Previsão de entrada até ao final do ano).")
-        reserva_afan = fundo_afan_pendente * 0.20
-        invest_afan = fundo_afan_pendente * 0.80
-        st.markdown(f"""
-        * Destino da Reserva (20%): `{reserva_afan:,.2f} Kz`
-        * Destino para Investimento BODIVA (80% / restante): `{invest_afan:,.2f} Kz`
-        """)
+O Clube de Investimento APPO existe para promover a literacia financeira e o acesso
+disciplinado ao mercado de capitais angolano, permitindo que os seus sócios construam
+património de forma colectiva, informada e sustentável através da Bolsa de Dívida e
+Valores de Angola (BODIVA).
 
-# ---------------------------------------------------------
-# 3. PATRIMÓNIO & BODIVA
-# ---------------------------------------------------------
-elif menu == "Património & BODIVA":
-    st.title("Gestão de Ativos e Posições na BODIVA")
-    st.markdown("Controlo detalhado da carteira de títulos negociados via BFA Capital Markets, discriminando o saldo disponível do capital cativo em subscrições.")
+### Princípios Fundamentais
 
-    st.markdown("### 💼 Posições Atuais em Carteira")
-    df_carteira = pd.DataFrame({
-        "Título": ["ENSA ACÇÃO", "BFA ACÇÃO", "BFA AÇÃO"],
-        "Mercado": ["BODIVA ACÇÕES", "BODIVA ACÇÕES", "BODIVA ACÇÕES"],
-        "Quantidade": [36, 4, 1],
-        "Aquisição (Kz)": ["1 301 041,33", "362 651,48", "193 832,41"],
-        "Valor Atual (Kz)": ["1 130 904,00", "360 000,00", "190 000,00"],
-        "Estado": ["Ativo", "Ativo", "Ativo"]
-    })
-    st.dataframe(df_carteira, use_container_width=True)
+1. **Disciplina antes de intuição** — toda a alocação de capital segue um processo de
+   análise documentado, nunca impulso.
+2. **Horizonte de longo prazo** — a volatilidade normal do mercado é aceite como parte
+   do ciclo, não como motivo de venda precipitada.
+3. **Diversificação prudente** — o capital é distribuído entre dívida pública e acções
+   de diferentes emitentes cotados na BODIVA.
+4. **Transparência e prestação de contas** — todas as posições e resultados são
+   registados e disponibilizados aos sócios.
+5. **Literacia financeira como pilar** — o Clube mantém uma biblioteca educativa
+   actualizada para que cada sócio compreenda os mecanismos do mercado.
+6. **Decisões colectivas** — nenhum sócio actua unilateralmente em nome do Clube.
+7. **Gestão de risco activa** — mantém-se sempre uma reserva de liquidez para
+   aproveitar oportunidades sem vender posições em momentos desfavoráveis.
+"""
 
-    st.markdown("### 🔒 Ordens e Subscrições Cativas (Bookbuilding)")
-    st.markdown("""
-    *Os valores abaixo encontram-se cativos em subscrições e ordens ainda não totalmente executadas, não fazendo parte do saldo livre de negociação imediata.*
-    """)
-    df_cativos = pd.DataFrame({
-        "ID Ordem": ["2026W-XW0HXF1Q3ZA", "2026W-0H0H9HYDI277", "2026M-ID-0307936476"],
-        "Título": ["ENSA ACÇÃO", "BFA ACÇÃO", "ENSA ACÇÃO"],
-        "Tipo": ["Bookbuilding", "Pore.com.", "Publicidade Geral"],
-        "Montante Cativo (Kz)": ["500 000,00", "350 000,00", "10 000,00"],
-        "Estado": ["Emitida / Cativo", "Pendente", "Ativa"]
-    })
-    st.dataframe(df_cativos, use_container_width=True)
+TEXTO_EX_DIVIDENDO = """
+A **data ex-dividendo** é o dia a partir do qual quem compra uma acção já não tem
+direito a receber o próximo dividendo anunciado. Só quem já era detentor da acção
+antes dessa data recebe o pagamento.
 
-# ---------------------------------------------------------
-# 4. VALUATION & ANÁLISES
-# ---------------------------------------------------------
-elif menu == "Valuation & Análises":
-    st.title("Serviços de Análise e Valuation")
-    st.markdown("Ferramentas de avaliação de empresas cotadas e curadoria de inteligência de mercado nacional e internacional.")
+**Sequência típica:** anúncio → data ex-dividendo (o preço ajusta-se em baixa,
+aproximadamente no valor do dividendo) → data de registo → data de pagamento.
+"""
 
-    tab1, tab2 = st.tabs(["Valuation Básica (Grátis)", "Relatórios e Bastidores (Premium)"])
+TEXTO_RATEIO = """
+O **rateio** é o mecanismo usado quando a procura por acções numa Oferta Pública de
+Venda (OPV) excede a oferta disponível. Em vez de servir os pedidos por ordem de
+chegada, a bolsa distribui as acções proporcionalmente entre os subscritores.
 
-    with tab1:
-        st.subheader("Ferramenta de Valuation Simplificada (Metodologia Li Lu / Damodaran)")
-        st.markdown("Insira os parâmetros fundamentais para estimar o valor intrínseco básico de um ativo:")
-        
-        lucro_acao = st.number_input("Lucro por Ação (LPA / EPS em Kz):", value=150.0)
-        crescimento_estimado = st.slider("Taxa de Crescimento Esperada (%)", 0.0, 30.0, 8.0)
-        taxa_desconto = st.slider("Taxa de Desconto / WACC (%)", 5.0, 25.0, 12.0)
-        
-        if st.button("Calcular Valuation Teórico"):
-            valor_intrinsico = lucro_acao * (1 + crescimento_estimado/100) / (taxa_desconto/100)
-            st.success(f"O Valor Intrínseco Estimado por Ação é de aproximadamente **{valor_intrinsico:,.2f} Kz**.")
+**Exemplo real (BODIVA, Julho de 2026):** na OPV da Unitel, a procura pelos 7,5
+milhões de acções colocadas à venda ultrapassou os 9 milhões de títulos — cerca de
+120% acima da oferta — pelo que se aplicou rateio.
+"""
 
-    with tab2:
-        st.subheader("📚 Curadoria de Fontes Especializadas")
-        st.markdown("""
-        Aceda a relatórios e análises aprofundadas de referência:
-        * **Nacionais:** [BODIVA](https://www.bodiva.ao/), [IGAPE Relatórios](https://igape.minfin.gov.ao/sep/relatorios), [KitadInvest Stocks](https://kitadinvest.com/stocks), [Eaglestone](https://www.eaglestone.eu/pt/o-grupo/sobre/), [360 Angola](https://360angola.com/).
-        * **Internacionais & Banca em Análise:** [Bloomberg](https://www.bloomberg.com.br/sobre-a-bloomberg/), [Deloitte Angola (Banca em Análise)](https://www.deloitte.com/), Revista Expansão, Exame, e [EFG Hermes](https://efghermesresearch.com/home).
-        """)
+ACTIVOS_INICIAIS = [
+    ("Unitel", "Ação", 38000.0, 0.0),
+    ("Standard Bank Angola", "Ação", 45000.0, 0.0),
+    ("Banco de Fomento Angola (BFA)", "Ação", 12500.0, 0.0),
+    ("BODIVA", "Ação", 82400.0, 0.0),
+    ("OT Kz 2027", "Obrigação do Tesouro", 100000.0, 0.0),
+]
 
-# ---------------------------------------------------------
-# 5. PAINEL DO ADMINISTRADOR
-# ---------------------------------------------------------
-elif menu == "Painel do Administrador":
-    st.title("Área de Gestão e Publicação do Administrador")
-    st.markdown("Publique orientações estratégicas, notas de mercado ou artigos diretamente para os membros e visitantes do clube, sem necessidade de editar o código-fonte.")
+ARTIGOS_INICIAIS = [
+    ("Princípios e Filosofia de Investimento do Clube", "Institucional", TEXTO_PRINCIPIOS),
+    ("O que é a Data Ex-Dividendo?", "Educação", TEXTO_EX_DIVIDENDO),
+    ("O que é o Rateio?", "Educação", TEXTO_RATEIO),
+]
 
-    senha = st.text_input("Palavra-passe de Administrador:", type="password")
-    
-    if senha == "appo2026": # Palavra-passe configurável
-        st.success("Acesso autorizado com sucesso!")
-        
-        titulo_artigo = st.text_input("Título da Publicação / Orientação:")
-        conteudo_artigo = st.text_area("Corpo do Artigo / Nota:")
-        
-        if st.button("Publicar na Aplicação"):
-            if titulo_artigo and conteudo_artigo:
-                st.success(f"Artigo '{titulo_artigo}' publicado com sucesso na página pública!")
-                # Aqui registaria o artigo num ficheiro ou base de dados local
+# =========================================================
+# BASE DE DADOS (PostgreSQL via Neon)
+# =========================================================
+@st.cache_resource
+def obter_ligacao():
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = True
+    return conn
+
+
+def executar(sql, parametros=None):
+    conn = obter_ligacao()
+    with conn.cursor() as cur:
+        cur.execute(sql, parametros or ())
+
+
+def consultar_um(sql, parametros=None):
+    conn = obter_ligacao()
+    with conn.cursor() as cur:
+        cur.execute(sql, parametros or ())
+        return cur.fetchone()
+
+
+def consultar_df(sql, parametros=None) -> pd.DataFrame:
+    conn = obter_ligacao()
+    return pd.read_sql_query(sql, conn, params=parametros or ())
+
+
+def inicializar_bd():
+    executar(
+        """
+        CREATE TABLE IF NOT EXISTS contas (
+            id SERIAL PRIMARY KEY,
+            nome TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+            criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    executar(
+        """
+        CREATE TABLE IF NOT EXISTS log_acessos (
+            id SERIAL PRIMARY KEY,
+            email TEXT,
+            sucesso BOOLEAN NOT NULL,
+            criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    executar(
+        """
+        CREATE TABLE IF NOT EXISTS resumo_patrimonial (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            capital_social NUMERIC NOT NULL,
+            investimentos NUMERIC NOT NULL,
+            reservas NUMERIC NOT NULL,
+            actualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    executar(
+        """
+        CREATE TABLE IF NOT EXISTS historico_patrimonio (
+            id SERIAL PRIMARY KEY,
+            capital_social NUMERIC NOT NULL,
+            investimentos NUMERIC NOT NULL,
+            reservas NUMERIC NOT NULL,
+            total NUMERIC NOT NULL,
+            registado_em TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    executar(
+        """
+        CREATE TABLE IF NOT EXISTS movimentos (
+            id SERIAL PRIMARY KEY,
+            tipo TEXT NOT NULL,
+            descricao TEXT,
+            montante NUMERIC NOT NULL,
+            data_movimento DATE NOT NULL,
+            criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    executar(
+        """
+        CREATE TABLE IF NOT EXISTS activos (
+            id SERIAL PRIMARY KEY,
+            nome TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            preco NUMERIC NOT NULL,
+            variacao NUMERIC NOT NULL DEFAULT 0,
+            actualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    executar(
+        """
+        CREATE TABLE IF NOT EXISTS artigos (
+            id SERIAL PRIMARY KEY,
+            titulo TEXT NOT NULL,
+            categoria TEXT NOT NULL,
+            conteudo TEXT NOT NULL,
+            criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    executar(
+        """
+        CREATE TABLE IF NOT EXISTS socios (
+            id SERIAL PRIMARY KEY,
+            nome TEXT NOT NULL,
+            email TEXT,
+            telefone TEXT,
+            bi TEXT,
+            contribuicao_inicial NUMERIC,
+            criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+
+    # --- Semear dados iniciais, só se as tabelas estiverem vazias ---
+    if consultar_um("SELECT COUNT(*) FROM contas")[0] == 0:
+        executar(
+            "INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)",
+            ("Administrador", ADMIN_EMAIL_INICIAL, hash_password(ADMIN_PASSWORD_INICIAL), True),
+        )
+
+    if consultar_um("SELECT COUNT(*) FROM resumo_patrimonial")[0] == 0:
+        executar(
+            "INSERT INTO resumo_patrimonial (id, capital_social, investimentos, reservas) "
+            "VALUES (1, %s, %s, %s)",
+            (15500000.0, 12300000.0, 3200000.0),
+        )
+        executar(
+            "INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) "
+            "VALUES (%s, %s, %s, %s)",
+            (15500000.0, 12300000.0, 3200000.0, 15500000.0 + 12300000.0 + 3200000.0),
+        )
+
+    if consultar_um("SELECT COUNT(*) FROM activos")[0] == 0:
+        for nome, tipo, preco, var in ACTIVOS_INICIAIS:
+            executar(
+                "INSERT INTO activos (nome, tipo, preco, variacao) VALUES (%s, %s, %s, %s)",
+                (nome, tipo, preco, var),
+            )
+
+    if consultar_um("SELECT COUNT(*) FROM artigos")[0] == 0:
+        for titulo, categoria, conteudo in ARTIGOS_INICIAIS:
+            executar(
+                "INSERT INTO artigos (titulo, categoria, conteudo) VALUES (%s, %s, %s)",
+                (titulo, categoria, conteudo),
+            )
+
+
+# ---------------- Contas ----------------
+def obter_conta_por_email(email: str):
+    return consultar_um(
+        "SELECT id, nome, email, password_hash, is_admin FROM contas WHERE email = %s", (email,)
+    )
+
+
+def inserir_conta(nome, email, password, is_admin):
+    executar(
+        "INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)",
+        (nome, email, hash_password(password), is_admin),
+    )
+
+
+def listar_contas() -> pd.DataFrame:
+    return consultar_df(
+        "SELECT id, nome, email, is_admin, criado_em FROM contas ORDER BY criado_em DESC"
+    )
+
+
+def contar_admins() -> int:
+    return consultar_um("SELECT COUNT(*) FROM contas WHERE is_admin = TRUE")[0]
+
+
+def repor_password(conta_id: int) -> str:
+    nova_password = secrets.token_urlsafe(9)
+    executar(
+        "UPDATE contas SET password_hash = %s WHERE id = %s", (hash_password(nova_password), conta_id)
+    )
+    return nova_password
+
+
+def eliminar_conta(conta_id: int):
+    executar("DELETE FROM contas WHERE id = %s", (conta_id,))
+
+
+def registar_acesso(email: str, sucesso: bool):
+    executar("INSERT INTO log_acessos (email, sucesso) VALUES (%s, %s)", (email, sucesso))
+
+
+def obter_log_acessos() -> pd.DataFrame:
+    return consultar_df(
+        "SELECT email, sucesso, criado_em FROM log_acessos ORDER BY criado_em DESC LIMIT 50"
+    )
+
+
+# ---------------- Resumo patrimonial e histórico ----------------
+def obter_resumo_patrimonial() -> dict:
+    linha = consultar_um(
+        "SELECT capital_social, investimentos, reservas, actualizado_em FROM resumo_patrimonial WHERE id = 1"
+    )
+    return {
+        "capital_social": float(linha[0]),
+        "investimentos": float(linha[1]),
+        "reservas": float(linha[2]),
+        "actualizado_em": linha[3],
+    }
+
+
+def actualizar_resumo_patrimonial(capital_social, investimentos, reservas):
+    executar(
+        "UPDATE resumo_patrimonial SET capital_social = %s, investimentos = %s, reservas = %s, "
+        "actualizado_em = NOW() WHERE id = 1",
+        (capital_social, investimentos, reservas),
+    )
+    total = capital_social + investimentos + reservas
+    executar(
+        "INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) "
+        "VALUES (%s, %s, %s, %s)",
+        (capital_social, investimentos, reservas, total),
+    )
+
+
+def obter_historico_patrimonio() -> pd.DataFrame:
+    return consultar_df(
+        "SELECT registado_em, total FROM historico_patrimonio ORDER BY registado_em"
+    )
+
+
+# ---------------- Movimentos ----------------
+def inserir_movimento(tipo, descricao, montante, data_movimento):
+    executar(
+        "INSERT INTO movimentos (tipo, descricao, montante, data_movimento) VALUES (%s, %s, %s, %s)",
+        (tipo, descricao, montante, data_movimento),
+    )
+
+
+def obter_movimentos() -> pd.DataFrame:
+    return consultar_df(
+        "SELECT tipo, descricao, montante, data_movimento, criado_em FROM movimentos "
+        "ORDER BY data_movimento DESC, criado_em DESC"
+    )
+
+
+# ---------------- Activos ----------------
+def obter_activos() -> pd.DataFrame:
+    return consultar_df(
+        "SELECT id, nome, tipo, preco, variacao, actualizado_em FROM activos ORDER BY nome"
+    )
+
+
+def substituir_activos(df: pd.DataFrame):
+    executar("DELETE FROM activos")
+    for _, linha in df.iterrows():
+        nome = str(linha.get("nome", "")).strip()
+        if not nome:
+            continue
+        tipo = str(linha.get("tipo", "Ação")).strip() or "Ação"
+        preco = float(linha.get("preco", 0) or 0)
+        variacao = float(linha.get("variacao", 0) or 0)
+        executar(
+            "INSERT INTO activos (nome, tipo, preco, variacao) VALUES (%s, %s, %s, %s)",
+            (nome, tipo, preco, variacao),
+        )
+
+
+# ---------------- Artigos ----------------
+def obter_artigos(categoria: str = None) -> pd.DataFrame:
+    if categoria and categoria != "Todas":
+        return consultar_df(
+            "SELECT id, titulo, categoria, conteudo, criado_em FROM artigos WHERE categoria = %s "
+            "ORDER BY criado_em DESC",
+            (categoria,),
+        )
+    return consultar_df("SELECT id, titulo, categoria, conteudo, criado_em FROM artigos ORDER BY criado_em DESC")
+
+
+def inserir_artigo(titulo, categoria, conteudo):
+    executar(
+        "INSERT INTO artigos (titulo, categoria, conteudo) VALUES (%s, %s, %s)", (titulo, categoria, conteudo)
+    )
+
+
+def eliminar_artigo(artigo_id: int):
+    executar("DELETE FROM artigos WHERE id = %s", (artigo_id,))
+
+
+# ---------------- Sócios (pedidos de adesão) ----------------
+def inserir_socio(nome, email, telefone, bi, contribuicao_inicial):
+    executar(
+        "INSERT INTO socios (nome, email, telefone, bi, contribuicao_inicial) VALUES (%s, %s, %s, %s, %s)",
+        (nome, email, telefone, bi, contribuicao_inicial),
+    )
+
+
+def obter_socios() -> pd.DataFrame:
+    return consultar_df(
+        "SELECT nome, email, telefone, bi, contribuicao_inicial, criado_em FROM socios ORDER BY criado_em DESC"
+    )
+
+
+def extrair_texto_pdf(ficheiro) -> str:
+    leitor = PdfReader(ficheiro)
+    partes = [pagina.extract_text() or "" for pagina in leitor.pages]
+    return "\n\n".join(partes).strip()
+
+
+def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "Clube de Investimento APPO", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, f"Relatorio gerado em {agora()}", ln=True)
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.cell(0, 8, "Resumo Patrimonial", ln=True)
+    pdf.set_font("Helvetica", "", 11)
+    total = resumo["capital_social"] + resumo["investimentos"] + resumo["reservas"]
+    pdf.cell(0, 7, f"Capital Social: {kz(resumo['capital_social'])}", ln=True)
+    pdf.cell(0, 7, f"Investimentos: {kz(resumo['investimentos'])}", ln=True)
+    pdf.cell(0, 7, f"Reservas: {kz(resumo['reservas'])}", ln=True)
+    pdf.cell(0, 7, f"Total: {kz(total)}", ln=True)
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.cell(0, 8, "Activos em Carteira", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    for _, linha in df_activos.iterrows():
+        pdf.cell(0, 6, f"- {linha['nome']} ({linha['tipo']}): {kz(linha['preco'])}", ln=True)
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.cell(0, 8, "Movimentos Recentes", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    if df_movimentos.empty:
+        pdf.cell(0, 6, "Sem movimentos registados.", ln=True)
+    else:
+        for _, linha in df_movimentos.head(30).iterrows():
+            data_txt = str(linha["data_movimento"])
+            pdf.cell(
+                0, 6,
+                f"- {data_txt} | {linha['tipo']} | {kz(linha['montante'])} | {linha['descricao'] or ''}",
+                ln=True,
+            )
+
+    saida = pdf.output()
+    return bytes(saida)
+
+
+inicializar_bd()
+
+# =========================================================
+# AUTENTICAÇÃO — CONTAS INDIVIDUAIS
+# =========================================================
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+if "login_timestamp" not in st.session_state:
+    st.session_state["login_timestamp"] = None
+if "conta_nome" not in st.session_state:
+    st.session_state["conta_nome"] = ""
+if "conta_email" not in st.session_state:
+    st.session_state["conta_email"] = ""
+if "is_admin" not in st.session_state:
+    st.session_state["is_admin"] = False
+
+# Expirar sessão por inactividade
+if st.session_state["autenticado"] and st.session_state["login_timestamp"]:
+    if time.time() - st.session_state["login_timestamp"] > TEMPO_LIMITE_SESSAO_SEGUNDOS:
+        st.session_state["autenticado"] = False
+        st.session_state["login_timestamp"] = None
+        st.warning("A tua sessão expirou por inactividade. Inicia sessão novamente.")
+
+
+def pagina_login():
+    col_esq, col_centro, col_dir = st.columns([1, 1.4, 1])
+    with col_centro:
+        st.markdown("## 📊 Clube de Investimento APPO")
+        st.caption("Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios")
+        st.markdown("#### Acesso reservado a sócios")
+        with st.form("form_login"):
+            email = st.text_input("E-mail")
+            password = st.text_input("Palavra-passe", type="password")
+            submeter = st.form_submit_button("Entrar")
+        if submeter:
+            conta = obter_conta_por_email(email.strip().lower())
+            if conta and verificar_password(password, conta[3]):
+                registar_acesso(email, True)
+                st.session_state["autenticado"] = True
+                st.session_state["login_timestamp"] = time.time()
+                st.session_state["conta_id"] = conta[0]
+                st.session_state["conta_nome"] = conta[1]
+                st.session_state["conta_email"] = conta[2]
+                st.session_state["is_admin"] = bool(conta[4])
+                st.rerun()
             else:
-                st.warning("Preencha todos os campos antes de publicar.")
-    elif senha != "":
-        st.error("Palavra-passe incorreta.")
+                registar_acesso(email, False)
+                st.error("E-mail ou palavra-passe incorrectos. Contacta um administrador do Clube.")
+
+
+if not st.session_state["autenticado"]:
+    pagina_login()
+    st.stop()
+
+# =========================================================
+# BARRA LATERAL / NAVEGAÇÃO
+# =========================================================
+st.sidebar.title("📊 Clube APPO")
+st.sidebar.caption(f"Sessão: {st.session_state['conta_nome']} ({st.session_state['conta_email']})")
+st.sidebar.divider()
+
+PAGINAS = [
+    "🏠 Início & Análises",
+    "📈 Cotações & Activos",
+    "💰 Contabilidade & Finanças",
+    "📊 Histórico & Relatórios",
+    "🧮 Orçamento Pessoal (Regra 50/30/20)",
+    "📚 Biblioteca Educativa",
+    "🧾 Adesão de Sócios",
+    "ℹ️ Sobre Nós & Estatutos",
+]
+if st.session_state["is_admin"]:
+    PAGINAS.append("🔐 Painel do Administrador")
+
+pagina = st.sidebar.radio("Navegação", PAGINAS, label_visibility="collapsed")
+
+st.sidebar.divider()
+if st.sidebar.button("Terminar sessão"):
+    for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin"]:
+        st.session_state.pop(chave, None)
+    st.rerun()
+
+st.sidebar.caption(f"Última actualização da página: {agora()}")
+
+# =========================================================
+# PÁGINA: INÍCIO & ANÁLISES
+# =========================================================
+if pagina == "🏠 Início & Análises":
+    st.title("Clube de Investimento APPO")
+    st.caption("Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios")
+    st.divider()
+
+    resumo = obter_resumo_patrimonial()
+    total_patrimonio = resumo["capital_social"] + resumo["investimentos"] + resumo["reservas"]
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Capital Social", kz(resumo["capital_social"]))
+    col2.metric("Investimentos", kz(resumo["investimentos"]))
+    col3.metric("Reservas", kz(resumo["reservas"]))
+    col4.metric("Património Total", kz(total_patrimonio))
+    st.caption(f"Última actualização do resumo patrimonial: {resumo['actualizado_em']}")
+    st.divider()
+
+    st.subheader("Distribuição do Património")
+    df_patrimonio = pd.DataFrame(
+        {
+            "Categoria": ["Capital Social", "Investimentos", "Reservas"],
+            "Montante (Kz)": [resumo["capital_social"], resumo["investimentos"], resumo["reservas"]],
+        }
+    ).set_index("Categoria")
+    st.bar_chart(df_patrimonio)
+
+    st.divider()
+    st.subheader("Cotações em destaque")
+    df_activos = obter_activos()
+    if not df_activos.empty:
+        st.dataframe(
+            df_activos[["nome", "tipo", "preco", "variacao"]].rename(
+                columns={"nome": "Activo", "tipo": "Tipo", "preco": "Preço (Kz)", "variacao": "Variação (%)"}
+            ),
+            hide_index=True,
+        )
+
+# =========================================================
+# PÁGINA: COTAÇÕES & ACTIVOS
+# =========================================================
+elif pagina == "📈 Cotações & Activos":
+    st.title("Cotações & Activos")
+    st.caption("Instrumentos financeiros cotados na BODIVA acompanhados pelo Clube")
+    st.divider()
+
+    df_activos = obter_activos()
+    if df_activos.empty:
+        st.info("Ainda não existem activos registados.")
+    else:
+        tipos = ["Todos"] + sorted(df_activos["tipo"].unique().tolist())
+        filtro_tipo = st.selectbox("Filtrar por tipo de activo", tipos)
+        df_filtrado = df_activos if filtro_tipo == "Todos" else df_activos[df_activos["tipo"] == filtro_tipo]
+
+        st.dataframe(
+            df_filtrado[["nome", "tipo", "preco", "variacao", "actualizado_em"]].rename(
+                columns={
+                    "nome": "Activo",
+                    "tipo": "Tipo",
+                    "preco": "Preço (Kz)",
+                    "variacao": "Variação (%)",
+                    "actualizado_em": "Actualizado em",
+                }
+            ),
+            hide_index=True,
+        )
+        st.divider()
+        st.subheader("Comparação de preços")
+        st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": "Preço (Kz)"}))
+
+# =========================================================
+# PÁGINA: CONTABILIDADE & FINANÇAS
+# =========================================================
+elif pagina == "💰 Contabilidade & Finanças":
+    st.title("Contabilidade & Finanças")
+    st.subheader("Resumo Contabilístico e Patrimonial do Clube")
+    st.divider()
+
+    resumo = obter_resumo_patrimonial()
+    df_resumo = pd.DataFrame(
+        [
+            {
+                "Categoria": "Capital Social",
+                "Descrição": "Capital subscrito e realizado pelos membros fundadores e associados",
+                "Montante": kz(resumo["capital_social"]),
+                "Moeda": "AOA",
+            },
+            {
+                "Categoria": "Investimentos",
+                "Descrição": "Carteira de acções e instrumentos financeiros cotados na BODIVA",
+                "Montante": kz(resumo["investimentos"]),
+                "Moeda": "AOA",
+            },
+            {
+                "Categoria": "Reservas",
+                "Descrição": "Fundo de estabilização e liquidez para novas oportunidades",
+                "Montante": kz(resumo["reservas"]),
+                "Moeda": "AOA",
+            },
+        ]
+    )
+    st.dataframe(df_resumo, hide_index=True)
+    total_patrimonio = resumo["capital_social"] + resumo["investimentos"] + resumo["reservas"]
+    st.metric("Património Total do Clube", kz(total_patrimonio))
+    st.caption(f"Última actualização: {resumo['actualizado_em']}")
+
+# =========================================================
+# PÁGINA: HISTÓRICO & RELATÓRIOS
+# =========================================================
+elif pagina == "📊 Histórico & Relatórios":
+    st.title("Histórico & Relatórios")
+    st.caption("Evolução do património do Clube ao longo do tempo, e exportação de relatórios")
+    st.divider()
+
+    df_historico = obter_historico_patrimonio()
+    if df_historico.empty or len(df_historico) < 2:
+        st.info(
+            "Ainda há poucos pontos de histórico. À medida que o resumo patrimonial for "
+            "actualizado no Painel do Administrador, este gráfico vai ganhando forma."
+        )
+    else:
+        df_grafico = df_historico.set_index("registado_em")[["total"]].rename(
+            columns={"total": "Património Total (Kz)"}
+        )
+        st.line_chart(df_grafico)
+
+    st.divider()
+    st.subheader("Movimentos registados")
+    df_movimentos = obter_movimentos()
+    if df_movimentos.empty:
+        st.info("Ainda não existem movimentos registados.")
+    else:
+        st.dataframe(
+            df_movimentos.rename(
+                columns={
+                    "tipo": "Tipo",
+                    "descricao": "Descrição",
+                    "montante": "Montante (Kz)",
+                    "data_movimento": "Data",
+                    "criado_em": "Registado em",
+                }
+            ),
+            hide_index=True,
+        )
+
+    st.divider()
+    st.subheader("Exportar relatório")
+    if st.button("Gerar relatório em PDF"):
+        resumo = obter_resumo_patrimonial()
+        pdf_bytes = gerar_relatorio_pdf(resumo, obter_activos(), df_movimentos)
+        st.download_button(
+            "Descarregar relatório em PDF",
+            data=pdf_bytes,
+            file_name=f"relatorio_appo_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf",
+        )
+
+# =========================================================
+# PÁGINA: ORÇAMENTO PESSOAL (REGRA 50/30/20)
+# =========================================================
+elif pagina == "🧮 Orçamento Pessoal (Regra 50/30/20)":
+    st.title("Orçamento Pessoal — Regra 50/30/20")
+    st.caption("50% Necessidades · 30% Desejos · 20% Poupança/Investimento")
+    st.divider()
+
+    rendimento = st.number_input(
+        "Rendimento mensal líquido (Kz)", min_value=0.0, step=5000.0, value=250000.0, format="%.2f"
+    )
+    alvo_necessidades = rendimento * 0.50
+    alvo_desejos = rendimento * 0.30
+    alvo_poupanca = rendimento * 0.20
+
+    st.subheader("Alocação recomendada")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Necessidades (50%)", kz(alvo_necessidades))
+    col2.metric("Desejos (30%)", kz(alvo_desejos))
+    col3.metric("Poupança/Investimento (20%)", kz(alvo_poupanca))
+
+    df_alvo = pd.DataFrame(
+        {
+            "Categoria": ["Necessidades", "Desejos", "Poupança/Investimento"],
+            "Valor recomendado (Kz)": [alvo_necessidades, alvo_desejos, alvo_poupanca],
+        }
+    ).set_index("Categoria")
+    st.bar_chart(df_alvo)
+
+    st.divider()
+    st.subheader("Compara com os teus gastos reais (opcional)")
+    with st.form("form_orcamento_real"):
+        col_a, col_b, col_c = st.columns(3)
+        real_necessidades = col_a.number_input("Gasto real — Necessidades (Kz)", min_value=0.0, step=1000.0)
+        real_desejos = col_b.number_input("Gasto real — Desejos (Kz)", min_value=0.0, step=1000.0)
+        real_poupanca = col_c.number_input("Poupança real (Kz)", min_value=0.0, step=1000.0)
+        comparar = st.form_submit_button("Comparar")
+
+    if comparar:
+        st.markdown("#### Resultado da comparação")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Necessidades", kz(real_necessidades), delta=kz(real_necessidades - alvo_necessidades), delta_color="inverse")
+        col2.metric("Desejos", kz(real_desejos), delta=kz(real_desejos - alvo_desejos), delta_color="inverse")
+        col3.metric("Poupança/Investimento", kz(real_poupanca), delta=kz(real_poupanca - alvo_poupanca), delta_color="normal")
+        if real_poupanca < alvo_poupanca:
+            st.warning("A tua poupança/investimento real está abaixo dos 20% recomendados.")
+        else:
+            st.success("Estás a cumprir, ou a superar, a meta de poupança de 20%.")
+
+# =========================================================
+# PÁGINA: BIBLIOTECA EDUCATIVA
+# =========================================================
+elif pagina == "📚 Biblioteca Educativa":
+    st.title("Biblioteca Educativa")
+    st.caption("Princípios do Clube e artigos sobre o mercado de capitais angolano")
+    st.divider()
+
+    df_artigos = obter_artigos()
+    if df_artigos.empty:
+        st.info("Ainda não existem artigos publicados.")
+    else:
+        categorias = ["Todas"] + sorted(df_artigos["categoria"].unique().tolist())
+        filtro_categoria = st.selectbox("Filtrar por categoria", categorias)
+        for _, artigo in obter_artigos(filtro_categoria).iterrows():
+            with st.expander(f"{artigo['titulo']}  —  _{artigo['categoria']}_"):
+                st.caption(f"Publicado em {artigo['criado_em']}")
+                st.markdown(artigo["conteudo"])
+
+# =========================================================
+# PÁGINA: ADESÃO DE SÓCIOS
+# =========================================================
+elif pagina == "🧾 Adesão de Sócios":
+    st.title("Adesão de Sócios")
+    st.caption("Preenche o formulário para solicitar a tua adesão ao Clube de Investimento APPO")
+    st.divider()
+
+    with st.form("form_adesao", clear_on_submit=True):
+        nome = st.text_input("Nome completo *")
+        col1, col2 = st.columns(2)
+        email = col1.text_input("E-mail")
+        telefone = col2.text_input("Telefone / WhatsApp")
+        bi = st.text_input("Número do Bilhete de Identidade")
+        contribuicao = st.number_input("Contribuição inicial pretendida (Kz)", min_value=0.0, step=5000.0)
+        aceite = st.checkbox("Declaro que li e aceito os Estatutos do Clube de Investimento APPO *")
+        enviar = st.form_submit_button("Submeter pedido de adesão")
+
+    if enviar:
+        if not nome or not aceite:
+            st.error("Preenche o nome completo e aceita os Estatutos para submeter o pedido.")
+        else:
+            inserir_socio(nome, email, telefone, bi, contribuicao)
+            st.success(
+                "Pedido de adesão submetido com sucesso! Um administrador do Clube irá entrar em "
+                "contacto para confirmar a tua adesão e criar a tua conta de acesso."
+            )
+
+# =========================================================
+# PÁGINA: SOBRE NÓS & ESTATUTOS
+# =========================================================
+elif pagina == "ℹ️ Sobre Nós & Estatutos":
+    st.title("Sobre Nós & Estatutos")
+    st.divider()
+    st.subheader("Quem somos")
+    st.markdown(
+        "O **Clube de Investimento APPO** é uma associação de investidores angolanos que "
+        "junta capital de forma colectiva para investir no mercado de capitais nacional, "
+        "através da Bolsa de Dívida e Valores de Angola (BODIVA)."
+    )
+    st.subheader("Princípios e Filosofia de Investimento")
+    st.markdown(TEXTO_PRINCIPIOS)
+    st.subheader("Estatutos — pontos-chave")
+    st.markdown(
+        """
+- **Natureza:** associação de investidores, conforme Estatutos formalmente registados.
+- **Órgãos sociais:** Assembleia de Sócios, Comissão de Gestão e Conselho Fiscal.
+- **Admissão de sócios:** sujeita a aprovação da Comissão de Gestão.
+- **Deliberações:** decisões de investimento relevantes exigem deliberação colectiva.
+- **Distribuição de resultados:** proporcional à quota de capital de cada sócio.
+
+*(Texto de referência — substituir pelos Estatutos formalmente aprovados e registados do Clube.)*
+        """
+    )
+
+# =========================================================
+# PÁGINA: PAINEL DO ADMINISTRADOR
+# =========================================================
+elif pagina == "🔐 Painel do Administrador":
+    st.title("Painel do Administrador")
+    st.divider()
+
+    aba_resumo, aba_activos, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca = st.tabs(
+        ["Resumo Patrimonial", "Cotações & Activos", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança"]
+    )
+
+    with aba_resumo:
+        st.subheader("Editar Resumo Patrimonial")
+        st.caption("Cada alteração aqui cria automaticamente um novo ponto no histórico do Clube.")
+        resumo = obter_resumo_patrimonial()
+        with st.form("form_editar_resumo"):
+            novo_capital = st.number_input("Capital Social (Kz)", min_value=0.0, step=10000.0, value=float(resumo["capital_social"]))
+            novo_investimentos = st.number_input("Investimentos (Kz)", min_value=0.0, step=10000.0, value=float(resumo["investimentos"]))
+            novas_reservas = st.number_input("Reservas (Kz)", min_value=0.0, step=10000.0, value=float(resumo["reservas"]))
+            guardar_resumo = st.form_submit_button("Guardar alterações")
+        if guardar_resumo:
+            actualizar_resumo_patrimonial(novo_capital, novo_investimentos, novas_reservas)
+            st.success("Resumo patrimonial actualizado e novo ponto de histórico registado.")
+            st.rerun()
+
+    with aba_activos:
+        st.subheader("Editar Cotações & Activos")
+        df_activos = obter_activos()
+        df_editado = st.data_editor(
+            df_activos[["nome", "tipo", "preco", "variacao"]],
+            num_rows="dynamic",
+            key="editor_activos",
+            column_config={
+                "nome": "Nome do activo",
+                "tipo": "Tipo",
+                "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=100.0),
+                "variacao": st.column_config.NumberColumn("Variação (%)", step=0.1),
+            },
+        )
+        if st.button("Guardar alterações às cotações"):
+            substituir_activos(df_editado)
+            st.success("Cotações actualizadas com sucesso.")
+            st.rerun()
+
+    with aba_movimentos:
+        st.subheader("Registar novo movimento")
+        with st.form("form_novo_movimento", clear_on_submit=True):
+            tipo_mov = st.selectbox(
+                "Tipo",
+                ["Entrada de Capital", "Compra de Activo", "Venda de Activo", "Saída/Despesa", "Ajuste de Reserva"],
+            )
+            descricao_mov = st.text_input("Descrição")
+            montante_mov = st.number_input("Montante (Kz)", min_value=0.0, step=1000.0)
+            data_mov = st.date_input("Data do movimento")
+            registar_mov = st.form_submit_button("Registar movimento")
+        if registar_mov:
+            inserir_movimento(tipo_mov, descricao_mov, montante_mov, data_mov)
+            st.success("Movimento registado com sucesso.")
+            st.rerun()
+
+        st.divider()
+        st.subheader("Movimentos existentes")
+        st.dataframe(obter_movimentos(), hide_index=True)
+
+    with aba_biblioteca:
+        st.subheader("Adicionar novo artigo")
+        modo = st.radio("Fonte do conteúdo", ["Carregar PDF", "Escrever manualmente"], horizontal=True, key="modo_artigo")
+        texto_extraido = ""
+        if modo == "Carregar PDF":
+            ficheiro_pdf = st.file_uploader("Carregar ficheiro PDF", type=["pdf"], key="uploader_pdf")
+            if ficheiro_pdf is not None:
+                try:
+                    texto_extraido = extrair_texto_pdf(ficheiro_pdf)
+                    st.success("Texto extraído do PDF com sucesso. Revê antes de publicar.")
+                except Exception as erro:
+                    st.error(f"Não foi possível ler o PDF: {erro}")
+        with st.form("form_novo_artigo", clear_on_submit=True):
+            titulo_artigo = st.text_input("Título do artigo")
+            categoria_artigo = st.selectbox("Categoria", ["Institucional", "Educação", "Análise de Mercado", "Referência"])
+            conteudo_artigo = st.text_area("Conteúdo (Markdown suportado)", value=texto_extraido, height=280)
+            publicar = st.form_submit_button("Publicar artigo")
+        if publicar:
+            if not titulo_artigo or not conteudo_artigo:
+                st.error("Preenche o título e o conteúdo do artigo.")
+            else:
+                inserir_artigo(titulo_artigo, categoria_artigo, conteudo_artigo)
+                st.success("Artigo publicado.")
+                st.rerun()
+
+        st.divider()
+        st.subheader("Artigos existentes")
+        for _, artigo in obter_artigos().iterrows():
+            col_a, col_b, col_c = st.columns([3, 1.5, 1])
+            col_a.write(artigo["titulo"])
+            col_b.write(artigo["categoria"])
+            if col_c.button("Eliminar", key=f"eliminar_artigo_{artigo['id']}"):
+                eliminar_artigo(int(artigo["id"]))
+                st.rerun()
+
+    with aba_socios:
+        st.subheader("Pedidos de adesão recebidos")
+        df_socios = obter_socios()
+        if df_socios.empty:
+            st.info("Ainda não existem pedidos de adesão.")
+        else:
+            st.dataframe(
+                df_socios.rename(
+                    columns={
+                        "nome": "Nome",
+                        "email": "E-mail",
+                        "telefone": "Telefone",
+                        "bi": "Nº BI",
+                        "contribuicao_inicial": "Contribuição Inicial (Kz)",
+                        "criado_em": "Submetido em",
+                    }
+                ),
+                hide_index=True,
+            )
+
+    with aba_contas:
+        st.subheader("Criar conta de acesso para um sócio")
+        with st.form("form_nova_conta", clear_on_submit=True):
+            nome_conta = st.text_input("Nome completo")
+            email_conta = st.text_input("E-mail (usado para entrar)")
+            password_conta = st.text_input("Palavra-passe inicial", type="password")
+            admin_conta = st.checkbox("Esta conta é administradora")
+            criar_conta = st.form_submit_button("Criar conta")
+        if criar_conta:
+            if not nome_conta or not email_conta or not password_conta:
+                st.error("Preenche todos os campos.")
+            else:
+                try:
+                    inserir_conta(nome_conta, email_conta.strip().lower(), password_conta, admin_conta)
+                    st.success(f"Conta criada para {email_conta}.")
+                    st.rerun()
+                except psycopg2.errors.UniqueViolation:
+                    obter_ligacao().rollback()
+                    st.error("Já existe uma conta com este e-mail.")
+
+        st.divider()
+        st.subheader("Contas existentes")
+        df_contas = listar_contas()
+        for _, conta in df_contas.iterrows():
+            col_a, col_b, col_c, col_d = st.columns([2.5, 1, 1.2, 1.2])
+            col_a.write(f"{conta['nome']} — {conta['email']}")
+            col_b.write("Admin" if conta["is_admin"] else "Sócio")
+            if col_c.button("Repor password", key=f"repor_{conta['id']}"):
+                nova = repor_password(int(conta["id"]))
+                st.info(f"Nova palavra-passe para {conta['email']}: **{nova}** (copia e envia ao sócio agora — não voltará a aparecer)")
+            pode_eliminar = not (conta["is_admin"] and contar_admins() <= 1)
+            if col_d.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
+                eliminar_conta(int(conta["id"]))
+                st.rerun()
+
+    with aba_seguranca:
+        st.subheader("Registo de tentativas de acesso (últimas 50)")
+        df_log = obter_log_acessos()
+        if df_log.empty:
+            st.info("Ainda não há registos de acesso.")
+        else:
+            st.dataframe(
+                df_log.rename(columns={"email": "E-mail", "sucesso": "Sucesso", "criado_em": "Data/Hora"}),
+                hide_index=True,
+            )
