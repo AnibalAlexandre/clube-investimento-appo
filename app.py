@@ -22,7 +22,7 @@ from pypdf import PdfReader
 # =========================================================
 st.set_page_config(
     page_title="Clube de Investimento APPO",
-    page_icon="📊",
+    page_icon="🕐",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -30,18 +30,20 @@ st.set_page_config(
 # =========================================================
 # IDENTIDADE VISUAL (CSS + logótipo em SVG, sem depender de imagens externas)
 # =========================================================
-CSS_APPO = """
+COR_MARCA = "#7C1F3E"  # bordô, igual ao logótipo original do Clube
+
+CSS_APPO = f"""
 <style>
-div[data-testid="stMetric"] {
-    background: linear-gradient(135deg, #ffffff 0%, #F1F4F9 100%);
-    border: 1px solid #E2E8F0;
-    border-left: 4px solid #0B3D91;
+div[data-testid="stMetric"] {{
+    background: linear-gradient(135deg, #ffffff 0%, #F4EFF1 100%);
+    border: 1px solid #E7DCE0;
+    border-left: 4px solid {COR_MARCA};
     border-radius: 10px;
     padding: 14px 16px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-}
-.appo-hero {
-    background: linear-gradient(120deg, #0B2E5E 0%, #0B3D91 55%, #1B6FBF 100%);
+}}
+.appo-hero {{
+    background: linear-gradient(120deg, #4A1226 0%, {COR_MARCA} 55%, #9C3A5C 100%);
     color: #FFFFFF;
     border-radius: 14px;
     padding: 26px 30px;
@@ -49,10 +51,10 @@ div[data-testid="stMetric"] {
     display: flex;
     align-items: center;
     gap: 18px;
-}
-.appo-hero h1 { margin: 0; font-size: 1.7rem; line-height: 1.2; }
-.appo-hero p { margin: 4px 0 0 0; opacity: 0.85; font-size: 0.92rem; }
-.appo-badge {
+}}
+.appo-hero h1 {{ margin: 0; font-size: 1.7rem; line-height: 1.2; }}
+.appo-hero p {{ margin: 4px 0 0 0; opacity: 0.88; font-size: 0.92rem; }}
+.appo-badge {{
     display: inline-block;
     background: rgba(255,255,255,0.16);
     padding: 3px 11px;
@@ -60,31 +62,65 @@ div[data-testid="stMetric"] {
     font-size: 0.72rem;
     margin-top: 10px;
     letter-spacing: 0.3px;
-}
-.appo-sidebar-title { display:flex; align-items:center; gap:10px; margin-bottom: 2px; }
-.appo-sidebar-title span { font-weight: 700; font-size: 1.15rem; color: #0B3D91; }
+}}
+.appo-sidebar-title {{ display:flex; align-items:center; gap:10px; margin-bottom: 2px; }}
+.appo-sidebar-title span {{ font-weight: 700; font-size: 1.15rem; color: {COR_MARCA}; }}
+.appo-premium-lock {{
+    background: #FBF4F0;
+    border: 1px dashed {COR_MARCA};
+    border-radius: 10px;
+    padding: 18px 20px;
+    text-align: center;
+}}
+.appo-wordmark {{
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: 700;
+    letter-spacing: 2px;
+    font-size: 1.6rem;
+    color: {COR_MARCA};
+    text-align: center;
+    margin-top: 4px;
+}}
 </style>
 """
 st.markdown(CSS_APPO, unsafe_allow_html=True)
 
 
-def logo_svg(tamanho: int = 42) -> str:
-    """Logótipo abstracto (onda/pomba), desenhado em SVG — não depende de nenhuma imagem externa."""
+def logo_svg(tamanho: int = 42, cor: str = COR_MARCA) -> str:
+    """Logótipo do Clube: mostrador de relógio com seta de retorno, representando o foco
+    no longo prazo. Desenhado em SVG puro — não depende de nenhuma imagem externa."""
     return f"""
-    <svg width="{tamanho}" height="{tamanho}" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 40 C18 22,34 15,60 6 C48 18,40 24,36 34 C46 32,54 34,60 40
-                 C48 38,40 40,32 46 C26 50,16 52,4 40 Z" fill="#E8B84B" opacity="0.9"/>
-        <path d="M4 40 C18 27,30 22,52 14 C42 22,34 28,30 36 C38 35,44 37,48 41
-                 C38 39,30 41,24 46 C18 50,10 50,4 40 Z" fill="#FFFFFF"/>
+    <svg width="{tamanho}" height="{tamanho}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="40" r="30" fill="none" stroke="{cor}" stroke-width="6"/>
+        <line x1="50" y1="40" x2="50" y2="21" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>
+        <line x1="50" y1="40" x2="63" y2="50" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="50" cy="40" r="4" fill="{cor}"/>
+        <line x1="17" y1="40" x2="23" y2="40" stroke="{cor}" stroke-width="4" stroke-linecap="round"/>
+        <line x1="77" y1="40" x2="83" y2="40" stroke="{cor}" stroke-width="4" stroke-linecap="round"/>
+        <line x1="50" y1="4" x2="50" y2="10" stroke="{cor}" stroke-width="4" stroke-linecap="round"/>
+        <path d="M 26 66 A 30 30 0 0 0 68 68" fill="none" stroke="{cor}" stroke-width="6" stroke-linecap="round"/>
+        <polygon points="68,68 59,64 64,75" fill="{cor}"/>
     </svg>
     """
+
+
+def logo_com_texto(tamanho: int = 72, cor: str = COR_MARCA):
+    st.markdown(
+        f"""
+        <div style="text-align:center; margin-top:10px;">
+            {logo_svg(tamanho, cor)}
+            <div class="appo-wordmark">APPO</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def hero(titulo: str, subtitulo: str, badge: str = "🇦🇴 BODIVA · Kwanzas (Kz)"):
     st.markdown(
         f"""
         <div class="appo-hero">
-            {logo_svg(46)}
+            {logo_svg(46, "#FFFFFF")}
             <div>
                 <h1>{titulo}</h1>
                 <p>{subtitulo}</p>
@@ -150,8 +186,7 @@ def cor_variacao(v) -> str:
 
 def tabela_cotacoes_estilizada(df_activos: pd.DataFrame):
     """Recebe um DataFrame com colunas ticker/nome/tipo/preco/variacao e devolve um
-    pandas Styler pronto a passar ao st.dataframe, com o aspecto de um home broker:
-    ticker em monospace, preço formatado em Kz, variação a verde/vermelho."""
+    pandas Styler pronto a passar ao st.dataframe, com o aspecto de um home broker."""
     df_disp = df_activos[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
     df_disp["mercado"] = "🇦🇴 BODIVA"
     df_disp = df_disp.rename(
@@ -341,6 +376,7 @@ def inicializar_bd():
         )
         """
     )
+    executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE")
     executar(
         """
         CREATE TABLE IF NOT EXISTS log_acessos (
@@ -398,7 +434,6 @@ def inicializar_bd():
         )
         """
     )
-    # Migração: garante a coluna 'ticker' mesmo em bases de dados criadas antes desta versão.
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS ticker TEXT NOT NULL DEFAULT ''")
     executar(
         """
@@ -451,7 +486,6 @@ def inicializar_bd():
                 (nome, tipo, preco, var, ticker),
             )
     else:
-        # Preenche o ticker em activos já existentes (criados antes desta versão) que ainda não o têm.
         for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
             executar(
                 "UPDATE activos SET ticker = %s WHERE nome = %s AND (ticker IS NULL OR ticker = '')",
@@ -469,7 +503,7 @@ def inicializar_bd():
 # ---------------- Contas ----------------
 def obter_conta_por_email(email: str):
     return consultar_um(
-        "SELECT id, nome, email, password_hash, is_admin FROM contas WHERE email = %s", (email,)
+        "SELECT id, nome, email, password_hash, is_admin, is_premium FROM contas WHERE email = %s", (email,)
     )
 
 
@@ -482,12 +516,16 @@ def inserir_conta(nome, email, password, is_admin):
 
 def listar_contas() -> pd.DataFrame:
     return consultar_df(
-        "SELECT id, nome, email, is_admin, criado_em FROM contas ORDER BY criado_em DESC"
+        "SELECT id, nome, email, is_admin, is_premium, criado_em FROM contas ORDER BY criado_em DESC"
     )
 
 
 def contar_admins() -> int:
     return consultar_um("SELECT COUNT(*) FROM contas WHERE is_admin = TRUE")[0]
+
+
+def alternar_premium(conta_id: int, valor: bool):
+    executar("UPDATE contas SET is_premium = %s WHERE id = %s", (valor, conta_id))
 
 
 def repor_password(conta_id: int) -> str:
@@ -685,6 +723,8 @@ if "conta_email" not in st.session_state:
     st.session_state["conta_email"] = ""
 if "is_admin" not in st.session_state:
     st.session_state["is_admin"] = False
+if "is_premium" not in st.session_state:
+    st.session_state["is_premium"] = False
 
 # Expirar sessão por inactividade
 if st.session_state["autenticado"] and st.session_state["login_timestamp"]:
@@ -697,16 +737,10 @@ if st.session_state["autenticado"] and st.session_state["login_timestamp"]:
 def pagina_login():
     col_esq, col_centro, col_dir = st.columns([1, 1.4, 1])
     with col_centro:
+        logo_com_texto(72)
         st.markdown(
-            f"""<div style="text-align:center; margin-top:24px;">{logo_svg(64)}</div>""",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<h2 style='text-align:center; margin-bottom:0;'>Clube de Investimento APPO</h2>",
-            unsafe_allow_html=True,
-        )
-        st.caption(
-            "<div style='text-align:center;'>Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios</div>",
+            "<p style='text-align:center; opacity:0.75; margin-top:6px;'>"
+            "Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios</p>",
             unsafe_allow_html=True,
         )
         st.markdown("#### Acesso reservado a sócios")
@@ -724,6 +758,7 @@ def pagina_login():
                 st.session_state["conta_nome"] = conta[1]
                 st.session_state["conta_email"] = conta[2]
                 st.session_state["is_admin"] = bool(conta[4])
+                st.session_state["is_premium"] = bool(conta[5])
                 st.rerun()
             else:
                 registar_acesso(email, False)
@@ -746,7 +781,8 @@ st.sidebar.markdown(
     """,
     unsafe_allow_html=True,
 )
-st.sidebar.caption(f"Sessão: {st.session_state['conta_nome']} ({st.session_state['conta_email']})")
+selo_premium = " · ⭐ Premium" if st.session_state["is_premium"] else ""
+st.sidebar.caption(f"Sessão: {st.session_state['conta_nome']} ({st.session_state['conta_email']}){selo_premium}")
 st.sidebar.divider()
 
 PAGINAS = [
@@ -754,6 +790,7 @@ PAGINAS = [
     "📈 Cotações & Activos",
     "💰 Contabilidade & Finanças",
     "📊 Histórico & Relatórios",
+    "📐 Avaliação de Activos",
     "🧮 Regra 50/30/20",
     "📚 Biblioteca Educativa",
     "🧾 Adesão de Sócios",
@@ -766,7 +803,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, label_visibility="collapsed")
 
 st.sidebar.divider()
 if st.sidebar.button("Terminar sessão"):
-    for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin"]:
+    for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium"]:
         st.session_state.pop(chave, None)
     st.rerun()
 
@@ -913,6 +950,86 @@ elif pagina == "📊 Histórico & Relatórios":
             data=pdf_bytes,
             file_name=f"relatorio_appo_{datetime.now().strftime('%Y%m%d')}.pdf",
             mime="application/pdf",
+        )
+
+# =========================================================
+# PÁGINA: AVALIAÇÃO DE ACTIVOS (GRATUITA + PREMIUM)
+# =========================================================
+elif pagina == "📐 Avaliação de Activos":
+    hero("Avaliação de Activos", "Estima o valor intrínseco de uma acção a partir dos seus fundamentais")
+
+    st.subheader("Avaliação Simplificada (gratuita)")
+    st.caption(
+        "Modelo de crescimento perpétuo (Gordon Growth), inspirado na metodologia de Damodaran. "
+        "Serve para uma primeira estimativa — não substitui uma análise financeira completa."
+    )
+    col1, col2, col3 = st.columns(3)
+    eps = col1.number_input("Lucro por Acção — LPA (Kz)", min_value=0.0, value=150.0, step=10.0)
+    crescimento = col2.slider("Taxa de Crescimento Esperada (%)", 0.0, 20.0, 8.0, 0.5)
+    desconto = col3.slider("Taxa de Desconto / WACC (%)", crescimento + 0.5, 30.0, max(15.0, crescimento + 5), 0.5)
+
+    g = crescimento / 100
+    r = desconto / 100
+    valor_intrinseco = (eps * (1 + g)) / (r - g) if r > g else None
+
+    if valor_intrinseco is None:
+        st.error("A Taxa de Desconto tem de ser maior do que a Taxa de Crescimento para o cálculo ser válido.")
+    else:
+        st.metric("Valor Intrínseco Estimado", kz(valor_intrinseco))
+        st.caption(
+            f"Fórmula: LPA × (1 + g) ÷ (WACC − g) = {kz(eps)} × {1+g:.2f} ÷ ({r:.2f} − {g:.2f})"
+        )
+
+    st.divider()
+    st.subheader("⭐ Relatórios e Análise Aprofundada (Premium)")
+
+    if not st.session_state["is_premium"]:
+        st.markdown(
+            """
+            <div class="appo-premium-lock">
+                <strong>Esta secção é exclusiva para sócios Premium.</strong><br/>
+                Inclui tabela de sensibilidade (vários cenários de crescimento/desconto),
+                comparação automática com o preço de mercado actual, e margem de segurança.<br/><br/>
+                Fala com um administrador do Clube para activares o teu acesso Premium.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    elif valor_intrinseco is not None:
+        st.markdown("##### Tabela de Sensibilidade (Kz por acção)")
+        cenarios_g = [max(0.0, g - 0.02), g, g + 0.02]
+        cenarios_r = [r - 0.02, r, r + 0.02]
+        linhas = []
+        for rr in cenarios_r:
+            linha = {}
+            for gg in cenarios_g:
+                if rr > gg:
+                    linha[f"g={gg*100:.1f}%"] = kz((eps * (1 + gg)) / (rr - gg))
+                else:
+                    linha[f"g={gg*100:.1f}%"] = "—"
+            linhas.append(linha)
+        df_sens = pd.DataFrame(linhas, index=[f"WACC={rr*100:.1f}%" for rr in cenarios_r])
+        st.dataframe(df_sens)
+
+        st.markdown("##### Comparação com o preço de mercado")
+        df_activos = obter_activos()
+        if not df_activos.empty:
+            activo_escolhido = st.selectbox("Comparar com qual activo cotado?", df_activos["nome"].tolist())
+            preco_mercado = float(df_activos.loc[df_activos["nome"] == activo_escolhido, "preco"].iloc[0])
+            margem = (valor_intrinseco - preco_mercado) / preco_mercado * 100 if preco_mercado else 0
+            col_a, col_b, col_c = st.columns(3)
+            col_a.metric("Preço de Mercado", kz(preco_mercado))
+            col_b.metric("Valor Intrínseco", kz(valor_intrinseco))
+            col_c.metric("Margem de Segurança", pct(margem))
+            if margem > 15:
+                st.success("O modelo sugere uma acção potencialmente subvalorizada face ao mercado.")
+            elif margem < -15:
+                st.warning("O modelo sugere uma acção potencialmente sobrevalorizada face ao mercado.")
+            else:
+                st.info("O modelo sugere que o preço de mercado está próximo do valor estimado.")
+        st.caption(
+            "Aviso: esta ferramenta é apenas educativa e baseia-se em pressupostos simplificados. "
+            "Não constitui aconselhamento de investimento."
         )
 
 # =========================================================
@@ -1196,16 +1313,25 @@ elif pagina == "🔐 Painel do Administrador":
 
         st.divider()
         st.subheader("Contas existentes")
+        st.caption("Activa o acesso Premium (Avaliação Aprofundada) depois de confirmares o pagamento do sócio.")
         df_contas = listar_contas()
         for _, conta in df_contas.iterrows():
-            col_a, col_b, col_c, col_d = st.columns([2.5, 1, 1.2, 1.2])
+            col_a, col_b, col_c, col_d, col_e = st.columns([2.3, 0.9, 1.1, 1.1, 1.1])
             col_a.write(f"{conta['nome']} — {conta['email']}")
             col_b.write("Admin" if conta["is_admin"] else "Sócio")
-            if col_c.button("Repor password", key=f"repor_{conta['id']}"):
+            if conta["is_premium"]:
+                if col_c.button("Remover Premium", key=f"despremium_{conta['id']}"):
+                    alternar_premium(int(conta["id"]), False)
+                    st.rerun()
+            else:
+                if col_c.button("Tornar Premium", key=f"premium_{conta['id']}"):
+                    alternar_premium(int(conta["id"]), True)
+                    st.rerun()
+            if col_d.button("Repor password", key=f"repor_{conta['id']}"):
                 nova = repor_password(int(conta["id"]))
                 st.info(f"Nova palavra-passe para {conta['email']}: **{nova}** (copia e envia ao sócio agora — não voltará a aparecer)")
             pode_eliminar = not (conta["is_admin"] and contar_admins() <= 1)
-            if col_d.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
+            if col_e.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
                 eliminar_conta(int(conta["id"]))
                 st.rerun()
 
