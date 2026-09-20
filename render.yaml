@@ -9,9 +9,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      - key: APP_PASSWORD
+      - key: DATABASE_URL
         sync: false
-      - key: ADMIN_PASSWORD
+      - key: ADMIN_EMAIL
         sync: false
-# Nota: o plano "free" da Render não suporta disco persistente.
-# O ficheiro appo.db é apagado sempre que o serviço reinicia ou faz novo deploy.
+      - key: ADMIN_PASSWORD_INICIAL
+        sync: false
