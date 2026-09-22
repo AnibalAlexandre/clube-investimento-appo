@@ -30,31 +30,35 @@ st.set_page_config(
 
 
 def render_html(html: str):
-    """st.markdown com unsafe_allow_html, mas primeiro remove a indentação comum.
-    Sem isto, texto HTML indentado (>=4 espaços) é interpretado pelo Markdown como um
-    bloco de código e aparece como texto em bruto em vez de ser renderizado — foi a
-    causa do bug em que o HTML aparecia literalmente no ecrã."""
+    """st.markdown com unsafe_allow_html, mas primeiro remove a indentação comum —
+    sem isto, HTML indentado é lido pelo Markdown como bloco de código em bruto."""
     st.markdown(textwrap.dedent(html).strip(), unsafe_allow_html=True)
 
 
 # =========================================================
 # IDENTIDADE VISUAL (CSS + logótipo em SVG, sem depender de imagens externas)
 # =========================================================
-COR_MARCA = "#7C1F3E"  # bordô, igual ao logótipo original do Clube
+COR_MARCA = "#7C1F3E"
 
 CSS_APPO = f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Baloo+2:wght@600;700&display=swap');
+
+[data-testid="stAppViewContainer"] {{
+    background: #FBF8F6;
+}}
 div[data-testid="stMetric"] {{
-    background: linear-gradient(135deg, #ffffff 0%, #F4EFF1 100%);
-    border: 1px solid #E7DCE0;
+    background: linear-gradient(135deg, #ffffff 0%, #F6EFF2 100%);
+    border: 1px solid #ECDEE3;
     border-left: 4px solid {COR_MARCA};
     border-radius: 10px;
     padding: 14px 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    box-shadow: 0 1px 4px rgba(124,31,62,0.08);
 }}
 .appo-hero {{
-    background: linear-gradient(120deg, #4A1226 0%, {COR_MARCA} 55%, #9C3A5C 100%);
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(120deg, #4A1226 0%, {COR_MARCA} 55%, #A6486A 100%);
     color: #FFFFFF;
     border-radius: 14px;
     padding: 24px 30px;
@@ -63,65 +67,77 @@ div[data-testid="stMetric"] {{
     align-items: center;
     gap: 16px;
 }}
+.appo-hero::before {{
+    content: "";
+    position: absolute; inset: 0;
+    background-image: repeating-linear-gradient(
+        135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 2px,
+        transparent 2px, transparent 16px
+    );
+    pointer-events: none;
+}}
+.appo-hero > * {{ position: relative; z-index: 1; }}
 .appo-hero h1 {{ margin: 0; font-size: 1.6rem; line-height: 1.2; }}
-.appo-hero p {{ margin: 4px 0 0 0; opacity: 0.88; font-size: 0.9rem; }}
+.appo-hero p {{ margin: 4px 0 0 0; opacity: 0.9; font-size: 0.9rem; }}
 .appo-badge {{
-    display: inline-block;
-    background: rgba(255,255,255,0.16);
-    padding: 3px 11px;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    margin-top: 10px;
-    letter-spacing: 0.3px;
+    display: inline-block; background: rgba(255,255,255,0.18);
+    padding: 3px 11px; border-radius: 999px; font-size: 0.72rem;
+    margin-top: 10px; letter-spacing: 0.3px;
 }}
 .appo-sidebar-header {{ display:flex; align-items:center; gap:12px; margin-bottom: 4px; }}
-.appo-sidebar-sub {{ font-size: 0.68rem; color:#9a8a90; letter-spacing:1.5px; text-transform:uppercase; margin:0; }}
+.appo-sidebar-sub {{ font-size: 0.66rem; color:#9a8a90; letter-spacing:1.5px; text-transform:uppercase; margin:0; }}
 .appo-sidebar-word {{
-    font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 1.55rem;
-    color: {COR_MARCA}; line-height: 1; margin-top: 1px;
+    font-family: 'Luckiest Guy', cursive; font-weight: 400; font-size: 1.7rem;
+    color: {COR_MARCA}; line-height: 1; margin-top: 2px;
 }}
 .appo-premium-lock {{
-    background: #FBF4F0;
-    border: 1px dashed {COR_MARCA};
-    border-radius: 10px;
-    padding: 18px 20px;
-    text-align: center;
+    background: #FBF4F0; border: 1px dashed {COR_MARCA}; border-radius: 10px;
+    padding: 18px 20px; text-align: center;
 }}
 .appo-wordmark {{
-    font-family: 'Baloo 2', sans-serif;
-    font-weight: 800;
-    letter-spacing: 1px;
-    font-size: 3.1rem;
-    color: {COR_MARCA};
-    text-align: center;
-    margin-top: 2px;
-    line-height: 1;
+    font-family: 'Luckiest Guy', cursive; font-weight: 400; letter-spacing: 1px;
+    font-size: 3.4rem; color: {COR_MARCA}; text-align: center; margin-top: 4px;
+    line-height: 1; text-shadow: 1px 2px 0 rgba(124,31,62,0.18);
+}}
+.appo-indicador-nota {{
+    background: #F6EFF2; border-radius: 8px; padding: 10px 14px;
+    font-size: 0.85rem; color: #4A3038; margin: 6px 0 4px 0;
+}}
+.appo-categoria-banner {{
+    border-radius: 10px 10px 0 0; padding: 12px 18px;
+    display: flex; align-items: center; gap: 12px; margin: -1rem -1rem 12px -1rem;
+}}
+.appo-categoria-banner span {{
+    color: #fff; font-weight: 700; letter-spacing: 0.6px; font-size: 0.78rem; text-transform: uppercase;
 }}
 </style>
 """
 st.markdown(CSS_APPO, unsafe_allow_html=True)
 
 
-def logo_svg(tamanho: int = 42, cor: str = COR_MARCA) -> str:
-    """Logótipo do Clube: mostrador de relógio com seta de retorno, representando o foco
-    no longo prazo. Desenhado em SVG puro — não depende de nenhuma imagem externa."""
+def logo_svg(tamanho: int = 46, cor: str = COR_MARCA) -> str:
+    """Logótipo do Clube: mostrador de relógio com seta de retorno (foco no longo prazo),
+    traço mais grosso e sombra subtil. SVG puro — não depende de imagens externas."""
     return (
-        f'<svg width="{tamanho}" height="{tamanho}" viewBox="0 0 100 100" '
-        f'xmlns="http://www.w3.org/2000/svg">'
-        f'<circle cx="50" cy="40" r="30" fill="none" stroke="{cor}" stroke-width="6"/>'
-        f'<line x1="50" y1="40" x2="50" y2="21" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>'
-        f'<line x1="50" y1="40" x2="63" y2="50" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>'
-        f'<circle cx="50" cy="40" r="4" fill="{cor}"/>'
-        f'<line x1="17" y1="40" x2="23" y2="40" stroke="{cor}" stroke-width="4" stroke-linecap="round"/>'
-        f'<line x1="77" y1="40" x2="83" y2="40" stroke="{cor}" stroke-width="4" stroke-linecap="round"/>'
-        f'<line x1="50" y1="4" x2="50" y2="10" stroke="{cor}" stroke-width="4" stroke-linecap="round"/>'
-        f'<path d="M 26 66 A 30 30 0 0 0 68 68" fill="none" stroke="{cor}" stroke-width="6" stroke-linecap="round"/>'
-        f'<polygon points="68,68 59,64 64,75" fill="{cor}"/>'
-        f"</svg>"
+        f'<svg width="{tamanho}" height="{tamanho}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
+        f'<defs><filter id="sombraAPPO" x="-30%" y="-30%" width="160%" height="160%">'
+        f'<feDropShadow dx="0" dy="1.5" stdDeviation="1.6" flood-color="#000000" flood-opacity="0.28"/>'
+        f"</filter></defs>"
+        f'<g filter="url(#sombraAPPO)">'
+        f'<circle cx="50" cy="40" r="31" fill="none" stroke="{cor}" stroke-width="7.5"/>'
+        f'<line x1="50" y1="40" x2="50" y2="19" stroke="{cor}" stroke-width="6.5" stroke-linecap="round"/>'
+        f'<line x1="50" y1="40" x2="65" y2="51" stroke="{cor}" stroke-width="6.5" stroke-linecap="round"/>'
+        f'<circle cx="50" cy="40" r="5" fill="{cor}"/>'
+        f'<line x1="14" y1="40" x2="21" y2="40" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>'
+        f'<line x1="79" y1="40" x2="86" y2="40" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>'
+        f'<line x1="50" y1="1" x2="50" y2="8" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>'
+        f'<path d="M 22 68 A 33 33 0 0 0 70 70" fill="none" stroke="{cor}" stroke-width="7.5" stroke-linecap="round"/>'
+        f'<polygon points="70,70 60,65 66,78" fill="{cor}"/>'
+        f"</g></svg>"
     )
 
 
-def logo_com_texto(tamanho: int = 110, cor: str = COR_MARCA):
+def logo_com_texto(tamanho: int = 130, cor: str = COR_MARCA):
     render_html(
         f"""
         <div style="text-align:center; margin-top:10px;">
@@ -136,7 +152,7 @@ def hero(titulo: str, subtitulo: str, badge: str = "🇦🇴 BODIVA · Kwanzas (
     render_html(
         f"""
         <div class="appo-hero">
-            {logo_svg(52, "#FFFFFF")}
+            {logo_svg(58, "#FFFFFF")}
             <div>
                 <h1>{titulo}</h1>
                 <p>{subtitulo}</p>
@@ -147,13 +163,45 @@ def hero(titulo: str, subtitulo: str, badge: str = "🇦🇴 BODIVA · Kwanzas (
     )
 
 
+CORES_CATEGORIA = {
+    "Institucional": COR_MARCA,
+    "Educação": "#1F6F5C",
+    "Análise de Mercado": "#0B3D91",
+    "Referência": "#8A6A26",
+}
+
+ICONES_CATEGORIA = {
+    "Institucional": "🏛️",
+    "Educação": "📖",
+    "Análise de Mercado": "📊",
+    "Referência": "📎",
+}
+
+
+def banner_categoria(categoria: str):
+    cor = CORES_CATEGORIA.get(categoria, COR_MARCA)
+    icone = ICONES_CATEGORIA.get(categoria, "📄")
+    render_html(
+        f"""
+        <div class="appo-categoria-banner" style="background:linear-gradient(120deg, {cor}cc, {cor});">
+            <span style="font-size:1.3rem;">{icone}</span>
+            <span>{categoria}</span>
+        </div>
+        """
+    )
+
+
+def nota_indicador(texto: str):
+    render_html(f'<div class="appo-indicador-nota">💡 {texto}</div>')
+
+
 # =========================================================
 # CONSTANTES E SEGREDOS
 # =========================================================
 DATABASE_URL = os.environ.get("DATABASE_URL")
 ADMIN_EMAIL_INICIAL = os.environ.get("ADMIN_EMAIL", "admin@appo.co.ao")
 ADMIN_PASSWORD_INICIAL = os.environ.get("ADMIN_PASSWORD_INICIAL", "MudarAgora123!")
-TEMPO_LIMITE_SESSAO_SEGUNDOS = 60 * 60  # 60 minutos de inactividade
+TEMPO_LIMITE_SESSAO_SEGUNDOS = 60 * 60
 
 if not DATABASE_URL:
     st.error(
@@ -168,7 +216,6 @@ def agora() -> str:
 
 
 def kz(valor) -> str:
-    """Formata um número como Kwanzas, ao estilo angolano (espaço como separador de milhar)."""
     try:
         inteiro = int(round(float(valor)))
     except (TypeError, ValueError):
@@ -180,7 +227,6 @@ def kz(valor) -> str:
 
 
 def pct(valor) -> str:
-    """Formata um número (fracção, ex: 0.08) como percentagem, com sinal explícito."""
     try:
         return f"{float(valor)*100:+.2f}%"
     except (TypeError, ValueError):
@@ -188,7 +234,6 @@ def pct(valor) -> str:
 
 
 def pct_bruto(valor) -> str:
-    """Formata um número já em percentagem (ex: 8.0, não 0.08), com sinal."""
     try:
         return f"{float(valor):+.2f}%"
     except (TypeError, ValueError):
@@ -220,10 +265,8 @@ def tabela_cotacoes_estilizada(df_activos: pd.DataFrame):
     df_disp = df_activos[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
     df_disp["mercado"] = "🇦🇴 BODIVA"
     df_disp = df_disp.rename(
-        columns={
-            "ticker": "Ticker", "nome": "Activo", "tipo": "Tipo",
-            "preco": "Preço", "variacao": "Variação", "mercado": "Mercado",
-        }
+        columns={"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Preço",
+                 "variacao": "Variação", "mercado": "Mercado"}
     )
     df_disp = df_disp[["Ticker", "Activo", "Tipo", "Mercado", "Preço", "Variação"]]
     return (
@@ -246,7 +289,7 @@ def verificar_password(password: str, password_hash: str) -> bool:
 
 
 # =========================================================
-# CONTEÚDO EDUCATIVO INICIAL (usado para semear/actualizar a Biblioteca)
+# CONTEÚDO EDUCATIVO
 # =========================================================
 TEXTO_PRINCIPIOS = """
 ### Missão
@@ -341,10 +384,6 @@ Segundo **Benjamin Graham**, um investidor distingue-se de um *trader* por três
 Estas três atitudes derivam de uma só percepção: comprar uma acção é comprar uma
 fracção de um negócio real, não um bilhete para negociar de curto prazo.
 
-**Porque estar na bolsa, sendo "dono" de um negócio?** A bolsa existe precisamente
-para permitir entrar e sair livremente — mas o investidor de valor usa essa liquidez
-com moderação, não como convite a negociar todos os dias.
-
 *Adaptado de material de formação do Clube, com base nos ensinamentos de Benjamin Graham.*
 """
 
@@ -363,12 +402,7 @@ quem começa:
 entre 25 e 31 de Março; a data de registo comum foi 10 de Abril; os pagamentos
 escalonaram-se entre 13 e 17 de Abril.
 
-**Onde confirmar sempre:** cmc.ao, secção de comunicados dos emitentes — nunca datas
-soltas partilhadas em redes sociais.
-
-**Sobre o rateio:** quando a procura numa OPV excede a oferta, as acções são
-distribuídas proporcionalmente. Na OPV do BFA, por exemplo, a procura superou a
-oferta em mais de 5 vezes.
+**Onde confirmar sempre:** cmc.ao, secção de comunicados dos emitentes.
 """
 
 TEXTO_DANGOTE = """
@@ -378,17 +412,9 @@ Em Setembro de 2026, a Dangote Petroleum Refinery abriu capital na bolsa da Nig�
 **Números:** ₦525 por acção (~0,40 USD); 4,1 mil milhões de acções colocadas;
 avaliação implícita de 49 mil milhões USD; free-float de apenas ~3,3%.
 
-**O valuation, em contexto:** ao preço da OPV, a refinaria vale cerca de
-75.385 USD por barril de capacidade instalada — entre 2,5 e 5 vezes acima da
-referência histórica do sector (15.000-30.000 USD/bpd).
-
 **Sinal de alerta:** prejuízo de 476 milhões USD em 2025, seguido de um lucro de
 1,82 mil milhões USD só no 1º semestre de 2026 — impulsionado por margens de
 refinação excepcionalmente altas, historicamente cíclicas.
-
-**Para um investidor a partir de Angola:** a via directa exige um BVN nigeriano,
-inacessível sem passaporte nigeriano. Plataformas pan-africanas como a Daba Finance
-permitem participação sem essa exigência.
 
 *Nota: mercado fora do âmbito da BODIVA (Nigéria, Naira) — incluído como referência
 comparativa e educativa.*
@@ -399,23 +425,15 @@ Principais regras de funcionamento do Mercado de Bolsa da BODIVA (Regra Nº 2/18
 registada na CMC):
 
 - **Admissão de acções:** dispersão mínima de 5% do capital pelo mercado;
-  capitalização bolsista mínima de 500 milhões de Kz (ou, em alternativa,
-  1.000 milhões de Kz de volume de negócios anual, com resultado operacional ≥20%
-  desse volume).
+  capitalização bolsista mínima de 500 milhões de Kz.
 - **Lote mínimo de negociação:** 1 acção, salvo excepção definida pela BODIVA.
-- **Limites de variação de preço (acções):** 25% (variação estática) e 20%
-  (variação dinâmica) num único dia de negociação; limites diferentes aplicam-se à
-  dívida pública, consoante a maturidade.
-- **Liquidação:** as operações liquidam no dia útil seguinte à negociação
-  (ciclo D+1).
-- **Interrupção por volatilidade:** se as variações dinâmicas se aproximarem dos
-  limites, a BODIVA pode interromper a negociação de um título e reabri-la através
-  de leilão.
+- **Limites de variação de preço (acções):** 25% (estática) e 20% (dinâmica) num
+  único dia de negociação.
+- **Liquidação:** ciclo D+1 (dia útil seguinte à negociação).
 
 *Fonte: Regra BODIVA Nº 2/18 do Mercado de Bolsa, 18 de Dezembro de 2018.*
 """
 
-# (ticker, nome, tipo, preco, variacao)
 ACTIVOS_INICIAIS = [
     ("UNTLAAAA", "Unitel", "Ação", 38000.0, 0.0),
     ("SBAAAAAA", "Standard Bank Angola", "Ação", 45000.0, 0.0),
@@ -435,8 +453,6 @@ ARTIGOS_INICIAIS = [
     ("Regras de Negociação da BODIVA (Regra Nº 2/18)", "Referência", TEXTO_REGRAS_BODIVA),
 ]
 
-# Dados reais de avaliação (Set/2026), a partir dos ficheiros de valuation do Clube.
-# (empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, g)
 AVALIACOES_INICIAIS = [
     ("BFA", "Banca", 100500.0, 15000000, 233140000000, 0, 365250000000, 139885149600, 0.08),
     ("BAI", "Banca", 93900.0, 19450000, 295918000000, 0, 838000000000, 147841239768, 0.08),
@@ -448,7 +464,7 @@ AVALIACOES_INICIAIS = [
 ]
 
 # =========================================================
-# BASE DE DADOS (PostgreSQL via Neon) — com reconexão automática
+# BASE DE DADOS — com reconexão automática
 # =========================================================
 @st.cache_resource
 def obter_ligacao():
@@ -491,110 +507,71 @@ def consultar_df(sql, parametros=None) -> pd.DataFrame:
 
 def inicializar_bd():
     executar(
-        """
-        CREATE TABLE IF NOT EXISTS contas (
+        """CREATE TABLE IF NOT EXISTS contas (
             id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL, is_admin BOOLEAN NOT NULL DEFAULT FALSE,
-            criado_em TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
+            criado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
     )
     executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE")
     executar(
-        """
-        CREATE TABLE IF NOT EXISTS log_acessos (
+        """CREATE TABLE IF NOT EXISTS log_acessos (
             id SERIAL PRIMARY KEY, email TEXT, sucesso BOOLEAN NOT NULL,
-            criado_em TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
+            criado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
     )
     executar(
-        """
-        CREATE TABLE IF NOT EXISTS resumo_patrimonial (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            capital_social NUMERIC NOT NULL,
-            investimentos NUMERIC NOT NULL,
-            reservas NUMERIC NOT NULL,
-            actualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
+        """CREATE TABLE IF NOT EXISTS resumo_patrimonial (
+            id INTEGER PRIMARY KEY CHECK (id = 1), capital_social NUMERIC NOT NULL,
+            investimentos NUMERIC NOT NULL, reservas NUMERIC NOT NULL,
+            actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
     )
     executar("ALTER TABLE resumo_patrimonial ADD COLUMN IF NOT EXISTS capital_subscrito NUMERIC")
     executar("ALTER TABLE resumo_patrimonial ADD COLUMN IF NOT EXISTS capital_realizado NUMERIC")
     executar(
-        """
-        CREATE TABLE IF NOT EXISTS historico_patrimonio (
+        """CREATE TABLE IF NOT EXISTS historico_patrimonio (
             id SERIAL PRIMARY KEY, capital_social NUMERIC NOT NULL, investimentos NUMERIC NOT NULL,
-            reservas NUMERIC NOT NULL, total NUMERIC NOT NULL, registado_em TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
+            reservas NUMERIC NOT NULL, total NUMERIC NOT NULL, registado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
     )
     executar(
-        """
-        CREATE TABLE IF NOT EXISTS movimentos (
+        """CREATE TABLE IF NOT EXISTS movimentos (
             id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, descricao TEXT, montante NUMERIC NOT NULL,
-            data_movimento DATE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
+            data_movimento DATE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
     )
     executar(
-        """
-        CREATE TABLE IF NOT EXISTS activos (
+        """CREATE TABLE IF NOT EXISTS activos (
             id SERIAL PRIMARY KEY, nome TEXT NOT NULL, tipo TEXT NOT NULL, preco NUMERIC NOT NULL,
-            variacao NUMERIC NOT NULL DEFAULT 0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
+            variacao NUMERIC NOT NULL DEFAULT 0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
     )
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS ticker TEXT NOT NULL DEFAULT ''")
     executar(
-        """
-        CREATE TABLE IF NOT EXISTS artigos (
+        """CREATE TABLE IF NOT EXISTS artigos (
             id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL,
-            conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
+            conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
     )
     executar(
-        """
-        CREATE TABLE IF NOT EXISTS socios (
+        """CREATE TABLE IF NOT EXISTS socios (
             id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT,
-            contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
+            contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
     )
     executar(
-        """
-        CREATE TABLE IF NOT EXISTS premissas_macro (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            inflacao NUMERIC NOT NULL DEFAULT 0.135,
-            taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18,
-            premio_risco NUMERIC NOT NULL DEFAULT 0.055,
-            beta_banca NUMERIC NOT NULL DEFAULT 1.0,
-            beta_telecom NUMERIC NOT NULL DEFAULT 0.9,
-            beta_outros NUMERIC NOT NULL DEFAULT 1.0,
-            actualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
+        """CREATE TABLE IF NOT EXISTS premissas_macro (
+            id INTEGER PRIMARY KEY CHECK (id = 1), inflacao NUMERIC NOT NULL DEFAULT 0.135,
+            taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18, premio_risco NUMERIC NOT NULL DEFAULT 0.055,
+            beta_banca NUMERIC NOT NULL DEFAULT 1.0, beta_telecom NUMERIC NOT NULL DEFAULT 0.9,
+            beta_outros NUMERIC NOT NULL DEFAULT 1.0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
     )
     executar(
-        """
-        CREATE TABLE IF NOT EXISTS avaliacoes (
-            id SERIAL PRIMARY KEY,
-            empresa TEXT UNIQUE NOT NULL,
-            sector TEXT NOT NULL,
-            preco NUMERIC NOT NULL DEFAULT 0,
-            acoes_circulacao NUMERIC NOT NULL DEFAULT 0,
-            lucro_liquido NUMERIC NOT NULL DEFAULT 0,
-            ganho_pontual NUMERIC NOT NULL DEFAULT 0,
-            capital_proprio NUMERIC NOT NULL DEFAULT 0,
-            dividendo_total NUMERIC NOT NULL DEFAULT 0,
-            crescimento_g NUMERIC NOT NULL DEFAULT 0.08,
-            actualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
+        """CREATE TABLE IF NOT EXISTS avaliacoes (
+            id SERIAL PRIMARY KEY, empresa TEXT UNIQUE NOT NULL, sector TEXT NOT NULL,
+            preco NUMERIC NOT NULL DEFAULT 0, acoes_circulacao NUMERIC NOT NULL DEFAULT 0,
+            lucro_liquido NUMERIC NOT NULL DEFAULT 0, ganho_pontual NUMERIC NOT NULL DEFAULT 0,
+            capital_proprio NUMERIC NOT NULL DEFAULT 0, dividendo_total NUMERIC NOT NULL DEFAULT 0,
+            crescimento_g NUMERIC NOT NULL DEFAULT 0.08, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
+    )
+    executar(
+        """CREATE TABLE IF NOT EXISTS favoritos (
+            conta_id INTEGER NOT NULL, activo_id INTEGER NOT NULL, PRIMARY KEY (conta_id, activo_id))"""
     )
 
-    # --- Semear dados iniciais, só se as tabelas estiverem vazias ---
     if consultar_um("SELECT COUNT(*) FROM contas")[0] == 0:
         executar(
             "INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)",
@@ -613,7 +590,6 @@ def inicializar_bd():
             (5000000.0, 1866677.0, 2832885.0, 5000000.0 + 1866677.0 + 2832885.0),
         )
     else:
-        # Migração: preenche capital_subscrito/realizado em bases já existentes que ainda não os têm.
         linha = consultar_um("SELECT capital_subscrito, capital_realizado, capital_social FROM resumo_patrimonial WHERE id = 1")
         if linha and linha[0] is None:
             valor_antigo = float(linha[2])
@@ -635,14 +611,9 @@ def inicializar_bd():
                 (ticker, nome),
             )
 
-    # Artigos: insere qualquer artigo novo que ainda não exista (por título), mesmo em bases já semeadas.
     for titulo, categoria, conteudo in ARTIGOS_INICIAIS:
-        existe = consultar_um("SELECT 1 FROM artigos WHERE titulo = %s", (titulo,))
-        if not existe:
-            executar(
-                "INSERT INTO artigos (titulo, categoria, conteudo) VALUES (%s, %s, %s)",
-                (titulo, categoria, conteudo),
-            )
+        if not consultar_um("SELECT 1 FROM artigos WHERE titulo = %s", (titulo,)):
+            executar("INSERT INTO artigos (titulo, categoria, conteudo) VALUES (%s, %s, %s)", (titulo, categoria, conteudo))
 
     if consultar_um("SELECT COUNT(*) FROM premissas_macro")[0] == 0:
         executar(
@@ -650,10 +621,8 @@ def inicializar_bd():
             "beta_telecom, beta_outros) VALUES (1, 0.135, 0.18, 0.055, 1.0, 0.9, 1.0)"
         )
 
-    # Avaliações: insere qualquer empresa nova que ainda não exista (por nome).
     for empresa, sector, preco, acoes, lucro, ganho, cap_proprio, div_total, g in AVALIACOES_INICIAIS:
-        existe = consultar_um("SELECT 1 FROM avaliacoes WHERE empresa = %s", (empresa,))
-        if not existe:
+        if not consultar_um("SELECT 1 FROM avaliacoes WHERE empresa = %s", (empresa,)):
             executar(
                 "INSERT INTO avaliacoes (empresa, sector, preco, acoes_circulacao, lucro_liquido, "
                 "ganho_pontual, capital_proprio, dividendo_total, crescimento_g) "
@@ -713,11 +682,8 @@ def obter_resumo_patrimonial() -> dict:
         "FROM resumo_patrimonial WHERE id = 1"
     )
     return {
-        "capital_subscrito": float(linha[0] or 0),
-        "capital_realizado": float(linha[1] or 0),
-        "investimentos": float(linha[2]),
-        "reservas": float(linha[3]),
-        "actualizado_em": linha[4],
+        "capital_subscrito": float(linha[0] or 0), "capital_realizado": float(linha[1] or 0),
+        "investimentos": float(linha[2]), "reservas": float(linha[3]), "actualizado_em": linha[4],
     }
 
 
@@ -753,7 +719,7 @@ def obter_movimentos() -> pd.DataFrame:
     )
 
 
-# ---------------- Activos (cotações) ----------------
+# ---------------- Activos + Favoritos ----------------
 def obter_activos() -> pd.DataFrame:
     return consultar_df("SELECT id, ticker, nome, tipo, preco, variacao, actualizado_em FROM activos ORDER BY nome")
 
@@ -774,12 +740,22 @@ def substituir_activos(df: pd.DataFrame):
         )
 
 
+def obter_favoritos(conta_id: int) -> set:
+    df = consultar_df("SELECT activo_id FROM favoritos WHERE conta_id = %s", (conta_id,))
+    return set(df["activo_id"].tolist())
+
+
+def definir_favoritos(conta_id: int, ids_seleccionados: list):
+    executar("DELETE FROM favoritos WHERE conta_id = %s", (conta_id,))
+    for aid in ids_seleccionados:
+        executar("INSERT INTO favoritos (conta_id, activo_id) VALUES (%s, %s)", (conta_id, aid))
+
+
 # ---------------- Artigos ----------------
 def obter_artigos(categoria: str = None) -> pd.DataFrame:
     if categoria and categoria != "Todas":
         return consultar_df(
-            "SELECT id, titulo, categoria, conteudo, criado_em FROM artigos WHERE categoria = %s "
-            "ORDER BY criado_em DESC",
+            "SELECT id, titulo, categoria, conteudo, criado_em FROM artigos WHERE categoria = %s ORDER BY criado_em DESC",
             (categoria,),
         )
     return consultar_df("SELECT id, titulo, categoria, conteudo, criado_em FROM artigos ORDER BY criado_em DESC")
@@ -793,7 +769,7 @@ def eliminar_artigo(artigo_id: int):
     executar("DELETE FROM artigos WHERE id = %s", (artigo_id,))
 
 
-# ---------------- Sócios (pedidos de adesão) ----------------
+# ---------------- Sócios ----------------
 def inserir_socio(nome, email, telefone, bi, contribuicao_inicial):
     executar(
         "INSERT INTO socios (nome, email, telefone, bi, contribuicao_inicial) VALUES (%s, %s, %s, %s, %s)",
@@ -830,7 +806,7 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     pdf.cell(0, 7, f"Capital Realizado: {kz(resumo['capital_realizado'])}", ln=True)
     pdf.cell(0, 7, f"Investimentos: {kz(resumo['investimentos'])}", ln=True)
     pdf.cell(0, 7, f"Reservas: {kz(resumo['reservas'])}", ln=True)
-    pdf.cell(0, 7, f"Total (Realizado + Investimentos + Reservas): {kz(total)}", ln=True)
+    pdf.cell(0, 7, f"Total: {kz(total)}", ln=True)
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(0, 8, "Activos em Carteira", ln=True)
@@ -845,21 +821,18 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         pdf.cell(0, 6, "Sem movimentos registados.", ln=True)
     else:
         for _, linha in df_movimentos.head(30).iterrows():
-            data_txt = str(linha["data_movimento"])
             pdf.cell(
                 0, 6,
-                f"- {data_txt} | {linha['tipo']} | {kz(linha['montante'])} | {linha['descricao'] or ''}",
+                f"- {linha['data_movimento']} | {linha['tipo']} | {kz(linha['montante'])} | {linha['descricao'] or ''}",
                 ln=True,
             )
-    saida = pdf.output()
-    return bytes(saida)
+    return bytes(pdf.output())
 
 
-# ---------------- Avaliação de Activos (fundamentais + DDM) ----------------
+# ---------------- Avaliação (fundamentais + DDM) ----------------
 def obter_premissas_macro() -> dict:
     linha = consultar_um(
-        "SELECT inflacao, taxa_livre_risco, premio_risco, beta_banca, beta_telecom, beta_outros "
-        "FROM premissas_macro WHERE id = 1"
+        "SELECT inflacao, taxa_livre_risco, premio_risco, beta_banca, beta_telecom, beta_outros FROM premissas_macro WHERE id = 1"
     )
     return {
         "inflacao": float(linha[0]), "taxa_livre_risco": float(linha[1]), "premio_risco": float(linha[2]),
@@ -929,16 +902,15 @@ def calcular_metricas_avaliacao(av: dict, premissas: dict) -> dict:
     valor_justo = (d1 / (ke - g)) if ke > g else None
     upside = ((valor_justo - preco) / preco) if (valor_justo is not None and preco) else None
     return {
-        "cap_mercado": preco * acoes, "eps": eps, "pe": pe, "pbv": pbv, "dps": dps,
-        "payout": payout, "dy_nominal": dy_nominal, "dy_real": dy_real, "roe": roe,
-        "ke": ke, "valor_justo": valor_justo, "upside": upside,
+        "cap_mercado": preco * acoes, "eps": eps, "pe": pe, "pbv": pbv, "dps": dps, "payout": payout,
+        "dy_nominal": dy_nominal, "dy_real": dy_real, "roe": roe, "ke": ke, "valor_justo": valor_justo, "upside": upside,
     }
 
 
 inicializar_bd()
 
 # =========================================================
-# AUTENTICAÇÃO — CONTAS INDIVIDUAIS
+# AUTENTICAÇÃO
 # =========================================================
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
@@ -963,7 +935,7 @@ if st.session_state["autenticado"] and st.session_state["login_timestamp"]:
 def pagina_login():
     col_esq, col_centro, col_dir = st.columns([1, 1.4, 1])
     with col_centro:
-        logo_com_texto(110)
+        logo_com_texto(130)
         render_html(
             """
             <p style="text-align:center; opacity:0.75; margin-top:6px;">
@@ -998,12 +970,12 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # =========================================================
-# BARRA LATERAL / NAVEGAÇÃO
+# BARRA LATERAL
 # =========================================================
 render_html(
     f"""
     <div class="appo-sidebar-header">
-        {logo_svg(46)}
+        {logo_svg(50)}
         <div>
             <p class="appo-sidebar-sub">Clube de Investimento</p>
             <div class="appo-sidebar-word">APPO</div>
@@ -1016,15 +988,9 @@ st.sidebar.caption(f"Sessão: {st.session_state['conta_nome']} ({st.session_stat
 st.sidebar.divider()
 
 PAGINAS = [
-    "🏠 Início & Análises",
-    "📈 Cotações & Activos",
-    "💰 Contabilidade & Finanças",
-    "📊 Histórico & Relatórios",
-    "📐 Avaliação de Activos",
-    "🧮 Regra 50/30/20",
-    "📚 Biblioteca Educativa",
-    "🧾 Adesão de Sócios",
-    "ℹ️ Sobre Nós & Estatutos",
+    "🏠 Início & Análises", "📈 Cotações & Activos", "💰 Contabilidade & Finanças",
+    "📊 Histórico & Relatórios", "📐 Avaliação de Activos", "🧮 Regra 50/30/20",
+    "📚 Biblioteca Educativa", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos",
 ]
 if st.session_state["is_admin"]:
     PAGINAS.append("🔐 Painel do Administrador")
@@ -1051,30 +1017,21 @@ if pagina == "🏠 Início & Análises":
     col1, col2 = st.columns(2)
     col1.metric("Capital Subscrito", kz(resumo["capital_subscrito"]))
     col2.metric(
-        "Capital Realizado",
-        kz(resumo["capital_realizado"]),
-        delta=(
-            f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}% do subscrito"
-            if resumo["capital_subscrito"] else None
-        ),
+        "Capital Realizado", kz(resumo["capital_realizado"]),
+        delta=(f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}% do subscrito" if resumo["capital_subscrito"] else None),
         delta_color="off",
     )
     col3, col4, col5 = st.columns(3)
     col3.metric("Investimentos", kz(resumo["investimentos"]))
     col4.metric("Reservas", kz(resumo["reservas"]))
     col5.metric("Património Total", kz(total_patrimonio))
-    st.caption(
-        f"Património Total = Capital Realizado + Investimentos + Reservas. "
-        f"Última actualização: {resumo['actualizado_em']}"
-    )
+    st.caption(f"Património Total = Capital Realizado + Investimentos + Reservas. Última actualização: {resumo['actualizado_em']}")
     st.divider()
 
     st.subheader("Distribuição do Património")
     df_patrimonio = pd.DataFrame(
-        {
-            "Categoria": ["Capital Realizado", "Investimentos", "Reservas"],
-            "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]],
-        }
+        {"Categoria": ["Capital Realizado", "Investimentos", "Reservas"],
+         "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]]}
     ).set_index("Categoria")
     st.bar_chart(df_patrimonio)
 
@@ -1085,7 +1042,7 @@ if pagina == "🏠 Início & Análises":
         st.dataframe(tabela_cotacoes_estilizada(df_activos), hide_index=True)
 
 # =========================================================
-# PÁGINA: COTAÇÕES & ACTIVOS
+# PÁGINA: COTAÇÕES & ACTIVOS (com Favoritos)
 # =========================================================
 elif pagina == "📈 Cotações & Activos":
     hero("Cotações & Activos", "Instrumentos financeiros cotados na BODIVA acompanhados pelo Clube", "🇦🇴 BODIVA DIRECTA")
@@ -1094,15 +1051,39 @@ elif pagina == "📈 Cotações & Activos":
     if df_activos.empty:
         st.info("Ainda não existem activos registados.")
     else:
-        tipos = ["Todos"] + sorted(df_activos["tipo"].unique().tolist())
-        filtro_tipo = st.selectbox("Filtrar por tipo de activo", tipos)
-        df_filtrado = df_activos if filtro_tipo == "Todos" else df_activos[df_activos["tipo"] == filtro_tipo]
+        aba_fav, aba_todos = st.tabs(["⭐ Favoritos", "📋 Todos os Activos"])
+        conta_id = st.session_state["conta_id"]
+        favoritos_actuais = obter_favoritos(conta_id)
 
-        st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
-        st.caption(f"Última actualização: {df_filtrado['actualizado_em'].max()}")
-        st.divider()
-        st.subheader("Comparação de preços")
-        st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": "Preço (Kz)"}))
+        with aba_fav:
+            opcoes = dict(zip(df_activos["nome"], df_activos["id"]))
+            seleccionados_nomes = [nome for nome, aid in opcoes.items() if aid in favoritos_actuais]
+            novos_nomes = st.multiselect("Escolher os teus activos favoritos", options=list(opcoes.keys()), default=seleccionados_nomes)
+            if set(novos_nomes) != set(seleccionados_nomes):
+                definir_favoritos(conta_id, [opcoes[n] for n in novos_nomes])
+                st.rerun()
+            if novos_nomes:
+                df_fav = df_activos[df_activos["nome"].isin(novos_nomes)]
+                st.dataframe(tabela_cotacoes_estilizada(df_fav), hide_index=True)
+            else:
+                st.info("Ainda não marcaste nenhum activo como favorito. Usa a caixa acima.")
+
+        with aba_todos:
+            tipos = ["Todos"] + sorted(df_activos["tipo"].unique().tolist())
+            filtro_tipo = st.selectbox("Filtrar por tipo de activo", tipos)
+            df_filtrado = df_activos if filtro_tipo == "Todos" else df_activos[df_activos["tipo"] == filtro_tipo]
+            st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
+            st.caption(f"Última actualização: {df_filtrado['actualizado_em'].max()}")
+
+            st.download_button(
+                "⬇️ Descarregar tabela em CSV",
+                data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False).encode("utf-8"),
+                file_name="cotacoes_appo.csv", mime="text/csv",
+            )
+
+            st.divider()
+            st.subheader("Comparação de preços")
+            st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": "Preço (Kz)"}))
 
 # =========================================================
 # PÁGINA: CONTABILIDADE & FINANÇAS
@@ -1113,14 +1094,10 @@ elif pagina == "💰 Contabilidade & Finanças":
     resumo = obter_resumo_patrimonial()
     df_resumo = pd.DataFrame(
         [
-            {"Categoria": "Capital Subscrito", "Descrição": "Total de capital comprometido pelos sócios",
-             "Montante": kz(resumo["capital_subscrito"]), "Moeda": "AOA"},
-            {"Categoria": "Capital Realizado", "Descrição": "Parte do capital subscrito já efectivamente paga",
-             "Montante": kz(resumo["capital_realizado"]), "Moeda": "AOA"},
-            {"Categoria": "Investimentos", "Descrição": "Carteira de acções e instrumentos financeiros cotados na BODIVA",
-             "Montante": kz(resumo["investimentos"]), "Moeda": "AOA"},
-            {"Categoria": "Reservas", "Descrição": "Fundo de estabilização e liquidez para novas oportunidades",
-             "Montante": kz(resumo["reservas"]), "Moeda": "AOA"},
+            {"Categoria": "Capital Subscrito", "Descrição": "Total de capital comprometido pelos sócios", "Montante": kz(resumo["capital_subscrito"]), "Moeda": "AOA"},
+            {"Categoria": "Capital Realizado", "Descrição": "Parte do capital subscrito já efectivamente paga", "Montante": kz(resumo["capital_realizado"]), "Moeda": "AOA"},
+            {"Categoria": "Investimentos", "Descrição": "Carteira de acções e instrumentos financeiros cotados na BODIVA", "Montante": kz(resumo["investimentos"]), "Moeda": "AOA"},
+            {"Categoria": "Reservas", "Descrição": "Fundo de estabilização e liquidez para novas oportunidades", "Montante": kz(resumo["reservas"]), "Moeda": "AOA"},
         ]
     )
     st.dataframe(df_resumo, hide_index=True)
@@ -1136,15 +1113,9 @@ elif pagina == "📊 Histórico & Relatórios":
 
     df_historico = obter_historico_patrimonio()
     if df_historico.empty or len(df_historico) < 2:
-        st.info(
-            "Ainda há poucos pontos de histórico. À medida que o resumo patrimonial for "
-            "actualizado no Painel do Administrador, este gráfico vai ganhando forma."
-        )
+        st.info("Ainda há poucos pontos de histórico. Este gráfico vai ganhando forma com o tempo.")
     else:
-        st.caption(
-            "Cada ponto representa uma actualização do resumo patrimonial "
-            "(Capital Realizado + Investimentos + Reservas). Eixo vertical em Kwanzas (Kz)."
-        )
+        st.caption("Cada ponto representa uma actualização do resumo patrimonial. Eixo vertical em Kwanzas (Kz).")
         df_grafico = df_historico.set_index("registado_em")[["total"]].rename(columns={"total": "Património Total (Kz)"})
         st.line_chart(df_grafico)
 
@@ -1155,13 +1126,17 @@ elif pagina == "📊 Histórico & Relatórios":
         st.info("Ainda não existem movimentos registados.")
     else:
         df_exibir = df_movimentos.copy()
-        df_exibir["montante"] = df_exibir["montante"].apply(kz)
+        df_exibir["montante_fmt"] = df_exibir["montante"].apply(kz)
         st.dataframe(
-            df_exibir.rename(
-                columns={"tipo": "Tipo", "descricao": "Descrição", "montante": "Montante",
-                         "data_movimento": "Data", "criado_em": "Registado em"}
+            df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "criado_em"]].rename(
+                columns={"tipo": "Tipo", "descricao": "Descrição", "montante_fmt": "Montante", "data_movimento": "Data", "criado_em": "Registado em"}
             ),
             hide_index=True,
+        )
+        st.download_button(
+            "⬇️ Descarregar movimentos em CSV",
+            data=df_movimentos.to_csv(index=False).encode("utf-8"),
+            file_name="movimentos_appo.csv", mime="text/csv",
         )
 
     st.divider()
@@ -1189,10 +1164,10 @@ elif pagina == "📐 Avaliação de Activos":
         empresa_sel = st.selectbox("Empresa", df_aval["empresa"].tolist())
         av_linha = df_aval[df_aval["empresa"] == empresa_sel].iloc[0]
         av = {
-            "sector": av_linha["sector"], "preco": float(av_linha["preco"]),
-            "acoes_circulacao": float(av_linha["acoes_circulacao"]), "lucro_liquido": float(av_linha["lucro_liquido"]),
-            "ganho_pontual": float(av_linha["ganho_pontual"]), "capital_proprio": float(av_linha["capital_proprio"]),
-            "dividendo_total": float(av_linha["dividendo_total"]), "crescimento_g": float(av_linha["crescimento_g"]),
+            "sector": av_linha["sector"], "preco": float(av_linha["preco"]), "acoes_circulacao": float(av_linha["acoes_circulacao"]),
+            "lucro_liquido": float(av_linha["lucro_liquido"]), "ganho_pontual": float(av_linha["ganho_pontual"]),
+            "capital_proprio": float(av_linha["capital_proprio"]), "dividendo_total": float(av_linha["dividendo_total"]),
+            "crescimento_g": float(av_linha["crescimento_g"]),
         }
         m = calcular_metricas_avaliacao(av, premissas)
 
@@ -1202,15 +1177,24 @@ elif pagina == "📐 Avaliação de Activos":
         col2.metric("P/E", multiplo(m["pe"]))
         col3.metric("P/BV", multiplo(m["pbv"]))
         col4.metric("Dividend Yield", pct(m["dy_nominal"]))
+        nota_indicador(
+            "<b>P/E</b> = quantos anos de lucro actual pagas pelo preço da acção — compara sempre dentro do "
+            "mesmo sector. <b>P/BV</b> = preço face ao valor contabilístico por acção; acima de 1x significa que "
+            "o mercado paga mais do que o valor contabilístico. <b>Dividend Yield</b> = retorno anual só em "
+            "dividendos, ao preço de hoje."
+        )
 
         col5, col6, col7 = st.columns(3)
         col5.metric("Valor Justo (DDM)", kz(m["valor_justo"]) if m["valor_justo"] is not None else "n/d")
-        col6.metric(
-            "Upside / Downside",
-            pct(m["upside"]) if m["upside"] is not None else "n/d",
-            delta=pct(m["upside"]) if m["upside"] is not None else None,
-        )
+        col6.metric("Upside / Downside", pct(m["upside"]) if m["upside"] is not None else "n/d")
         col7.metric("Custo de Capital (Ke)", pct(m["ke"]))
+        nota_indicador(
+            "<b>Valor Justo (DDM)</b> é uma estimativa, não uma certeza — quanto a acção 'deveria' valer se os "
+            "dividendos crescerem à taxa assumida (g). <b>Upside/Downside</b> compara esse valor com o preço de "
+            "mercado actual: positivo sugere possível desconto, negativo sugere possível prémio. "
+            "<b>Ke</b> é o retorno mínimo exigido para compensar o risco do sector — quanto maior o Ke, mais "
+            "exigente é o modelo com o crescimento futuro da empresa."
+        )
 
         if m["upside"] is not None:
             if m["upside"] > 0.15:
@@ -1221,9 +1205,8 @@ elif pagina == "📐 Avaliação de Activos":
                 st.info("O modelo DDM sugere que o preço de mercado está próximo do valor estimado.")
 
         st.caption(
-            "Modelo de Dividendos Descontados (DDM/Gordon Growth): Valor Justo = D1 ÷ (Ke − g), onde "
-            "D1 é o dividendo esperado no próximo ano. É muito sensível às premissas de crescimento (g) e "
-            "custo de capital (Ke) — usar como cross-check à leitura de múltiplos, nunca isoladamente."
+            "Modelo de Dividendos Descontados (DDM/Gordon Growth): Valor Justo = D1 ÷ (Ke − g). "
+            "Muito sensível às premissas de g e Ke — usar como cross-check à leitura de múltiplos, nunca isoladamente."
         )
 
         st.divider()
@@ -1234,8 +1217,7 @@ elif pagina == "📐 Avaliação de Activos":
                 """
                 <div class="appo-premium-lock">
                     <strong>Esta secção é exclusiva para sócios Premium.</strong><br/>
-                    Inclui comparação sectorial das 7 empresas, tabela de sensibilidade
-                    (cenários de crescimento e custo de capital), ROE e Dividend Yield real.<br/><br/>
+                    Inclui comparação sectorial das 7 empresas, tabela de sensibilidade, ROE e Dividend Yield real.<br/><br/>
                     Fala com um administrador do Clube para activares o teu acesso Premium.
                 </div>
                 """
@@ -1246,6 +1228,12 @@ elif pagina == "📐 Avaliação de Activos":
             col_a.metric("ROE", pct(m["roe"]) if m["roe"] is not None else "n/d")
             col_b.metric("Payout", pct(m["payout"]) if m["payout"] is not None else "n/d")
             col_c.metric("Dividend Yield Real", pct(m["dy_real"]))
+            nota_indicador(
+                "<b>ROE</b> = rentabilidade gerada sobre o capital próprio da empresa — quanto maior, mais "
+                "eficiente a usar o dinheiro dos accionistas. <b>Payout</b> = fracção do lucro distribuída como "
+                "dividendo (o resto fica reinvestido no negócio). <b>Dividend Yield Real</b> = o yield nominal "
+                "descontado da inflação — o ganho a preços constantes, não apenas em Kwanzas nominais."
+            )
 
             st.markdown("##### Tabela de Sensibilidade — Valor Justo (Kz por acção)")
             ke_base, g_base = m["ke"], av["crescimento_g"]
@@ -1255,10 +1243,7 @@ elif pagina == "📐 Avaliação de Activos":
             for ke_c in cenarios_ke:
                 linha = {}
                 for g_c in cenarios_g:
-                    if ke_c > g_c:
-                        linha[f"g={g_c*100:.1f}%"] = kz((m["dps"] * (1 + g_c)) / (ke_c - g_c))
-                    else:
-                        linha[f"g={g_c*100:.1f}%"] = "—"
+                    linha[f"g={g_c*100:.1f}%"] = kz((m["dps"] * (1 + g_c)) / (ke_c - g_c)) if ke_c > g_c else "—"
                 linhas.append(linha)
             st.dataframe(pd.DataFrame(linhas, index=[f"Ke={ke_c*100:.1f}%" for ke_c in cenarios_ke]))
 
@@ -1273,28 +1258,26 @@ elif pagina == "📐 Avaliação de Activos":
                 }
                 m_l = calcular_metricas_avaliacao(av_l, premissas)
                 linhas_comp.append(
-                    {
-                        "Empresa": l["empresa"], "Sector": l["sector"], "P/E": multiplo(m_l["pe"]),
-                        "P/BV": multiplo(m_l["pbv"]), "ROE": pct(m_l["roe"]) if m_l["roe"] is not None else "n/d",
-                        "DY Nominal": pct(m_l["dy_nominal"]), "Upside DDM": pct(m_l["upside"]) if m_l["upside"] is not None else "n/d",
-                    }
+                    {"Empresa": l["empresa"], "Sector": l["sector"], "P/E": multiplo(m_l["pe"]), "P/BV": multiplo(m_l["pbv"]),
+                     "ROE": pct(m_l["roe"]) if m_l["roe"] is not None else "n/d", "DY Nominal": pct(m_l["dy_nominal"]),
+                     "Upside DDM": pct(m_l["upside"]) if m_l["upside"] is not None else "n/d"}
                 )
-            st.dataframe(pd.DataFrame(linhas_comp), hide_index=True)
+            df_comp = pd.DataFrame(linhas_comp)
+            st.dataframe(df_comp, hide_index=True)
+            st.download_button(
+                "⬇️ Descarregar comparação sectorial em CSV", data=df_comp.to_csv(index=False).encode("utf-8"),
+                file_name="comparacao_sectorial_appo.csv", mime="text/csv",
+            )
             st.caption(
-                "Nota: sectores diferentes (banca, telecom, seguros, infra-estrutura) não são directamente "
-                "comparáveis por P/E — usar como primeiro sinal, nunca como veredicto isolado. "
-                "Esta ferramenta é educativa e não constitui aconselhamento de investimento."
+                "Sectores diferentes não são directamente comparáveis por P/E — usar como primeiro sinal, "
+                "nunca como veredicto isolado. Ferramenta educativa; não constitui aconselhamento de investimento."
             )
 
 # =========================================================
-# PÁGINA: REGRA 50/30/20 DO CLUBE
+# PÁGINA: REGRA 50/30/20
 # =========================================================
 elif pagina == "🧮 Regra 50/30/20":
-    hero(
-        "Regra 50/30/20 do Clube",
-        "Princípio nº 8: 50% Consumo · 30% Investimento · 20% Entesouramento",
-        "📐 Rendimento mensal total, incluindo extras",
-    )
+    hero("Regra 50/30/20 do Clube", "Princípio nº 8: 50% Consumo · 30% Investimento · 20% Entesouramento", "📐 Rendimento mensal total, incluindo extras")
 
     rendimento = st.number_input("Rendimento mensal total (Kz)", min_value=0.0, step=5000.0, value=250000.0, format="%.2f")
     alvo_consumo = rendimento * 0.50
@@ -1308,8 +1291,7 @@ elif pagina == "🧮 Regra 50/30/20":
     col3.metric("Entesouramento (20%)", kz(alvo_entesouramento))
 
     df_alvo = pd.DataFrame(
-        {"Categoria": ["Consumo", "Investimento", "Entesouramento"],
-         "Valor recomendado (Kz)": [alvo_consumo, alvo_investimento, alvo_entesouramento]}
+        {"Categoria": ["Consumo", "Investimento", "Entesouramento"], "Valor recomendado (Kz)": [alvo_consumo, alvo_investimento, alvo_entesouramento]}
     ).set_index("Categoria")
     st.bar_chart(df_alvo)
 
@@ -1334,7 +1316,7 @@ elif pagina == "🧮 Regra 50/30/20":
             st.success("Estás a cumprir, ou a superar, a meta de 20% de entesouramento.")
 
 # =========================================================
-# PÁGINA: BIBLIOTECA EDUCATIVA
+# PÁGINA: BIBLIOTECA EDUCATIVA (com banners de categoria)
 # =========================================================
 elif pagina == "📚 Biblioteca Educativa":
     hero("Biblioteca Educativa", "Princípios do Clube e artigos sobre o mercado de capitais angolano")
@@ -1346,7 +1328,8 @@ elif pagina == "📚 Biblioteca Educativa":
         categorias = ["Todas"] + sorted(df_artigos["categoria"].unique().tolist())
         filtro_categoria = st.selectbox("Filtrar por categoria", categorias)
         for _, artigo in obter_artigos(filtro_categoria).iterrows():
-            with st.expander(f"{artigo['titulo']}  —  _{artigo['categoria']}_", key=f"artigo_exp_{artigo['id']}"):
+            with st.expander(f"{ICONES_CATEGORIA.get(artigo['categoria'], '📄')} {artigo['titulo']}", key=f"artigo_exp_{artigo['id']}"):
+                banner_categoria(artigo["categoria"])
                 st.caption(f"Publicado em {artigo['criado_em']}")
                 st.markdown(artigo["conteudo"])
 
@@ -1371,10 +1354,7 @@ elif pagina == "🧾 Adesão de Sócios":
             st.error("Preenche o nome completo e aceita os Estatutos para submeter o pedido.")
         else:
             inserir_socio(nome, email, telefone, bi, contribuicao)
-            st.success(
-                "Pedido de adesão submetido com sucesso! Um administrador do Clube irá entrar em "
-                "contacto para confirmar a tua adesão e criar a tua conta de acesso."
-            )
+            st.success("Pedido de adesão submetido com sucesso! Um administrador do Clube irá entrar em contacto.")
 
 # =========================================================
 # PÁGINA: SOBRE NÓS & ESTATUTOS
@@ -1400,10 +1380,7 @@ elif pagina == "ℹ️ Sobre Nós & Estatutos":
 - **Distribuição de resultados:** proporcional à quota de capital de cada sócio.
         """
     )
-    st.caption(
-        "Nota interna: o texto acima é um modelo de referência, a substituir pelos "
-        "Estatutos formalmente aprovados e registados do Clube assim que estiverem disponíveis."
-    )
+    st.caption("Nota interna: modelo de referência, a substituir pelos Estatutos formalmente aprovados e registados do Clube.")
 
 # =========================================================
 # PÁGINA: PAINEL DO ADMINISTRADOR
@@ -1417,7 +1394,7 @@ elif pagina == "🔐 Painel do Administrador":
 
     with aba_resumo:
         st.subheader("Editar Resumo Patrimonial")
-        st.caption("O Capital Realizado deve ser sempre ≤ ao Capital Subscrito. Cada alteração cria um novo ponto no histórico.")
+        st.caption("O Capital Realizado deve ser sempre ≤ ao Capital Subscrito.")
         resumo = obter_resumo_patrimonial()
         with st.form("form_editar_resumo"):
             novo_subscrito = st.number_input("Capital Subscrito (Kz)", min_value=0.0, step=10000.0, value=float(resumo["capital_subscrito"]))
@@ -1437,11 +1414,9 @@ elif pagina == "🔐 Painel do Administrador":
         st.subheader("Editar Cotações & Activos")
         df_activos = obter_activos()
         df_editado = st.data_editor(
-            df_activos[["ticker", "nome", "tipo", "preco", "variacao"]],
-            num_rows="dynamic", key="editor_activos",
+            df_activos[["ticker", "nome", "tipo", "preco", "variacao"]], num_rows="dynamic", key="editor_activos",
             column_config={
-                "ticker": st.column_config.TextColumn("Ticker", max_chars=12),
-                "nome": "Nome do activo", "tipo": "Tipo",
+                "ticker": st.column_config.TextColumn("Ticker", max_chars=12), "nome": "Nome do activo", "tipo": "Tipo",
                 "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=100.0),
                 "variacao": st.column_config.NumberColumn("Variação (%)", step=0.1),
             },
@@ -1471,11 +1446,9 @@ elif pagina == "🔐 Painel do Administrador":
 
         st.divider()
         st.subheader("Dados de Avaliação por Empresa")
-        st.caption("Actualiza estes valores à medida que saírem novos relatórios e contas ou cotações.")
         df_aval = obter_avaliacoes()
         df_aval_editado = st.data_editor(
-            df_aval[["empresa", "sector", "preco", "acoes_circulacao", "lucro_liquido", "ganho_pontual",
-                     "capital_proprio", "dividendo_total", "crescimento_g"]],
+            df_aval[["empresa", "sector", "preco", "acoes_circulacao", "lucro_liquido", "ganho_pontual", "capital_proprio", "dividendo_total", "crescimento_g"]],
             num_rows="dynamic", key="editor_avaliacoes",
             column_config={
                 "empresa": "Empresa", "sector": "Sector",
@@ -1505,7 +1478,6 @@ elif pagina == "🔐 Painel do Administrador":
             inserir_movimento(tipo_mov, descricao_mov, montante_mov, data_mov)
             st.success("Movimento registado com sucesso.")
             st.rerun()
-
         st.divider()
         st.subheader("Movimentos existentes")
         df_mov_admin = obter_movimentos()
@@ -1523,7 +1495,7 @@ elif pagina == "🔐 Painel do Administrador":
             if ficheiro_pdf is not None:
                 try:
                     texto_extraido = extrair_texto_pdf(ficheiro_pdf)
-                    st.success("Texto extraído do PDF com sucesso. Revê antes de publicar.")
+                    st.success("Texto extraído com sucesso. Revê antes de publicar.")
                 except Exception as erro:
                     st.error(f"Não foi possível ler o PDF: {erro}")
         with st.form("form_novo_artigo", clear_on_submit=True):
@@ -1538,7 +1510,6 @@ elif pagina == "🔐 Painel do Administrador":
                 inserir_artigo(titulo_artigo, categoria_artigo, conteudo_artigo)
                 st.success("Artigo publicado.")
                 st.rerun()
-
         st.divider()
         st.subheader("Artigos existentes")
         for _, artigo in obter_artigos().iterrows():
@@ -1558,10 +1529,7 @@ elif pagina == "🔐 Painel do Administrador":
             df_socios_exibir = df_socios.copy()
             df_socios_exibir["contribuicao_inicial"] = df_socios_exibir["contribuicao_inicial"].apply(kz)
             st.dataframe(
-                df_socios_exibir.rename(
-                    columns={"nome": "Nome", "email": "E-mail", "telefone": "Telefone", "bi": "Nº BI",
-                             "contribuicao_inicial": "Contribuição Inicial", "criado_em": "Submetido em"}
-                ),
+                df_socios_exibir.rename(columns={"nome": "Nome", "email": "E-mail", "telefone": "Telefone", "bi": "Nº BI", "contribuicao_inicial": "Contribuição Inicial", "criado_em": "Submetido em"}),
                 hide_index=True,
             )
 
@@ -1584,7 +1552,6 @@ elif pagina == "🔐 Painel do Administrador":
                 except psycopg2.errors.UniqueViolation:
                     obter_ligacao().rollback()
                     st.error("Já existe uma conta com este e-mail.")
-
         st.divider()
         st.subheader("Contas existentes")
         st.caption("Activa o acesso Premium depois de confirmares o pagamento do sócio.")
@@ -1603,7 +1570,7 @@ elif pagina == "🔐 Painel do Administrador":
                     st.rerun()
             if col_d.button("Repor password", key=f"repor_{conta['id']}"):
                 nova = repor_password(int(conta["id"]))
-                st.info(f"Nova palavra-passe para {conta['email']}: **{nova}** (copia e envia ao sócio agora — não voltará a aparecer)")
+                st.info(f"Nova palavra-passe para {conta['email']}: **{nova}**")
             pode_eliminar = not (conta["is_admin"] and contar_admins() <= 1)
             if col_e.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
                 eliminar_conta(int(conta["id"]))
@@ -1615,7 +1582,4 @@ elif pagina == "🔐 Painel do Administrador":
         if df_log.empty:
             st.info("Ainda não há registos de acesso.")
         else:
-            st.dataframe(
-                df_log.rename(columns={"email": "E-mail", "sucesso": "Sucesso", "criado_em": "Data/Hora"}),
-                hide_index=True,
-            )
+            st.dataframe(df_log.rename(columns={"email": "E-mail", "sucesso": "Sucesso", "criado_em": "Data/Hora"}), hide_index=True)
