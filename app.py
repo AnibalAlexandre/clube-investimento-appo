@@ -36,6 +36,21 @@ def render_html(html: str):
 
 
 # =========================================================
+# IMAGENS (Unsplash, licença livre — URLs estáveis, sem depender do Pinterest)
+# =========================================================
+IMG_SKYLINE = "https://images.unsplash.com/photo-1602552283771-c533ac53ce80?fm=jpg&q=70&w=1600&auto=format&fit=crop"
+IMG_GRAFICO = "https://images.unsplash.com/photo-1745270917449-c2e2c5806586?fm=jpg&q=70&w=1600&auto=format&fit=crop"
+IMG_REUNIAO = "https://images.unsplash.com/photo-1517048676732-d65bc937f952?fm=jpg&q=70&w=1600&auto=format&fit=crop"
+IMG_LIVROS = "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?fm=jpg&q=70&w=1600&auto=format&fit=crop"
+
+IMAGENS_CATEGORIA = {
+    "Institucional": IMG_REUNIAO,
+    "Educação": IMG_LIVROS,
+    "Análise de Mercado": IMG_GRAFICO,
+    "Referência": IMG_SKYLINE,
+}
+
+# =========================================================
 # IDENTIDADE VISUAL (CSS + logótipo em SVG, sem depender de imagens externas)
 # =========================================================
 COR_MARCA = "#7C1F3E"
@@ -110,14 +125,51 @@ div[data-testid="stMetric"] {{
 .appo-categoria-banner span {{
     color: #fff; font-weight: 700; letter-spacing: 0.6px; font-size: 0.78rem; text-transform: uppercase;
 }}
+.appo-capa {{
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 18px;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: flex-end;
+}}
+.appo-capa::after {{
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(20,5,12,0.10) 0%, rgba(20,5,12,0.78) 100%);
+}}
+.appo-capa span {{
+    position: relative; z-index: 1; color: #fff; font-weight: 700;
+    padding: 16px 22px; font-size: 1.05rem; text-shadow: 0 1px 4px rgba(0,0,0,0.45);
+}}
+.appo-categoria-foto {{
+    position: relative;
+    border-radius: 10px 10px 0 0;
+    margin: -1rem -1rem 12px -1rem;
+    height: 140px;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: flex-end;
+}}
+.appo-categoria-foto::after {{
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.68) 100%);
+    border-radius: 10px 10px 0 0;
+}}
+.appo-categoria-foto span {{
+    position: relative; z-index: 1; color: #fff; font-weight: 700;
+    padding: 12px 18px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px;
+}}
 </style>
 """
 st.markdown(CSS_APPO, unsafe_allow_html=True)
 
 
 def logo_svg(tamanho: int = 46, cor: str = COR_MARCA) -> str:
-    """Logótipo do Clube: mostrador de relógio com seta de retorno (foco no longo prazo),
-    traço mais grosso e sombra subtil. SVG puro — não depende de imagens externas."""
     return (
         f'<svg width="{tamanho}" height="{tamanho}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
         f'<defs><filter id="sombraAPPO" x="-30%" y="-30%" width="160%" height="160%">'
@@ -163,32 +215,43 @@ def hero(titulo: str, subtitulo: str, badge: str = "🇦🇴 BODIVA · Kwanzas (
     )
 
 
-CORES_CATEGORIA = {
-    "Institucional": COR_MARCA,
-    "Educação": "#1F6F5C",
-    "Análise de Mercado": "#0B3D91",
-    "Referência": "#8A6A26",
-}
-
-ICONES_CATEGORIA = {
-    "Institucional": "🏛️",
-    "Educação": "📖",
-    "Análise de Mercado": "📊",
-    "Referência": "📎",
-}
-
-
-def banner_categoria(categoria: str):
-    cor = CORES_CATEGORIA.get(categoria, COR_MARCA)
-    icone = ICONES_CATEGORIA.get(categoria, "📄")
+def banner_capa(imagem_url: str, texto: str, altura: int = 170):
     render_html(
         f"""
-        <div class="appo-categoria-banner" style="background:linear-gradient(120deg, {cor}cc, {cor});">
-            <span style="font-size:1.3rem;">{icone}</span>
-            <span>{categoria}</span>
+        <div class="appo-capa" style="height:{altura}px; background-image:url('{imagem_url}');">
+            <span>{texto}</span>
         </div>
         """
     )
+
+
+CORES_CATEGORIA = {
+    "Institucional": COR_MARCA, "Educação": "#1F6F5C",
+    "Análise de Mercado": "#0B3D91", "Referência": "#8A6A26",
+}
+ICONES_CATEGORIA = {"Institucional": "🏛️", "Educação": "📖", "Análise de Mercado": "📊", "Referência": "📎"}
+
+
+def banner_categoria(categoria: str):
+    icone = ICONES_CATEGORIA.get(categoria, "📄")
+    imagem = IMAGENS_CATEGORIA.get(categoria)
+    if imagem:
+        render_html(
+            f"""
+            <div class="appo-categoria-foto" style="background-image:url('{imagem}');">
+                <span>{icone} {categoria}</span>
+            </div>
+            """
+        )
+    else:
+        cor = CORES_CATEGORIA.get(categoria, COR_MARCA)
+        render_html(
+            f"""
+            <div class="appo-categoria-banner" style="background:linear-gradient(120deg, {cor}cc, {cor});">
+                <span style="font-size:1.3rem;">{icone}</span><span>{categoria}</span>
+            </div>
+            """
+        )
 
 
 def nota_indicador(texto: str):
@@ -381,9 +444,6 @@ Segundo **Benjamin Graham**, um investidor distingue-se de um *trader* por três
 3. **Aceita pensar diferente da maioria** — menos de 5% dos participantes do mercado
    seguem esta lógica, segundo estimativas do professor Lowenstein (Columbia).
 
-Estas três atitudes derivam de uma só percepção: comprar uma acção é comprar uma
-fracção de um negócio real, não um bilhete para negociar de curto prazo.
-
 *Adaptado de material de formação do Clube, com base nos ensinamentos de Benjamin Graham.*
 """
 
@@ -391,16 +451,13 @@ TEXTO_DIVIDENDOS_GUIA = """
 Receber um dividendo depende de três datas, e confundi-las é o erro mais comum de
 quem começa:
 
-- **Data da Assembleia Geral** — aprova o valor do dividendo, mas não determina quem
-  o recebe.
+- **Data da Assembleia Geral** — aprova o valor, mas não determina quem o recebe.
 - **Data de registo (ex-dividendo)** — a data que importa: quem detém a acção até
   este dia tem direito ao dividendo; quem compra depois, não.
-- **Data de pagamento** — quando o dinheiro chega, tipicamente semanas depois da
-  data de registo.
+- **Data de pagamento** — quando o dinheiro chega, semanas depois da data de registo.
 
-**Exemplo real (ciclo 2026, referente a 2025):** as Assembleias Gerais decorreram
-entre 25 e 31 de Março; a data de registo comum foi 10 de Abril; os pagamentos
-escalonaram-se entre 13 e 17 de Abril.
+**Exemplo real (ciclo 2026, referente a 2025):** Assembleias entre 25 e 31 de Março;
+data de registo comum a 10 de Abril; pagamentos entre 13 e 17 de Abril.
 
 **Onde confirmar sempre:** cmc.ao, secção de comunicados dos emitentes.
 """
@@ -409,15 +466,13 @@ TEXTO_DANGOTE = """
 Em Setembro de 2026, a Dangote Petroleum Refinery abriu capital na bolsa da Nigéria
 (NGX) — a maior OPV de sempre em África.
 
-**Números:** ₦525 por acção (~0,40 USD); 4,1 mil milhões de acções colocadas;
-avaliação implícita de 49 mil milhões USD; free-float de apenas ~3,3%.
+**Números:** ₦525 por acção (~0,40 USD); avaliação implícita de 49 mil milhões USD;
+free-float de apenas ~3,3%.
 
 **Sinal de alerta:** prejuízo de 476 milhões USD em 2025, seguido de um lucro de
-1,82 mil milhões USD só no 1º semestre de 2026 — impulsionado por margens de
-refinação excepcionalmente altas, historicamente cíclicas.
+1,82 mil milhões USD só no 1º semestre de 2026 — margens historicamente cíclicas.
 
-*Nota: mercado fora do âmbito da BODIVA (Nigéria, Naira) — incluído como referência
-comparativa e educativa.*
+*Nota: mercado fora do âmbito da BODIVA (Nigéria, Naira) — referência educativa.*
 """
 
 TEXTO_REGRAS_BODIVA = """
@@ -426,10 +481,9 @@ registada na CMC):
 
 - **Admissão de acções:** dispersão mínima de 5% do capital pelo mercado;
   capitalização bolsista mínima de 500 milhões de Kz.
-- **Lote mínimo de negociação:** 1 acção, salvo excepção definida pela BODIVA.
-- **Limites de variação de preço (acções):** 25% (estática) e 20% (dinâmica) num
-  único dia de negociação.
-- **Liquidação:** ciclo D+1 (dia útil seguinte à negociação).
+- **Lote mínimo de negociação:** 1 acção.
+- **Limites de variação de preço (acções):** 25% (estática) e 20% (dinâmica).
+- **Liquidação:** ciclo D+1.
 
 *Fonte: Regra BODIVA Nº 2/18 do Mercado de Bolsa, 18 de Dezembro de 2018.*
 """
@@ -935,7 +989,8 @@ if st.session_state["autenticado"] and st.session_state["login_timestamp"]:
 def pagina_login():
     col_esq, col_centro, col_dir = st.columns([1, 1.4, 1])
     with col_centro:
-        logo_com_texto(130)
+        banner_capa(IMG_SKYLINE, "Crescimento Sustentável, Foco no Longo Prazo", altura=150)
+        logo_com_texto(110)
         render_html(
             """
             <p style="text-align:center; opacity:0.75; margin-top:6px;">
@@ -1036,6 +1091,8 @@ if pagina == "🏠 Início & Análises":
     st.bar_chart(df_patrimonio)
 
     st.divider()
+    banner_capa(IMG_GRAFICO, "Disciplina, transparência e visão de longo prazo", altura=130)
+
     st.subheader("📌 Cotações em destaque")
     df_activos = obter_activos()
     if not df_activos.empty:
@@ -1192,8 +1249,7 @@ elif pagina == "📐 Avaliação de Activos":
             "<b>Valor Justo (DDM)</b> é uma estimativa, não uma certeza — quanto a acção 'deveria' valer se os "
             "dividendos crescerem à taxa assumida (g). <b>Upside/Downside</b> compara esse valor com o preço de "
             "mercado actual: positivo sugere possível desconto, negativo sugere possível prémio. "
-            "<b>Ke</b> é o retorno mínimo exigido para compensar o risco do sector — quanto maior o Ke, mais "
-            "exigente é o modelo com o crescimento futuro da empresa."
+            "<b>Ke</b> é o retorno mínimo exigido para compensar o risco do sector."
         )
 
         if m["upside"] is not None:
@@ -1229,10 +1285,9 @@ elif pagina == "📐 Avaliação de Activos":
             col_b.metric("Payout", pct(m["payout"]) if m["payout"] is not None else "n/d")
             col_c.metric("Dividend Yield Real", pct(m["dy_real"]))
             nota_indicador(
-                "<b>ROE</b> = rentabilidade gerada sobre o capital próprio da empresa — quanto maior, mais "
-                "eficiente a usar o dinheiro dos accionistas. <b>Payout</b> = fracção do lucro distribuída como "
-                "dividendo (o resto fica reinvestido no negócio). <b>Dividend Yield Real</b> = o yield nominal "
-                "descontado da inflação — o ganho a preços constantes, não apenas em Kwanzas nominais."
+                "<b>ROE</b> = rentabilidade gerada sobre o capital próprio da empresa. <b>Payout</b> = fracção "
+                "do lucro distribuída como dividendo. <b>Dividend Yield Real</b> = o yield nominal descontado "
+                "da inflação — o ganho a preços constantes."
             )
 
             st.markdown("##### Tabela de Sensibilidade — Valor Justo (Kz por acção)")
@@ -1316,7 +1371,7 @@ elif pagina == "🧮 Regra 50/30/20":
             st.success("Estás a cumprir, ou a superar, a meta de 20% de entesouramento.")
 
 # =========================================================
-# PÁGINA: BIBLIOTECA EDUCATIVA (com banners de categoria)
+# PÁGINA: BIBLIOTECA EDUCATIVA (com imagens de categoria)
 # =========================================================
 elif pagina == "📚 Biblioteca Educativa":
     hero("Biblioteca Educativa", "Princípios do Clube e artigos sobre o mercado de capitais angolano")
