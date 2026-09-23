@@ -14,6 +14,7 @@ import bcrypt
 import pandas as pd
 import psycopg2
 import psycopg2.extras
+import requests
 import streamlit as st
 from fpdf import FPDF
 from pypdf import PdfReader
@@ -30,13 +31,11 @@ st.set_page_config(
 
 
 def render_html(html: str):
-    """st.markdown com unsafe_allow_html, mas primeiro remove a indentação comum —
-    sem isto, HTML indentado é lido pelo Markdown como bloco de código em bruto."""
     st.markdown(textwrap.dedent(html).strip(), unsafe_allow_html=True)
 
 
 # =========================================================
-# IMAGENS (Unsplash, licença livre — URLs estáveis, sem depender do Pinterest)
+# IMAGENS (Unsplash, licença livre — URLs estáveis)
 # =========================================================
 IMG_SKYLINE = "https://images.unsplash.com/photo-1602552283771-c533ac53ce80?fm=jpg&q=70&w=1600&auto=format&fit=crop"
 IMG_GRAFICO = "https://images.unsplash.com/photo-1745270917449-c2e2c5806586?fm=jpg&q=70&w=1600&auto=format&fit=crop"
@@ -44,14 +43,97 @@ IMG_REUNIAO = "https://images.unsplash.com/photo-1517048676732-d65bc937f952?fm=j
 IMG_LIVROS = "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?fm=jpg&q=70&w=1600&auto=format&fit=crop"
 
 IMAGENS_CATEGORIA = {
-    "Institucional": IMG_REUNIAO,
-    "Educação": IMG_LIVROS,
-    "Análise de Mercado": IMG_GRAFICO,
-    "Referência": IMG_SKYLINE,
+    "Institucional": IMG_REUNIAO, "Educação": IMG_LIVROS,
+    "Análise de Mercado": IMG_GRAFICO, "Referência": IMG_SKYLINE,
 }
 
 # =========================================================
-# IDENTIDADE VISUAL (CSS + logótipo em SVG, sem depender de imagens externas)
+# IDIOMAS — navegação e ecrã de login traduzidos
+# =========================================================
+TRADUCOES = {
+    "Português": {
+        "tagline": "Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios",
+        "login_titulo": "Acesso reservado a sócios", "email": "E-mail", "password": "Palavra-passe",
+        "entrar": "Entrar", "erro_login": "E-mail ou palavra-passe incorrectos. Contacta um administrador do Clube.",
+        "sessao": "Sessão", "terminar_sessao": "Terminar sessão",
+        "nav_map": {
+            "🏠 Início & Análises": "🏠 Início & Análises", "📈 Cotações & Activos": "📈 Cotações & Activos",
+            "💰 Contabilidade & Finanças": "💰 Contabilidade & Finanças", "📊 Histórico & Relatórios": "📊 Histórico & Relatórios",
+            "📐 Avaliação de Activos": "📐 Avaliação de Activos", "💱 Conversor de Moeda": "💱 Conversor de Moeda",
+            "🧮 Regra 50/30/20": "🧮 Regra 50/30/20", "📚 Biblioteca Educativa": "📚 Biblioteca Educativa",
+            "🧾 Adesão de Sócios": "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos": "ℹ️ Sobre Nós & Estatutos",
+            "🔐 Painel do Administrador": "🔐 Painel do Administrador",
+        },
+    },
+    "English": {
+        "tagline": "Official BODIVA Quotes, Accounting and Membership Portal",
+        "login_titulo": "Members-only access", "email": "E-mail", "password": "Password",
+        "entrar": "Sign in", "erro_login": "Incorrect e-mail or password. Contact a Club administrator.",
+        "sessao": "Session", "terminar_sessao": "Sign out",
+        "nav_map": {
+            "🏠 Início & Análises": "🏠 Home & Analysis", "📈 Cotações & Activos": "📈 Quotes & Assets",
+            "💰 Contabilidade & Finanças": "💰 Accounting & Finance", "📊 Histórico & Relatórios": "📊 History & Reports",
+            "📐 Avaliação de Activos": "📐 Asset Valuation", "💱 Conversor de Moeda": "💱 Currency Converter",
+            "🧮 Regra 50/30/20": "🧮 50/30/20 Rule", "📚 Biblioteca Educativa": "📚 Learning Library",
+            "🧾 Adesão de Sócios": "🧾 Membership Application", "ℹ️ Sobre Nós & Estatutos": "ℹ️ About Us & Bylaws",
+            "🔐 Painel do Administrador": "🔐 Admin Panel",
+        },
+    },
+    "Français": {
+        "tagline": "Portail Officiel des Cotations BODIVA, Comptabilité et Adhésion",
+        "login_titulo": "Accès réservé aux membres", "email": "E-mail", "password": "Mot de passe",
+        "entrar": "Se connecter", "erro_login": "E-mail ou mot de passe incorrect. Contactez un administrateur.",
+        "sessao": "Session", "terminar_sessao": "Se déconnecter",
+        "nav_map": {
+            "🏠 Início & Análises": "🏠 Accueil & Analyses", "📈 Cotações & Activos": "📈 Cotations & Actifs",
+            "💰 Contabilidade & Finanças": "💰 Comptabilité & Finances", "📊 Histórico & Relatórios": "📊 Historique & Rapports",
+            "📐 Avaliação de Activos": "📐 Évaluation des Actifs", "💱 Conversor de Moeda": "💱 Convertisseur de Devises",
+            "🧮 Regra 50/30/20": "🧮 Règle 50/30/20", "📚 Biblioteca Educativa": "📚 Bibliothèque Éducative",
+            "🧾 Adesão de Sócios": "🧾 Adhésion des Membres", "ℹ️ Sobre Nós & Estatutos": "ℹ️ À propos & Statuts",
+            "🔐 Painel do Administrador": "🔐 Panneau d'Administration",
+        },
+    },
+    "Español": {
+        "tagline": "Portal Oficial de Cotizaciones BODIVA, Contabilidad y Adhesión",
+        "login_titulo": "Acceso reservado a socios", "email": "Correo electrónico", "password": "Contraseña",
+        "entrar": "Entrar", "erro_login": "Correo o contraseña incorrectos. Contacta a un administrador del Club.",
+        "sessao": "Sesión", "terminar_sessao": "Cerrar sesión",
+        "nav_map": {
+            "🏠 Início & Análises": "🏠 Inicio y Análisis", "📈 Cotações & Activos": "📈 Cotizaciones y Activos",
+            "💰 Contabilidade & Finanças": "💰 Contabilidad y Finanzas", "📊 Histórico & Relatórios": "📊 Historial e Informes",
+            "📐 Avaliação de Activos": "📐 Valoración de Activos", "💱 Conversor de Moeda": "💱 Conversor de Moneda",
+            "🧮 Regra 50/30/20": "🧮 Regla 50/30/20", "📚 Biblioteca Educativa": "📚 Biblioteca Educativa",
+            "🧾 Adesão de Sócios": "🧾 Adhesión de Socios", "ℹ️ Sobre Nós & Estatutos": "ℹ️ Sobre Nosotros y Estatutos",
+            "🔐 Painel do Administrador": "🔐 Panel de Administrador",
+        },
+    },
+    "中文 (Mandarim)": {
+        "tagline": "BODIVA官方行情、会计与会员门户",
+        "login_titulo": "仅限会员访问", "email": "电子邮件", "password": "密码",
+        "entrar": "登录", "erro_login": "邮箱或密码错误。请联系俱乐部管理员。",
+        "sessao": "会话", "terminar_sessao": "退出登录",
+        "nav_map": {
+            "🏠 Início & Análises": "🏠 首页与分析", "📈 Cotações & Activos": "📈 行情与资产",
+            "💰 Contabilidade & Finanças": "💰 会计与财务", "📊 Histórico & Relatórios": "📊 历史与报告",
+            "📐 Avaliação de Activos": "📐 资产估值", "💱 Conversor de Moeda": "💱 货币换算器",
+            "🧮 Regra 50/30/20": "🧮 50/30/20法则", "📚 Biblioteca Educativa": "📚 教育图书馆",
+            "🧾 Adesão de Sócios": "🧾 会员申请", "ℹ️ Sobre Nós & Estatutos": "ℹ️ 关于我们与章程",
+            "🔐 Painel do Administrador": "🔐 管理员面板",
+        },
+    },
+}
+LISTA_IDIOMAS = list(TRADUCOES.keys())
+
+if "idioma" not in st.session_state:
+    st.session_state["idioma"] = "Português"
+
+
+def t() -> dict:
+    return TRADUCOES[st.session_state["idioma"]]
+
+
+# =========================================================
+# IDENTIDADE VISUAL
 # =========================================================
 COR_MARCA = "#7C1F3E"
 
@@ -59,111 +141,41 @@ CSS_APPO = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Baloo+2:wght@600;700&display=swap');
 
-[data-testid="stAppViewContainer"] {{
-    background: #FBF8F6;
-}}
+[data-testid="stAppViewContainer"] {{ background: #FBF8F6; }}
 div[data-testid="stMetric"] {{
     background: linear-gradient(135deg, #ffffff 0%, #F6EFF2 100%);
-    border: 1px solid #ECDEE3;
-    border-left: 4px solid {COR_MARCA};
-    border-radius: 10px;
-    padding: 14px 16px;
-    box-shadow: 0 1px 4px rgba(124,31,62,0.08);
+    border: 1px solid #ECDEE3; border-left: 4px solid {COR_MARCA};
+    border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(124,31,62,0.08);
 }}
 .appo-hero {{
-    position: relative;
-    overflow: hidden;
+    position: relative; overflow: hidden;
     background: linear-gradient(120deg, #4A1226 0%, {COR_MARCA} 55%, #A6486A 100%);
-    color: #FFFFFF;
-    border-radius: 14px;
-    padding: 24px 30px;
-    margin-bottom: 18px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
+    color: #FFFFFF; border-radius: 14px; padding: 24px 30px; margin-bottom: 18px;
+    display: flex; align-items: center; gap: 16px;
 }}
 .appo-hero::before {{
-    content: "";
-    position: absolute; inset: 0;
-    background-image: repeating-linear-gradient(
-        135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 2px,
-        transparent 2px, transparent 16px
-    );
+    content: ""; position: absolute; inset: 0;
+    background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 2px, transparent 2px, transparent 16px);
     pointer-events: none;
 }}
 .appo-hero > * {{ position: relative; z-index: 1; }}
 .appo-hero h1 {{ margin: 0; font-size: 1.6rem; line-height: 1.2; }}
 .appo-hero p {{ margin: 4px 0 0 0; opacity: 0.9; font-size: 0.9rem; }}
-.appo-badge {{
-    display: inline-block; background: rgba(255,255,255,0.18);
-    padding: 3px 11px; border-radius: 999px; font-size: 0.72rem;
-    margin-top: 10px; letter-spacing: 0.3px;
-}}
+.appo-badge {{ display: inline-block; background: rgba(255,255,255,0.18); padding: 3px 11px; border-radius: 999px; font-size: 0.72rem; margin-top: 10px; letter-spacing: 0.3px; }}
 .appo-sidebar-header {{ display:flex; align-items:center; gap:12px; margin-bottom: 4px; }}
 .appo-sidebar-sub {{ font-size: 0.66rem; color:#9a8a90; letter-spacing:1.5px; text-transform:uppercase; margin:0; }}
-.appo-sidebar-word {{
-    font-family: 'Luckiest Guy', cursive; font-weight: 400; font-size: 1.7rem;
-    color: {COR_MARCA}; line-height: 1; margin-top: 2px;
-}}
-.appo-premium-lock {{
-    background: #FBF4F0; border: 1px dashed {COR_MARCA}; border-radius: 10px;
-    padding: 18px 20px; text-align: center;
-}}
-.appo-wordmark {{
-    font-family: 'Luckiest Guy', cursive; font-weight: 400; letter-spacing: 1px;
-    font-size: 3.4rem; color: {COR_MARCA}; text-align: center; margin-top: 4px;
-    line-height: 1; text-shadow: 1px 2px 0 rgba(124,31,62,0.18);
-}}
-.appo-indicador-nota {{
-    background: #F6EFF2; border-radius: 8px; padding: 10px 14px;
-    font-size: 0.85rem; color: #4A3038; margin: 6px 0 4px 0;
-}}
-.appo-categoria-banner {{
-    border-radius: 10px 10px 0 0; padding: 12px 18px;
-    display: flex; align-items: center; gap: 12px; margin: -1rem -1rem 12px -1rem;
-}}
-.appo-categoria-banner span {{
-    color: #fff; font-weight: 700; letter-spacing: 0.6px; font-size: 0.78rem; text-transform: uppercase;
-}}
-.appo-capa {{
-    position: relative;
-    border-radius: 14px;
-    overflow: hidden;
-    margin-bottom: 18px;
-    background-size: cover;
-    background-position: center;
-    display: flex;
-    align-items: flex-end;
-}}
-.appo-capa::after {{
-    content: "";
-    position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(20,5,12,0.10) 0%, rgba(20,5,12,0.78) 100%);
-}}
-.appo-capa span {{
-    position: relative; z-index: 1; color: #fff; font-weight: 700;
-    padding: 16px 22px; font-size: 1.05rem; text-shadow: 0 1px 4px rgba(0,0,0,0.45);
-}}
-.appo-categoria-foto {{
-    position: relative;
-    border-radius: 10px 10px 0 0;
-    margin: -1rem -1rem 12px -1rem;
-    height: 140px;
-    background-size: cover;
-    background-position: center;
-    display: flex;
-    align-items: flex-end;
-}}
-.appo-categoria-foto::after {{
-    content: "";
-    position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.68) 100%);
-    border-radius: 10px 10px 0 0;
-}}
-.appo-categoria-foto span {{
-    position: relative; z-index: 1; color: #fff; font-weight: 700;
-    padding: 12px 18px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px;
-}}
+.appo-sidebar-word {{ font-family: 'Luckiest Guy', cursive; font-weight: 400; font-size: 1.7rem; color: {COR_MARCA}; line-height: 1; margin-top: 2px; }}
+.appo-premium-lock {{ background: #FBF4F0; border: 1px dashed {COR_MARCA}; border-radius: 10px; padding: 18px 20px; text-align: center; }}
+.appo-wordmark {{ font-family: 'Luckiest Guy', cursive; font-weight: 400; letter-spacing: 1px; font-size: 3.4rem; color: {COR_MARCA}; text-align: center; margin-top: 4px; line-height: 1; text-shadow: 1px 2px 0 rgba(124,31,62,0.18); }}
+.appo-indicador-nota {{ background: #F6EFF2; border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; color: #4A3038; margin: 6px 0 4px 0; }}
+.appo-categoria-banner {{ border-radius: 10px 10px 0 0; padding: 12px 18px; display: flex; align-items: center; gap: 12px; margin: -1rem -1rem 12px -1rem; }}
+.appo-categoria-banner span {{ color: #fff; font-weight: 700; letter-spacing: 0.6px; font-size: 0.78rem; text-transform: uppercase; }}
+.appo-capa {{ position: relative; border-radius: 14px; overflow: hidden; margin-bottom: 18px; background-size: cover; background-position: center; display: flex; align-items: flex-end; }}
+.appo-capa-overlay {{ position: absolute; inset: 0; }}
+.appo-capa span {{ position: relative; z-index: 1; color: #fff; font-weight: 700; padding: 16px 22px; font-size: 1.05rem; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }}
+.appo-categoria-foto {{ position: relative; border-radius: 10px 10px 0 0; margin: -1rem -1rem 12px -1rem; height: 140px; background-size: cover; background-position: center; display: flex; align-items: flex-end; }}
+.appo-categoria-foto-overlay {{ position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%); border-radius: 10px 10px 0 0; }}
+.appo-categoria-foto span {{ position: relative; z-index: 1; color: #fff; font-weight: 700; padding: 12px 18px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; }}
 </style>
 """
 st.markdown(CSS_APPO, unsafe_allow_html=True)
@@ -173,8 +185,7 @@ def logo_svg(tamanho: int = 46, cor: str = COR_MARCA) -> str:
     return (
         f'<svg width="{tamanho}" height="{tamanho}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
         f'<defs><filter id="sombraAPPO" x="-30%" y="-30%" width="160%" height="160%">'
-        f'<feDropShadow dx="0" dy="1.5" stdDeviation="1.6" flood-color="#000000" flood-opacity="0.28"/>'
-        f"</filter></defs>"
+        f'<feDropShadow dx="0" dy="1.5" stdDeviation="1.6" flood-color="#000000" flood-opacity="0.28"/></filter></defs>'
         f'<g filter="url(#sombraAPPO)">'
         f'<circle cx="50" cy="40" r="31" fill="none" stroke="{cor}" stroke-width="7.5"/>'
         f'<line x1="50" y1="40" x2="50" y2="19" stroke="{cor}" stroke-width="6.5" stroke-linecap="round"/>'
@@ -184,20 +195,12 @@ def logo_svg(tamanho: int = 46, cor: str = COR_MARCA) -> str:
         f'<line x1="79" y1="40" x2="86" y2="40" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>'
         f'<line x1="50" y1="1" x2="50" y2="8" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>'
         f'<path d="M 22 68 A 33 33 0 0 0 70 70" fill="none" stroke="{cor}" stroke-width="7.5" stroke-linecap="round"/>'
-        f'<polygon points="70,70 60,65 66,78" fill="{cor}"/>'
-        f"</g></svg>"
+        f'<polygon points="70,70 60,65 66,78" fill="{cor}"/></g></svg>'
     )
 
 
 def logo_com_texto(tamanho: int = 130, cor: str = COR_MARCA):
-    render_html(
-        f"""
-        <div style="text-align:center; margin-top:10px;">
-            {logo_svg(tamanho, cor)}
-            <div class="appo-wordmark">APPO</div>
-        </div>
-        """
-    )
+    render_html(f'<div style="text-align:center; margin-top:10px;">{logo_svg(tamanho, cor)}<div class="appo-wordmark">APPO</div></div>')
 
 
 def hero(titulo: str, subtitulo: str, badge: str = "🇦🇴 BODIVA · Kwanzas (Kz)"):
@@ -205,30 +208,24 @@ def hero(titulo: str, subtitulo: str, badge: str = "🇦🇴 BODIVA · Kwanzas (
         f"""
         <div class="appo-hero">
             {logo_svg(58, "#FFFFFF")}
-            <div>
-                <h1>{titulo}</h1>
-                <p>{subtitulo}</p>
-                <span class="appo-badge">{badge}</span>
-            </div>
+            <div><h1>{titulo}</h1><p>{subtitulo}</p><span class="appo-badge">{badge}</span></div>
         </div>
         """
     )
 
 
-def banner_capa(imagem_url: str, texto: str, altura: int = 170):
+def banner_capa(imagem_url: str, texto: str, altura: int = 170, escurecimento: float = 0.5):
     render_html(
         f"""
         <div class="appo-capa" style="height:{altura}px; background-image:url('{imagem_url}');">
+            <div class="appo-capa-overlay" style="background:linear-gradient(180deg, rgba(20,5,12,0.05) 0%, rgba(20,5,12,{escurecimento}) 100%);"></div>
             <span>{texto}</span>
         </div>
         """
     )
 
 
-CORES_CATEGORIA = {
-    "Institucional": COR_MARCA, "Educação": "#1F6F5C",
-    "Análise de Mercado": "#0B3D91", "Referência": "#8A6A26",
-}
+CORES_CATEGORIA = {"Institucional": COR_MARCA, "Educação": "#1F6F5C", "Análise de Mercado": "#0B3D91", "Referência": "#8A6A26"}
 ICONES_CATEGORIA = {"Institucional": "🏛️", "Educação": "📖", "Análise de Mercado": "📊", "Referência": "📎"}
 
 
@@ -239,19 +236,13 @@ def banner_categoria(categoria: str):
         render_html(
             f"""
             <div class="appo-categoria-foto" style="background-image:url('{imagem}');">
-                <span>{icone} {categoria}</span>
+                <div class="appo-categoria-foto-overlay"></div><span>{icone} {categoria}</span>
             </div>
             """
         )
     else:
         cor = CORES_CATEGORIA.get(categoria, COR_MARCA)
-        render_html(
-            f"""
-            <div class="appo-categoria-banner" style="background:linear-gradient(120deg, {cor}cc, {cor});">
-                <span style="font-size:1.3rem;">{icone}</span><span>{categoria}</span>
-            </div>
-            """
-        )
+        render_html(f'<div class="appo-categoria-banner" style="background:linear-gradient(120deg, {cor}cc, {cor});"><span style="font-size:1.3rem;">{icone}</span><span>{categoria}</span></div>')
 
 
 def nota_indicador(texto: str):
@@ -267,10 +258,7 @@ ADMIN_PASSWORD_INICIAL = os.environ.get("ADMIN_PASSWORD_INICIAL", "MudarAgora123
 TEMPO_LIMITE_SESSAO_SEGUNDOS = 60 * 60
 
 if not DATABASE_URL:
-    st.error(
-        "A variável de ambiente DATABASE_URL não está definida. "
-        "Configura-a nas definições do serviço na Render (ver guia de implementação)."
-    )
+    st.error("A variável de ambiente DATABASE_URL não está definida. Configura-a nas definições do serviço na Render.")
     st.stop()
 
 
@@ -285,8 +273,7 @@ def kz(valor) -> str:
         return "0 Kz"
     sinal = "-" if inteiro < 0 else ""
     inteiro = abs(inteiro)
-    texto = f"{inteiro:,}".replace(",", " ")
-    return f"{sinal}{texto} Kz"
+    return f"{sinal}{f'{inteiro:,}'.replace(',', ' ')} Kz"
 
 
 def pct(valor) -> str:
@@ -327,10 +314,7 @@ def cor_variacao(v) -> str:
 def tabela_cotacoes_estilizada(df_activos: pd.DataFrame):
     df_disp = df_activos[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
     df_disp["mercado"] = "🇦🇴 BODIVA"
-    df_disp = df_disp.rename(
-        columns={"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Preço",
-                 "variacao": "Variação", "mercado": "Mercado"}
-    )
+    df_disp = df_disp.rename(columns={"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Preço", "variacao": "Variação", "mercado": "Mercado"})
     df_disp = df_disp[["Ticker", "Activo", "Tipo", "Mercado", "Preço", "Variação"]]
     return (
         df_disp.style.format({"Preço": kz, "Variação": pct_bruto})
@@ -349,6 +333,15 @@ def verificar_password(password: str, password_hash: str) -> bool:
         return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
     except Exception:
         return False
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def obter_taxas_cambio(base: str) -> dict:
+    resposta = requests.get(f"https://open.er-api.com/v6/latest/{base}", timeout=8)
+    dados = resposta.json()
+    if dados.get("result") != "success":
+        raise ValueError("Falha ao obter taxas de câmbio.")
+    return {"rates": dados["rates"], "actualizado": dados.get("time_last_update_utc", "")}
 
 
 # =========================================================
@@ -437,10 +430,8 @@ de preferência para reforçar a posição, em vez de a reduzir.
 TEXTO_INVESTIDOR_VS_TRADER = """
 Segundo **Benjamin Graham**, um investidor distingue-se de um *trader* por três atitudes:
 
-1. **Sente-se dono do negócio**, não apenas detentor de papéis — o desempenho da
-   carteira acompanha o desempenho real das empresas, não os humores do mercado.
-2. **Exige uma margem de segurança elevada** — como não controla o negócio de perto,
-   protege-se comprando com desconto face ao valor percebido.
+1. **Sente-se dono do negócio**, não apenas detentor de papéis.
+2. **Exige uma margem de segurança elevada**.
 3. **Aceita pensar diferente da maioria** — menos de 5% dos participantes do mercado
    seguem esta lógica, segundo estimativas do professor Lowenstein (Columbia).
 
@@ -452,9 +443,8 @@ Receber um dividendo depende de três datas, e confundi-las é o erro mais comum
 quem começa:
 
 - **Data da Assembleia Geral** — aprova o valor, mas não determina quem o recebe.
-- **Data de registo (ex-dividendo)** — a data que importa: quem detém a acção até
-  este dia tem direito ao dividendo; quem compra depois, não.
-- **Data de pagamento** — quando o dinheiro chega, semanas depois da data de registo.
+- **Data de registo (ex-dividendo)** — a data que importa.
+- **Data de pagamento** — quando o dinheiro chega, semanas depois.
 
 **Exemplo real (ciclo 2026, referente a 2025):** Assembleias entre 25 e 31 de Março;
 data de registo comum a 10 de Abril; pagamentos entre 13 e 17 de Abril.
@@ -468,9 +458,6 @@ Em Setembro de 2026, a Dangote Petroleum Refinery abriu capital na bolsa da Nig�
 
 **Números:** ₦525 por acção (~0,40 USD); avaliação implícita de 49 mil milhões USD;
 free-float de apenas ~3,3%.
-
-**Sinal de alerta:** prejuízo de 476 milhões USD em 2025, seguido de um lucro de
-1,82 mil milhões USD só no 1º semestre de 2026 — margens historicamente cíclicas.
 
 *Nota: mercado fora do âmbito da BODIVA (Nigéria, Naira) — referência educativa.*
 """
@@ -639,64 +626,44 @@ def inicializar_bd():
             (10000000.0, 10000000.0, 5000000.0, 1866677.0, 2832885.0),
         )
         executar(
-            "INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) "
-            "VALUES (%s, %s, %s, %s)",
+            "INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)",
             (5000000.0, 1866677.0, 2832885.0, 5000000.0 + 1866677.0 + 2832885.0),
         )
     else:
         linha = consultar_um("SELECT capital_subscrito, capital_realizado, capital_social FROM resumo_patrimonial WHERE id = 1")
         if linha and linha[0] is None:
             valor_antigo = float(linha[2])
-            executar(
-                "UPDATE resumo_patrimonial SET capital_subscrito = %s, capital_realizado = %s WHERE id = 1",
-                (valor_antigo, valor_antigo * 0.5),
-            )
+            executar("UPDATE resumo_patrimonial SET capital_subscrito = %s, capital_realizado = %s WHERE id = 1", (valor_antigo, valor_antigo * 0.5))
 
     if consultar_um("SELECT COUNT(*) FROM activos")[0] == 0:
         for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
-            executar(
-                "INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)",
-                (nome, tipo, preco, var, ticker),
-            )
+            executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco, var, ticker))
     else:
         for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
-            executar(
-                "UPDATE activos SET ticker = %s WHERE nome = %s AND (ticker IS NULL OR ticker = '')",
-                (ticker, nome),
-            )
+            executar("UPDATE activos SET ticker = %s WHERE nome = %s AND (ticker IS NULL OR ticker = '')", (ticker, nome))
 
     for titulo, categoria, conteudo in ARTIGOS_INICIAIS:
         if not consultar_um("SELECT 1 FROM artigos WHERE titulo = %s", (titulo,)):
             executar("INSERT INTO artigos (titulo, categoria, conteudo) VALUES (%s, %s, %s)", (titulo, categoria, conteudo))
 
     if consultar_um("SELECT COUNT(*) FROM premissas_macro")[0] == 0:
-        executar(
-            "INSERT INTO premissas_macro (id, inflacao, taxa_livre_risco, premio_risco, beta_banca, "
-            "beta_telecom, beta_outros) VALUES (1, 0.135, 0.18, 0.055, 1.0, 0.9, 1.0)"
-        )
+        executar("INSERT INTO premissas_macro (id, inflacao, taxa_livre_risco, premio_risco, beta_banca, beta_telecom, beta_outros) VALUES (1, 0.135, 0.18, 0.055, 1.0, 0.9, 1.0)")
 
     for empresa, sector, preco, acoes, lucro, ganho, cap_proprio, div_total, g in AVALIACOES_INICIAIS:
         if not consultar_um("SELECT 1 FROM avaliacoes WHERE empresa = %s", (empresa,)):
             executar(
-                "INSERT INTO avaliacoes (empresa, sector, preco, acoes_circulacao, lucro_liquido, "
-                "ganho_pontual, capital_proprio, dividendo_total, crescimento_g) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO avaliacoes (empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, crescimento_g) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (empresa, sector, preco, acoes, lucro, ganho, cap_proprio, div_total, g),
             )
 
 
 # ---------------- Contas ----------------
 def obter_conta_por_email(email: str):
-    return consultar_um(
-        "SELECT id, nome, email, password_hash, is_admin, is_premium FROM contas WHERE email = %s", (email,)
-    )
+    return consultar_um("SELECT id, nome, email, password_hash, is_admin, is_premium FROM contas WHERE email = %s", (email,))
 
 
 def inserir_conta(nome, email, password, is_admin):
-    executar(
-        "INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)",
-        (nome, email, hash_password(password), is_admin),
-    )
+    executar("INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)", (nome, email, hash_password(password), is_admin))
 
 
 def listar_contas() -> pd.DataFrame:
@@ -731,27 +698,17 @@ def obter_log_acessos() -> pd.DataFrame:
 
 # ---------------- Resumo patrimonial e histórico ----------------
 def obter_resumo_patrimonial() -> dict:
-    linha = consultar_um(
-        "SELECT capital_subscrito, capital_realizado, investimentos, reservas, actualizado_em "
-        "FROM resumo_patrimonial WHERE id = 1"
-    )
-    return {
-        "capital_subscrito": float(linha[0] or 0), "capital_realizado": float(linha[1] or 0),
-        "investimentos": float(linha[2]), "reservas": float(linha[3]), "actualizado_em": linha[4],
-    }
+    linha = consultar_um("SELECT capital_subscrito, capital_realizado, investimentos, reservas, actualizado_em FROM resumo_patrimonial WHERE id = 1")
+    return {"capital_subscrito": float(linha[0] or 0), "capital_realizado": float(linha[1] or 0), "investimentos": float(linha[2]), "reservas": float(linha[3]), "actualizado_em": linha[4]}
 
 
 def actualizar_resumo_patrimonial(capital_subscrito, capital_realizado, investimentos, reservas):
     executar(
-        "UPDATE resumo_patrimonial SET capital_social = %s, capital_subscrito = %s, capital_realizado = %s, "
-        "investimentos = %s, reservas = %s, actualizado_em = NOW() WHERE id = 1",
+        "UPDATE resumo_patrimonial SET capital_social = %s, capital_subscrito = %s, capital_realizado = %s, investimentos = %s, reservas = %s, actualizado_em = NOW() WHERE id = 1",
         (capital_subscrito, capital_subscrito, capital_realizado, investimentos, reservas),
     )
     total = capital_realizado + investimentos + reservas
-    executar(
-        "INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)",
-        (capital_realizado, investimentos, reservas, total),
-    )
+    executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)", (capital_realizado, investimentos, reservas, total))
 
 
 def obter_historico_patrimonio() -> pd.DataFrame:
@@ -760,17 +717,11 @@ def obter_historico_patrimonio() -> pd.DataFrame:
 
 # ---------------- Movimentos ----------------
 def inserir_movimento(tipo, descricao, montante, data_movimento):
-    executar(
-        "INSERT INTO movimentos (tipo, descricao, montante, data_movimento) VALUES (%s, %s, %s, %s)",
-        (tipo, descricao, montante, data_movimento),
-    )
+    executar("INSERT INTO movimentos (tipo, descricao, montante, data_movimento) VALUES (%s, %s, %s, %s)", (tipo, descricao, montante, data_movimento))
 
 
 def obter_movimentos() -> pd.DataFrame:
-    return consultar_df(
-        "SELECT tipo, descricao, montante, data_movimento, criado_em FROM movimentos "
-        "ORDER BY data_movimento DESC, criado_em DESC"
-    )
+    return consultar_df("SELECT tipo, descricao, montante, data_movimento, criado_em FROM movimentos ORDER BY data_movimento DESC, criado_em DESC")
 
 
 # ---------------- Activos + Favoritos ----------------
@@ -788,10 +739,7 @@ def substituir_activos(df: pd.DataFrame):
         preco = float(linha.get("preco", 0) or 0)
         variacao = float(linha.get("variacao", 0) or 0)
         ticker = str(linha.get("ticker", "") or "").strip().upper()
-        executar(
-            "INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)",
-            (nome, tipo, preco, variacao, ticker),
-        )
+        executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco, variacao, ticker))
 
 
 def obter_favoritos(conta_id: int) -> set:
@@ -808,10 +756,7 @@ def definir_favoritos(conta_id: int, ids_seleccionados: list):
 # ---------------- Artigos ----------------
 def obter_artigos(categoria: str = None) -> pd.DataFrame:
     if categoria and categoria != "Todas":
-        return consultar_df(
-            "SELECT id, titulo, categoria, conteudo, criado_em FROM artigos WHERE categoria = %s ORDER BY criado_em DESC",
-            (categoria,),
-        )
+        return consultar_df("SELECT id, titulo, categoria, conteudo, criado_em FROM artigos WHERE categoria = %s ORDER BY criado_em DESC", (categoria,))
     return consultar_df("SELECT id, titulo, categoria, conteudo, criado_em FROM artigos ORDER BY criado_em DESC")
 
 
@@ -825,22 +770,16 @@ def eliminar_artigo(artigo_id: int):
 
 # ---------------- Sócios ----------------
 def inserir_socio(nome, email, telefone, bi, contribuicao_inicial):
-    executar(
-        "INSERT INTO socios (nome, email, telefone, bi, contribuicao_inicial) VALUES (%s, %s, %s, %s, %s)",
-        (nome, email, telefone, bi, contribuicao_inicial),
-    )
+    executar("INSERT INTO socios (nome, email, telefone, bi, contribuicao_inicial) VALUES (%s, %s, %s, %s, %s)", (nome, email, telefone, bi, contribuicao_inicial))
 
 
 def obter_socios() -> pd.DataFrame:
-    return consultar_df(
-        "SELECT nome, email, telefone, bi, contribuicao_inicial, criado_em FROM socios ORDER BY criado_em DESC"
-    )
+    return consultar_df("SELECT nome, email, telefone, bi, contribuicao_inicial, criado_em FROM socios ORDER BY criado_em DESC")
 
 
 def extrair_texto_pdf(ficheiro) -> str:
     leitor = PdfReader(ficheiro)
-    partes = [pagina.extract_text() or "" for pagina in leitor.pages]
-    return "\n\n".join(partes).strip()
+    return "\n\n".join(pagina.extract_text() or "" for pagina in leitor.pages).strip()
 
 
 def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
@@ -875,38 +814,25 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         pdf.cell(0, 6, "Sem movimentos registados.", ln=True)
     else:
         for _, linha in df_movimentos.head(30).iterrows():
-            pdf.cell(
-                0, 6,
-                f"- {linha['data_movimento']} | {linha['tipo']} | {kz(linha['montante'])} | {linha['descricao'] or ''}",
-                ln=True,
-            )
+            pdf.cell(0, 6, f"- {linha['data_movimento']} | {linha['tipo']} | {kz(linha['montante'])} | {linha['descricao'] or ''}", ln=True)
     return bytes(pdf.output())
 
 
 # ---------------- Avaliação (fundamentais + DDM) ----------------
 def obter_premissas_macro() -> dict:
-    linha = consultar_um(
-        "SELECT inflacao, taxa_livre_risco, premio_risco, beta_banca, beta_telecom, beta_outros FROM premissas_macro WHERE id = 1"
-    )
-    return {
-        "inflacao": float(linha[0]), "taxa_livre_risco": float(linha[1]), "premio_risco": float(linha[2]),
-        "beta_banca": float(linha[3]), "beta_telecom": float(linha[4]), "beta_outros": float(linha[5]),
-    }
+    linha = consultar_um("SELECT inflacao, taxa_livre_risco, premio_risco, beta_banca, beta_telecom, beta_outros FROM premissas_macro WHERE id = 1")
+    return {"inflacao": float(linha[0]), "taxa_livre_risco": float(linha[1]), "premio_risco": float(linha[2]), "beta_banca": float(linha[3]), "beta_telecom": float(linha[4]), "beta_outros": float(linha[5])}
 
 
 def actualizar_premissas_macro(inflacao, rf, erp, beta_banca, beta_telecom, beta_outros):
     executar(
-        "UPDATE premissas_macro SET inflacao=%s, taxa_livre_risco=%s, premio_risco=%s, beta_banca=%s, "
-        "beta_telecom=%s, beta_outros=%s, actualizado_em=NOW() WHERE id = 1",
+        "UPDATE premissas_macro SET inflacao=%s, taxa_livre_risco=%s, premio_risco=%s, beta_banca=%s, beta_telecom=%s, beta_outros=%s, actualizado_em=NOW() WHERE id = 1",
         (inflacao, rf, erp, beta_banca, beta_telecom, beta_outros),
     )
 
 
 def obter_avaliacoes() -> pd.DataFrame:
-    return consultar_df(
-        "SELECT id, empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, "
-        "dividendo_total, crescimento_g, actualizado_em FROM avaliacoes ORDER BY empresa"
-    )
+    return consultar_df("SELECT id, empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, crescimento_g, actualizado_em FROM avaliacoes ORDER BY empresa")
 
 
 def substituir_avaliacoes(df: pd.DataFrame):
@@ -916,12 +842,10 @@ def substituir_avaliacoes(df: pd.DataFrame):
         if not empresa:
             continue
         executar(
-            "INSERT INTO avaliacoes (empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, "
-            "capital_proprio, dividendo_total, crescimento_g) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "INSERT INTO avaliacoes (empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, crescimento_g) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
-                empresa, str(linha.get("sector", "") or ""), float(linha.get("preco", 0) or 0),
-                float(linha.get("acoes_circulacao", 0) or 0), float(linha.get("lucro_liquido", 0) or 0),
-                float(linha.get("ganho_pontual", 0) or 0), float(linha.get("capital_proprio", 0) or 0),
+                empresa, str(linha.get("sector", "") or ""), float(linha.get("preco", 0) or 0), float(linha.get("acoes_circulacao", 0) or 0),
+                float(linha.get("lucro_liquido", 0) or 0), float(linha.get("ganho_pontual", 0) or 0), float(linha.get("capital_proprio", 0) or 0),
                 float(linha.get("dividendo_total", 0) or 0), float(linha.get("crescimento_g", 0) or 0),
             ),
         )
@@ -955,10 +879,7 @@ def calcular_metricas_avaliacao(av: dict, premissas: dict) -> dict:
     d1 = dps * (1 + g)
     valor_justo = (d1 / (ke - g)) if ke > g else None
     upside = ((valor_justo - preco) / preco) if (valor_justo is not None and preco) else None
-    return {
-        "cap_mercado": preco * acoes, "eps": eps, "pe": pe, "pbv": pbv, "dps": dps, "payout": payout,
-        "dy_nominal": dy_nominal, "dy_real": dy_real, "roe": roe, "ke": ke, "valor_justo": valor_justo, "upside": upside,
-    }
+    return {"cap_mercado": preco * acoes, "eps": eps, "pe": pe, "pbv": pbv, "dps": dps, "payout": payout, "dy_nominal": dy_nominal, "dy_real": dy_real, "roe": roe, "ke": ke, "valor_justo": valor_justo, "upside": upside}
 
 
 inicializar_bd()
@@ -989,20 +910,16 @@ if st.session_state["autenticado"] and st.session_state["login_timestamp"]:
 def pagina_login():
     col_esq, col_centro, col_dir = st.columns([1, 1.4, 1])
     with col_centro:
-        banner_capa(IMG_SKYLINE, "Crescimento Sustentável, Foco no Longo Prazo", altura=150)
+        st.selectbox("🌐", LISTA_IDIOMAS, key="idioma", label_visibility="collapsed")
+        textos = t()
+        banner_capa(IMG_SKYLINE, "Crescimento Sustentável, Foco no Longo Prazo", altura=150, escurecimento=0.42)
         logo_com_texto(110)
-        render_html(
-            """
-            <p style="text-align:center; opacity:0.75; margin-top:6px;">
-                Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios
-            </p>
-            """
-        )
-        st.markdown("#### Acesso reservado a sócios")
+        render_html(f'<p style="text-align:center; opacity:0.75; margin-top:6px;">{textos["tagline"]}</p>')
+        st.markdown(f"#### {textos['login_titulo']}")
         with st.form("form_login"):
-            email = st.text_input("E-mail")
-            password = st.text_input("Palavra-passe", type="password")
-            submeter = st.form_submit_button("Entrar")
+            email = st.text_input(textos["email"])
+            password = st.text_input(textos["password"], type="password")
+            submeter = st.form_submit_button(textos["entrar"])
         if submeter:
             conta = obter_conta_por_email(email.strip().lower())
             if conta and verificar_password(password, conta[3]):
@@ -1017,7 +934,7 @@ def pagina_login():
                 st.rerun()
             else:
                 registar_acesso(email, False)
-                st.error("E-mail ou palavra-passe incorrectos. Contacta um administrador do Clube.")
+                st.error(textos["erro_login"])
 
 
 if not st.session_state["autenticado"]:
@@ -1027,33 +944,25 @@ if not st.session_state["autenticado"]:
 # =========================================================
 # BARRA LATERAL
 # =========================================================
-render_html(
-    f"""
-    <div class="appo-sidebar-header">
-        {logo_svg(50)}
-        <div>
-            <p class="appo-sidebar-sub">Clube de Investimento</p>
-            <div class="appo-sidebar-word">APPO</div>
-        </div>
-    </div>
-    """
-)
+textos = t()
+render_html(f'<div class="appo-sidebar-header">{logo_svg(50)}<div><p class="appo-sidebar-sub">Clube de Investimento</p><div class="appo-sidebar-word">APPO</div></div></div>')
+st.sidebar.selectbox("🌐 Idioma / Language", LISTA_IDIOMAS, key="idioma")
 selo_premium = " · ⭐ Premium" if st.session_state["is_premium"] else ""
-st.sidebar.caption(f"Sessão: {st.session_state['conta_nome']} ({st.session_state['conta_email']}){selo_premium}")
+st.sidebar.caption(f"{textos['sessao']}: {st.session_state['conta_nome']} ({st.session_state['conta_email']}){selo_premium}")
 st.sidebar.divider()
 
 PAGINAS = [
     "🏠 Início & Análises", "📈 Cotações & Activos", "💰 Contabilidade & Finanças",
-    "📊 Histórico & Relatórios", "📐 Avaliação de Activos", "🧮 Regra 50/30/20",
-    "📚 Biblioteca Educativa", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos",
+    "📊 Histórico & Relatórios", "📐 Avaliação de Activos", "💱 Conversor de Moeda",
+    "🧮 Regra 50/30/20", "📚 Biblioteca Educativa", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos",
 ]
 if st.session_state["is_admin"]:
     PAGINAS.append("🔐 Painel do Administrador")
 
-pagina = st.sidebar.radio("Navegação", PAGINAS, label_visibility="collapsed")
+pagina = st.sidebar.radio("Navegação", PAGINAS, label_visibility="collapsed", format_func=lambda k: textos["nav_map"].get(k, k))
 
 st.sidebar.divider()
-if st.sidebar.button("Terminar sessão"):
+if st.sidebar.button(textos["terminar_sessao"]):
     for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium"]:
         st.session_state.pop(chave, None)
     st.rerun()
@@ -1071,11 +980,7 @@ if pagina == "🏠 Início & Análises":
 
     col1, col2 = st.columns(2)
     col1.metric("Capital Subscrito", kz(resumo["capital_subscrito"]))
-    col2.metric(
-        "Capital Realizado", kz(resumo["capital_realizado"]),
-        delta=(f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}% do subscrito" if resumo["capital_subscrito"] else None),
-        delta_color="off",
-    )
+    col2.metric("Capital Realizado", kz(resumo["capital_realizado"]), delta=(f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}% do subscrito" if resumo["capital_subscrito"] else None), delta_color="off")
     col3, col4, col5 = st.columns(3)
     col3.metric("Investimentos", kz(resumo["investimentos"]))
     col4.metric("Reservas", kz(resumo["reservas"]))
@@ -1084,14 +989,11 @@ if pagina == "🏠 Início & Análises":
     st.divider()
 
     st.subheader("Distribuição do Património")
-    df_patrimonio = pd.DataFrame(
-        {"Categoria": ["Capital Realizado", "Investimentos", "Reservas"],
-         "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]]}
-    ).set_index("Categoria")
+    df_patrimonio = pd.DataFrame({"Categoria": ["Capital Realizado", "Investimentos", "Reservas"], "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]]}).set_index("Categoria")
     st.bar_chart(df_patrimonio)
 
     st.divider()
-    banner_capa(IMG_GRAFICO, "Disciplina, transparência e visão de longo prazo", altura=130)
+    banner_capa(IMG_GRAFICO, "Disciplina, transparência e visão de longo prazo", altura=130, escurecimento=0.48)
 
     st.subheader("📌 Cotações em destaque")
     df_activos = obter_activos()
@@ -1099,7 +1001,7 @@ if pagina == "🏠 Início & Análises":
         st.dataframe(tabela_cotacoes_estilizada(df_activos), hide_index=True)
 
 # =========================================================
-# PÁGINA: COTAÇÕES & ACTIVOS (com Favoritos)
+# PÁGINA: COTAÇÕES & ACTIVOS
 # =========================================================
 elif pagina == "📈 Cotações & Activos":
     hero("Cotações & Activos", "Instrumentos financeiros cotados na BODIVA acompanhados pelo Clube", "🇦🇴 BODIVA DIRECTA")
@@ -1120,8 +1022,7 @@ elif pagina == "📈 Cotações & Activos":
                 definir_favoritos(conta_id, [opcoes[n] for n in novos_nomes])
                 st.rerun()
             if novos_nomes:
-                df_fav = df_activos[df_activos["nome"].isin(novos_nomes)]
-                st.dataframe(tabela_cotacoes_estilizada(df_fav), hide_index=True)
+                st.dataframe(tabela_cotacoes_estilizada(df_activos[df_activos["nome"].isin(novos_nomes)]), hide_index=True)
             else:
                 st.info("Ainda não marcaste nenhum activo como favorito. Usa a caixa acima.")
 
@@ -1131,13 +1032,7 @@ elif pagina == "📈 Cotações & Activos":
             df_filtrado = df_activos if filtro_tipo == "Todos" else df_activos[df_activos["tipo"] == filtro_tipo]
             st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
             st.caption(f"Última actualização: {df_filtrado['actualizado_em'].max()}")
-
-            st.download_button(
-                "⬇️ Descarregar tabela em CSV",
-                data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False).encode("utf-8"),
-                file_name="cotacoes_appo.csv", mime="text/csv",
-            )
-
+            st.download_button("⬇️ Descarregar tabela em CSV", data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False).encode("utf-8"), file_name="cotacoes_appo.csv", mime="text/csv")
             st.divider()
             st.subheader("Comparação de preços")
             st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": "Preço (Kz)"}))
@@ -1147,7 +1042,6 @@ elif pagina == "📈 Cotações & Activos":
 # =========================================================
 elif pagina == "💰 Contabilidade & Finanças":
     hero("Contabilidade & Finanças", "Resumo Contabilístico e Patrimonial do Clube")
-
     resumo = obter_resumo_patrimonial()
     df_resumo = pd.DataFrame(
         [
@@ -1167,14 +1061,12 @@ elif pagina == "💰 Contabilidade & Finanças":
 # =========================================================
 elif pagina == "📊 Histórico & Relatórios":
     hero("Histórico & Relatórios", "Evolução do património do Clube ao longo do tempo, e exportação de relatórios")
-
     df_historico = obter_historico_patrimonio()
     if df_historico.empty or len(df_historico) < 2:
         st.info("Ainda há poucos pontos de histórico. Este gráfico vai ganhando forma com o tempo.")
     else:
         st.caption("Cada ponto representa uma actualização do resumo patrimonial. Eixo vertical em Kwanzas (Kz).")
-        df_grafico = df_historico.set_index("registado_em")[["total"]].rename(columns={"total": "Património Total (Kz)"})
-        st.line_chart(df_grafico)
+        st.line_chart(df_historico.set_index("registado_em")[["total"]].rename(columns={"total": "Património Total (Kz)"}))
 
     st.divider()
     st.subheader("Movimentos registados")
@@ -1184,34 +1076,21 @@ elif pagina == "📊 Histórico & Relatórios":
     else:
         df_exibir = df_movimentos.copy()
         df_exibir["montante_fmt"] = df_exibir["montante"].apply(kz)
-        st.dataframe(
-            df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "criado_em"]].rename(
-                columns={"tipo": "Tipo", "descricao": "Descrição", "montante_fmt": "Montante", "data_movimento": "Data", "criado_em": "Registado em"}
-            ),
-            hide_index=True,
-        )
-        st.download_button(
-            "⬇️ Descarregar movimentos em CSV",
-            data=df_movimentos.to_csv(index=False).encode("utf-8"),
-            file_name="movimentos_appo.csv", mime="text/csv",
-        )
+        st.dataframe(df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "criado_em"]].rename(columns={"tipo": "Tipo", "descricao": "Descrição", "montante_fmt": "Montante", "data_movimento": "Data", "criado_em": "Registado em"}), hide_index=True)
+        st.download_button("⬇️ Descarregar movimentos em CSV", data=df_movimentos.to_csv(index=False).encode("utf-8"), file_name="movimentos_appo.csv", mime="text/csv")
 
     st.divider()
     st.subheader("Exportar relatório")
     if st.button("Gerar relatório em PDF"):
         resumo = obter_resumo_patrimonial()
         pdf_bytes = gerar_relatorio_pdf(resumo, obter_activos(), df_movimentos)
-        st.download_button(
-            "Descarregar relatório em PDF", data=pdf_bytes,
-            file_name=f"relatorio_appo_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf",
-        )
+        st.download_button("Descarregar relatório em PDF", data=pdf_bytes, file_name=f"relatorio_appo_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf")
 
 # =========================================================
 # PÁGINA: AVALIAÇÃO DE ACTIVOS
 # =========================================================
 elif pagina == "📐 Avaliação de Activos":
     hero("Avaliação de Activos", "Múltiplos e valor justo (DDM) das empresas cotadas, com dados reais do Clube")
-
     premissas = obter_premissas_macro()
     df_aval = obter_avaliacoes()
 
@@ -1220,12 +1099,7 @@ elif pagina == "📐 Avaliação de Activos":
     else:
         empresa_sel = st.selectbox("Empresa", df_aval["empresa"].tolist())
         av_linha = df_aval[df_aval["empresa"] == empresa_sel].iloc[0]
-        av = {
-            "sector": av_linha["sector"], "preco": float(av_linha["preco"]), "acoes_circulacao": float(av_linha["acoes_circulacao"]),
-            "lucro_liquido": float(av_linha["lucro_liquido"]), "ganho_pontual": float(av_linha["ganho_pontual"]),
-            "capital_proprio": float(av_linha["capital_proprio"]), "dividendo_total": float(av_linha["dividendo_total"]),
-            "crescimento_g": float(av_linha["crescimento_g"]),
-        }
+        av = {"sector": av_linha["sector"], "preco": float(av_linha["preco"]), "acoes_circulacao": float(av_linha["acoes_circulacao"]), "lucro_liquido": float(av_linha["lucro_liquido"]), "ganho_pontual": float(av_linha["ganho_pontual"]), "capital_proprio": float(av_linha["capital_proprio"]), "dividendo_total": float(av_linha["dividendo_total"]), "crescimento_g": float(av_linha["crescimento_g"])}
         m = calcular_metricas_avaliacao(av, premissas)
 
         st.caption(f"Sector: {av['sector']} · Capitalização de mercado: {kz(m['cap_mercado'])}")
@@ -1234,23 +1108,13 @@ elif pagina == "📐 Avaliação de Activos":
         col2.metric("P/E", multiplo(m["pe"]))
         col3.metric("P/BV", multiplo(m["pbv"]))
         col4.metric("Dividend Yield", pct(m["dy_nominal"]))
-        nota_indicador(
-            "<b>P/E</b> = quantos anos de lucro actual pagas pelo preço da acção — compara sempre dentro do "
-            "mesmo sector. <b>P/BV</b> = preço face ao valor contabilístico por acção; acima de 1x significa que "
-            "o mercado paga mais do que o valor contabilístico. <b>Dividend Yield</b> = retorno anual só em "
-            "dividendos, ao preço de hoje."
-        )
+        nota_indicador("<b>P/E</b> = quantos anos de lucro actual pagas pelo preço da acção. <b>P/BV</b> = preço face ao valor contabilístico por acção. <b>Dividend Yield</b> = retorno anual só em dividendos, ao preço de hoje.")
 
         col5, col6, col7 = st.columns(3)
         col5.metric("Valor Justo (DDM)", kz(m["valor_justo"]) if m["valor_justo"] is not None else "n/d")
         col6.metric("Upside / Downside", pct(m["upside"]) if m["upside"] is not None else "n/d")
         col7.metric("Custo de Capital (Ke)", pct(m["ke"]))
-        nota_indicador(
-            "<b>Valor Justo (DDM)</b> é uma estimativa, não uma certeza — quanto a acção 'deveria' valer se os "
-            "dividendos crescerem à taxa assumida (g). <b>Upside/Downside</b> compara esse valor com o preço de "
-            "mercado actual: positivo sugere possível desconto, negativo sugere possível prémio. "
-            "<b>Ke</b> é o retorno mínimo exigido para compensar o risco do sector."
-        )
+        nota_indicador("<b>Valor Justo (DDM)</b> é uma estimativa, não uma certeza. <b>Upside/Downside</b> compara com o preço de mercado. <b>Ke</b> é o retorno mínimo exigido para compensar o risco do sector.")
 
         if m["upside"] is not None:
             if m["upside"] > 0.15:
@@ -1260,35 +1124,20 @@ elif pagina == "📐 Avaliação de Activos":
             else:
                 st.info("O modelo DDM sugere que o preço de mercado está próximo do valor estimado.")
 
-        st.caption(
-            "Modelo de Dividendos Descontados (DDM/Gordon Growth): Valor Justo = D1 ÷ (Ke − g). "
-            "Muito sensível às premissas de g e Ke — usar como cross-check à leitura de múltiplos, nunca isoladamente."
-        )
+        st.caption("Modelo de Dividendos Descontados (DDM/Gordon Growth): Valor Justo = D1 ÷ (Ke − g). Usar como cross-check à leitura de múltiplos, nunca isoladamente.")
 
         st.divider()
         st.subheader("⭐ Análise Aprofundada (Premium)")
 
         if not st.session_state["is_premium"]:
-            render_html(
-                """
-                <div class="appo-premium-lock">
-                    <strong>Esta secção é exclusiva para sócios Premium.</strong><br/>
-                    Inclui comparação sectorial das 7 empresas, tabela de sensibilidade, ROE e Dividend Yield real.<br/><br/>
-                    Fala com um administrador do Clube para activares o teu acesso Premium.
-                </div>
-                """
-            )
+            render_html('<div class="appo-premium-lock"><strong>Esta secção é exclusiva para sócios Premium.</strong><br/>Inclui comparação sectorial, tabela de sensibilidade, ROE e Dividend Yield real.<br/><br/>Fala com um administrador do Clube para activares o teu acesso Premium.</div>')
         else:
             st.markdown("##### Indicadores adicionais")
             col_a, col_b, col_c = st.columns(3)
             col_a.metric("ROE", pct(m["roe"]) if m["roe"] is not None else "n/d")
             col_b.metric("Payout", pct(m["payout"]) if m["payout"] is not None else "n/d")
             col_c.metric("Dividend Yield Real", pct(m["dy_real"]))
-            nota_indicador(
-                "<b>ROE</b> = rentabilidade gerada sobre o capital próprio da empresa. <b>Payout</b> = fracção "
-                "do lucro distribuída como dividendo. <b>Dividend Yield Real</b> = o yield nominal descontado "
-                "da inflação — o ganho a preços constantes."
-            )
+            nota_indicador("<b>ROE</b> = rentabilidade sobre o capital próprio. <b>Payout</b> = fracção do lucro distribuída. <b>Dividend Yield Real</b> = yield descontado da inflação.")
 
             st.markdown("##### Tabela de Sensibilidade — Valor Justo (Kz por acção)")
             ke_base, g_base = m["ke"], av["crescimento_g"]
@@ -1305,50 +1154,61 @@ elif pagina == "📐 Avaliação de Activos":
             st.markdown("##### Comparação Sectorial (todas as empresas)")
             linhas_comp = []
             for _, l in df_aval.iterrows():
-                av_l = {
-                    "sector": l["sector"], "preco": float(l["preco"]), "acoes_circulacao": float(l["acoes_circulacao"]),
-                    "lucro_liquido": float(l["lucro_liquido"]), "ganho_pontual": float(l["ganho_pontual"]),
-                    "capital_proprio": float(l["capital_proprio"]), "dividendo_total": float(l["dividendo_total"]),
-                    "crescimento_g": float(l["crescimento_g"]),
-                }
+                av_l = {"sector": l["sector"], "preco": float(l["preco"]), "acoes_circulacao": float(l["acoes_circulacao"]), "lucro_liquido": float(l["lucro_liquido"]), "ganho_pontual": float(l["ganho_pontual"]), "capital_proprio": float(l["capital_proprio"]), "dividendo_total": float(l["dividendo_total"]), "crescimento_g": float(l["crescimento_g"])}
                 m_l = calcular_metricas_avaliacao(av_l, premissas)
-                linhas_comp.append(
-                    {"Empresa": l["empresa"], "Sector": l["sector"], "P/E": multiplo(m_l["pe"]), "P/BV": multiplo(m_l["pbv"]),
-                     "ROE": pct(m_l["roe"]) if m_l["roe"] is not None else "n/d", "DY Nominal": pct(m_l["dy_nominal"]),
-                     "Upside DDM": pct(m_l["upside"]) if m_l["upside"] is not None else "n/d"}
-                )
+                linhas_comp.append({"Empresa": l["empresa"], "Sector": l["sector"], "P/E": multiplo(m_l["pe"]), "P/BV": multiplo(m_l["pbv"]), "ROE": pct(m_l["roe"]) if m_l["roe"] is not None else "n/d", "DY Nominal": pct(m_l["dy_nominal"]), "Upside DDM": pct(m_l["upside"]) if m_l["upside"] is not None else "n/d"})
             df_comp = pd.DataFrame(linhas_comp)
             st.dataframe(df_comp, hide_index=True)
-            st.download_button(
-                "⬇️ Descarregar comparação sectorial em CSV", data=df_comp.to_csv(index=False).encode("utf-8"),
-                file_name="comparacao_sectorial_appo.csv", mime="text/csv",
-            )
-            st.caption(
-                "Sectores diferentes não são directamente comparáveis por P/E — usar como primeiro sinal, "
-                "nunca como veredicto isolado. Ferramenta educativa; não constitui aconselhamento de investimento."
-            )
+            st.download_button("⬇️ Descarregar comparação sectorial em CSV", data=df_comp.to_csv(index=False).encode("utf-8"), file_name="comparacao_sectorial_appo.csv", mime="text/csv")
+            st.caption("Sectores diferentes não são directamente comparáveis por P/E. Ferramenta educativa; não constitui aconselhamento de investimento.")
+
+# =========================================================
+# PÁGINA: CONVERSOR DE MOEDA
+# =========================================================
+elif pagina == "💱 Conversor de Moeda":
+    hero("Conversor de Moeda", "Taxas de câmbio actualizadas diariamente, com o Kwanza incluído", "💱 exchangerate-api.com")
+
+    MOEDAS = ["AOA", "USD", "EUR", "GBP", "ZAR", "CNY", "BRL"]
+    col1, col2, col3 = st.columns(3)
+    moeda_de = col1.selectbox("De", MOEDAS, index=0)
+    moeda_para = col2.selectbox("Para", MOEDAS, index=1)
+    valor = col3.number_input("Valor", min_value=0.0, value=1000.0, step=100.0)
+
+    try:
+        dados_cambio = obter_taxas_cambio(moeda_de)
+        taxa = dados_cambio["rates"].get(moeda_para)
+        if taxa is None:
+            st.error("Esta moeda não está disponível na fonte de dados neste momento.")
+        else:
+            resultado = valor * taxa
+            st.metric(f"{valor:,.2f} {moeda_de} equivale a", f"{resultado:,.2f} {moeda_para}")
+            st.caption(f"Taxa: 1 {moeda_de} = {taxa:.6f} {moeda_para}. Actualizado: {dados_cambio['actualizado']}. Fonte: exchangerate-api.com (aberta, actualização diária).")
+    except Exception:
+        st.warning("Não foi possível obter as taxas de câmbio neste momento. Tenta novamente dentro de instantes.")
+
+    st.divider()
+    st.subheader("Tabela rápida (a partir de 1 Kz)")
+    try:
+        dados_kz = obter_taxas_cambio("AOA")
+        linhas = [{"Moeda": m, "1 Kz equivale a": f"{dados_kz['rates'].get(m, 0):.6f} {m}"} for m in MOEDAS if m != "AOA"]
+        st.dataframe(pd.DataFrame(linhas), hide_index=True)
+    except Exception:
+        st.caption("Tabela indisponível de momento.")
 
 # =========================================================
 # PÁGINA: REGRA 50/30/20
 # =========================================================
 elif pagina == "🧮 Regra 50/30/20":
     hero("Regra 50/30/20 do Clube", "Princípio nº 8: 50% Consumo · 30% Investimento · 20% Entesouramento", "📐 Rendimento mensal total, incluindo extras")
-
     rendimento = st.number_input("Rendimento mensal total (Kz)", min_value=0.0, step=5000.0, value=250000.0, format="%.2f")
-    alvo_consumo = rendimento * 0.50
-    alvo_investimento = rendimento * 0.30
-    alvo_entesouramento = rendimento * 0.20
+    alvo_consumo, alvo_investimento, alvo_entesouramento = rendimento * 0.50, rendimento * 0.30, rendimento * 0.20
 
     st.subheader("Alocação recomendada")
     col1, col2, col3 = st.columns(3)
     col1.metric("Consumo (50%)", kz(alvo_consumo))
     col2.metric("Investimento (30%)", kz(alvo_investimento))
     col3.metric("Entesouramento (20%)", kz(alvo_entesouramento))
-
-    df_alvo = pd.DataFrame(
-        {"Categoria": ["Consumo", "Investimento", "Entesouramento"], "Valor recomendado (Kz)": [alvo_consumo, alvo_investimento, alvo_entesouramento]}
-    ).set_index("Categoria")
-    st.bar_chart(df_alvo)
+    st.bar_chart(pd.DataFrame({"Categoria": ["Consumo", "Investimento", "Entesouramento"], "Valor recomendado (Kz)": [alvo_consumo, alvo_investimento, alvo_entesouramento]}).set_index("Categoria"))
 
     st.divider()
     st.subheader("Compara com os teus gastos reais (opcional)")
@@ -1358,7 +1218,6 @@ elif pagina == "🧮 Regra 50/30/20":
         real_investimento = col_b.number_input("Gasto real — Investimento (Kz)", min_value=0.0, step=1000.0)
         real_entesouramento = col_c.number_input("Entesouramento real (Kz)", min_value=0.0, step=1000.0)
         comparar = st.form_submit_button("Comparar")
-
     if comparar:
         st.markdown("#### Resultado da comparação")
         col1, col2, col3 = st.columns(3)
@@ -1371,11 +1230,10 @@ elif pagina == "🧮 Regra 50/30/20":
             st.success("Estás a cumprir, ou a superar, a meta de 20% de entesouramento.")
 
 # =========================================================
-# PÁGINA: BIBLIOTECA EDUCATIVA (com imagens de categoria)
+# PÁGINA: BIBLIOTECA EDUCATIVA
 # =========================================================
 elif pagina == "📚 Biblioteca Educativa":
     hero("Biblioteca Educativa", "Princípios do Clube e artigos sobre o mercado de capitais angolano")
-
     df_artigos = obter_artigos()
     if df_artigos.empty:
         st.info("Ainda não existem artigos publicados.")
@@ -1393,7 +1251,6 @@ elif pagina == "📚 Biblioteca Educativa":
 # =========================================================
 elif pagina == "🧾 Adesão de Sócios":
     hero("Adesão de Sócios", "Preenche o formulário para solicitar a tua adesão ao Clube de Investimento APPO")
-
     with st.form("form_adesao", clear_on_submit=True):
         nome = st.text_input("Nome completo *")
         col1, col2 = st.columns(2)
@@ -1403,7 +1260,6 @@ elif pagina == "🧾 Adesão de Sócios":
         contribuicao = st.number_input("Contribuição inicial pretendida (Kz)", min_value=0.0, step=5000.0)
         aceite = st.checkbox("Declaro que li e aceite os Estatutos do Clube de Investimento APPO *")
         enviar = st.form_submit_button("Submeter pedido de adesão")
-
     if enviar:
         if not nome or not aceite:
             st.error("Preenche o nome completo e aceita os Estatutos para submeter o pedido.")
@@ -1416,13 +1272,8 @@ elif pagina == "🧾 Adesão de Sócios":
 # =========================================================
 elif pagina == "ℹ️ Sobre Nós & Estatutos":
     hero("Sobre Nós & Estatutos", "A missão, os princípios e o enquadramento estatutário do Clube")
-
     st.subheader("Quem somos")
-    st.markdown(
-        "O **Clube de Investimento APPO** é uma associação de investidores angolanos que "
-        "junta capital de forma colectiva para investir no mercado de capitais nacional, "
-        "através da Bolsa de Dívida e Valores de Angola (BODIVA)."
-    )
+    st.markdown("O **Clube de Investimento APPO** é uma associação de investidores angolanos que junta capital de forma colectiva para investir no mercado de capitais nacional, através da Bolsa de Dívida e Valores de Angola (BODIVA).")
     st.subheader("Princípios e Filosofia de Investimento")
     st.markdown(TEXTO_PRINCIPIOS)
     st.subheader("Estatutos — pontos-chave")
@@ -1472,8 +1323,8 @@ elif pagina == "🔐 Painel do Administrador":
             df_activos[["ticker", "nome", "tipo", "preco", "variacao"]], num_rows="dynamic", key="editor_activos",
             column_config={
                 "ticker": st.column_config.TextColumn("Ticker", max_chars=12), "nome": "Nome do activo", "tipo": "Tipo",
-                "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=100.0),
-                "variacao": st.column_config.NumberColumn("Variação (%)", step=0.1),
+                "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
+                "variacao": st.column_config.NumberColumn("Variação (%)", step=0.01, format="%.2f"),
             },
         )
         if st.button("Guardar alterações às cotações"):
@@ -1506,8 +1357,7 @@ elif pagina == "🔐 Painel do Administrador":
             df_aval[["empresa", "sector", "preco", "acoes_circulacao", "lucro_liquido", "ganho_pontual", "capital_proprio", "dividendo_total", "crescimento_g"]],
             num_rows="dynamic", key="editor_avaliacoes",
             column_config={
-                "empresa": "Empresa", "sector": "Sector",
-                "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=100.0),
+                "empresa": "Empresa", "sector": "Sector", "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=100.0),
                 "acoes_circulacao": st.column_config.NumberColumn("Acções em circulação", min_value=0.0, step=1000.0),
                 "lucro_liquido": st.column_config.NumberColumn("Lucro líquido (Kz)", step=1000000.0),
                 "ganho_pontual": st.column_config.NumberColumn("Ganho pontual não recorrente (Kz)", step=1000000.0),
@@ -1583,10 +1433,7 @@ elif pagina == "🔐 Painel do Administrador":
         else:
             df_socios_exibir = df_socios.copy()
             df_socios_exibir["contribuicao_inicial"] = df_socios_exibir["contribuicao_inicial"].apply(kz)
-            st.dataframe(
-                df_socios_exibir.rename(columns={"nome": "Nome", "email": "E-mail", "telefone": "Telefone", "bi": "Nº BI", "contribuicao_inicial": "Contribuição Inicial", "criado_em": "Submetido em"}),
-                hide_index=True,
-            )
+            st.dataframe(df_socios_exibir.rename(columns={"nome": "Nome", "email": "E-mail", "telefone": "Telefone", "bi": "Nº BI", "contribuicao_inicial": "Contribuição Inicial", "criado_em": "Submetido em"}), hide_index=True)
 
     with aba_contas:
         st.subheader("Criar conta de acesso para um sócio")
