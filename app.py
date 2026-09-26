@@ -21,7 +21,10 @@ if "estatutos_pdf_bytes" not in st.session_state:
     st.session_state["estatutos_pdf_bytes"] = None
 
 if "estatutos_texto" not in st.session_state:
-    st.session_state["estatutos_texto"] = "Os estatutos oficiais do Clube de Investimento APPO regem o funcionamento, direitos e deveres dos sócios."
+    st.session_state["estatutos_texto"] = (
+        "Os estatutos oficiais do Clube de Investimento APPO regem o funcionamento, "
+        "direitos e deveres de todos os sócios e membros."
+    )
 
 if "df_activos" not in st.session_state:
     st.session_state["df_activos"] = pd.DataFrame([
@@ -34,16 +37,15 @@ if "df_activos" not in st.session_state:
     ])
 
 # ==========================================
-# FUNÇÕES AUXILIARES & CORREÇÕES DE ERROS
+# FUNÇÕES AUXILIARES DE TRATAMENTO DE ERROS
 # ==========================================
 
-# 1. Estilização de cores sem deprecação do Pandas
 def cor_variacao(val):
     if isinstance(val, (int, float)):
         if val > 0:
-            return 'color: green; font-weight: bold;'
+            return 'color: #2e7d32; font-weight: bold;'
         elif val < 0:
-            return 'color: red; font-weight: bold;'
+            return 'color: #c62828; font-weight: bold;'
     return 'color: black;'
 
 def tabela_cotacoes_estilizada(df):
@@ -57,7 +59,6 @@ def tabela_cotacoes_estilizada(df):
     else:
         return styler.applymap(cor_variacao, subset=["variacao"])
 
-# 2. Geração segura de PDF em Bytes
 def gerar_relatorio_pdf(resumo, ativos, movimentos):
     pdf = FPDF()
     pdf.add_page()
@@ -77,23 +78,13 @@ def gerar_relatorio_pdf(resumo, ativos, movimentos):
     else:
         return bytes(str(out), 'latin1')
 
-# 3. Geração segura de Excel (CORRIGIDO O INDENTATIONERROR)
 def gerar_excel_bytes(df_export, nome_aba="Dados"):
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    # Utiliza openpyxl para evitar dependência estrita de xlsxwriter
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_export.to_excel(writer, sheet_name=nome_aba, index=False)
-        worksheet = writer.sheets[nome_aba]
-        
-        for i, col in enumerate(df_export.columns):
-            max_len = max(
-                df_export[col].astype(str).fillna('').map(len).max(),
-                len(str(col))
-            ) + 3
-            worksheet.set_column(i, i, max_len)
-            
     return output.getvalue()
 
-# 4. Leitura segura de PDF com resete de buffer
 def extrair_texto_pdf(uploaded_pdf):
     try:
         uploaded_pdf.seek(0)
@@ -108,8 +99,16 @@ def extrair_texto_pdf(uploaded_pdf):
         return f"Erro ao processar o ficheiro PDF: {str(e)}"
 
 # ==========================================
-# MENU LATERAL
+# BARRA LATERAL (COM SUPORTE A LOGO)
 # ==========================================
+st.sidebar.markdown("### 📈 Clube APPO")
+
+# Tente carregar o logótipo caso exista na pasta do projeto
+try:
+    st.sidebar.image("logo.png", use_container_width=True)
+except Exception:
+    pass
+
 st.sidebar.title("Navegação")
 opcao_menu = st.sidebar.radio(
     "Ir para:",
@@ -126,47 +125,61 @@ opcao_menu = st.sidebar.radio(
 )
 
 # ==========================================
-# PÁGINAS
+# CONTEÚDO PRINCIPAL
 # ==========================================
 
 # --- 1. INÍCIO & ANÁLISES ---
 if opcao_menu == "🏠 Início & Análises":
     st.title("📌 Cotações em Destaque")
+    st.markdown("Acompanhe o desempenho dos principais ativos negociados na Bolsa de Dívida e Valores de Angola (BODIVA).")
+    
     df_cotacoes = st.session_state["df_activos"]
     st.dataframe(tabela_cotacoes_estilizada(df_cotacoes), use_container_width=True, hide_index=True)
 
 # --- 2. COTAÇÕES & ACTIVOS ---
 elif opcao_menu == "📈 Cotações & Activos":
     st.title("📈 Todos os Activos")
-    tipo_filtro = st.selectbox("Filtrar por tipo de activo", ["Todos", "ACÇÃO", "OBRIGAÇÃO"])
+    
+    col_filtro1, col_filtro2 = st.columns([1, 2])
+    with col_filtro1:
+        tipo_filtro = st.selectbox("Filtrar por tipo de activo", ["Todos", "ACÇÃO", "OBRIGAÇÃO"])
+        
     df = st.session_state["df_activos"]
     if tipo_filtro != "Todos":
         df = df[df["tipo"] == tipo_filtro]
+        
     st.dataframe(tabela_cotacoes_estilizada(df), use_container_width=True, hide_index=True)
 
 # --- 3. HISTÓRICO & RELATÓRIOS ---
 elif opcao_menu == "📊 Histórico & Relatórios":
-    st.title("📊 Exportar Relatório")
-    if st.button("Gerar relatório em PDF"):
-        pdf_data = gerar_relatorio_pdf("Relatório mensal gerado.", None, None)
+    st.title("📊 Histórico & Relatórios")
+    st.write("Gere e descarregue os relatórios consolidados da carteira do Clube de Investimento APPO.")
+    
+    if st.button("📄 Gerar Relatório Completo em PDF"):
+        pdf_data = gerar_relatorio_pdf("Relatório das posições e movimentações recentes.", None, None)
         st.download_button("📥 Descarregar PDF", data=pdf_data, file_name="relatorio_appo.pdf", mime="application/pdf")
 
 # --- 4. AVALIAÇÃO DE ACTIVOS ---
 elif opcao_menu == "📐 Avaliação de Activos":
     st.title("📐 Avaliação Sectorial e Exportação")
+    st.write("Métricas de desempenho fundamentais para empresas cotadas.")
+    
     df_comp = pd.DataFrame([
         {"Empresa": "UNITEL", "Sector": "Telecomunicações", "P/E": 10.73, "ROE": 0.18, "DY Nominal": 0.08},
         {"Empresa": "SBA (Standard Bank)", "Sector": "Banca", "P/E": 3.85, "ROE": 0.44, "DY Nominal": 0.00}
     ])
-    st.dataframe(df_comp)
+    st.dataframe(df_comp, use_container_width=True)
     
-    excel_bytes = gerar_excel_bytes(df_comp, "Comparação Sectorial")
-    st.download_button(
-        "📥 Exportar Comparação para Excel",
-        data=excel_bytes,
-        file_name="comparacao_sectorial.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    try:
+        excel_bytes = gerar_excel_bytes(df_comp, "Comparação Sectorial")
+        st.download_button(
+            "📥 Exportar Comparação para Excel",
+            data=excel_bytes,
+            file_name="comparacao_sectorial.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        st.error(f"Erro ao gerar o ficheiro Excel: {str(e)}")
 
 # --- 5. REGRA 50/30/20 ---
 elif opcao_menu == "🧮 Regra 50/30/20":
@@ -184,18 +197,16 @@ elif opcao_menu == "🧮 Regra 50/30/20":
     col2.metric("30% Desejos Pessoais", f"{meta_des:,.2f} Kz")
     col3.metric("20% Investimento / Poupança", f"{meta_poup:,.2f} Kz")
     
+    st.divider()
     st.subheader("Simulação de Despesas Reais")
     c1, c2, c3 = st.columns(3)
     g_nec = c1.number_input("Gastos Reais em Necessidades (Kz):", value=meta_nec)
     g_des = c2.number_input("Gastos Reais em Desejos (Kz):", value=meta_des)
     g_poup = c3.number_input("Valor Alocado a Poupança/Investimento (Kz):", value=meta_poup)
     
-    diff_nec = meta_nec - g_nec
-    diff_des = meta_des - g_des
     diff_poup = g_poup - meta_poup
     
-    st.divider()
-    st.write("### Análise do Seu Orçamento")
+    st.subheader("Análise do Seu Orçamento")
     if diff_poup >= 0:
         st.success(f"Excelente! Está a cumprir ou superar a sua meta de poupança/investimento em +{diff_poup:,.2f} Kz.")
     else:
@@ -205,7 +216,12 @@ elif opcao_menu == "🧮 Regra 50/30/20":
 elif opcao_menu == "📚 Biblioteca Educativa":
     st.title("📚 Biblioteca Educativa")
     
-    opcoes_temas = ["Selecione um tema...", "Introdução ao Mercado de Capitais em Angola", "Como Avaliar Ações na BODIVA", "Gestão de Risco e Diversificação"]
+    opcoes_temas = [
+        "Selecione um tema...",
+        "Introdução ao Mercado de Capitais em Angola",
+        "Como Avaliar Ações na BODIVA",
+        "Gestão de Risco e Diversificação"
+    ]
     escolha = st.selectbox("Escolha o tópico de estudo:", opcoes_temas)
     
     if escolha == "Selecione um tema...":
@@ -220,7 +236,7 @@ elif opcao_menu == "📚 Biblioteca Educativa":
         st.subheader("Gestão de Risco e Diversificação")
         st.write("Diversificar ativos minimiza o risco não-sistemático da carteira...")
 
-# --- 7. SOBRE NÓS & ESTATUTOS (PÚBLICO) ---
+# --- 7. SOBRE NÓS & ESTATUTOS ---
 elif opcao_menu == "ℹ️ Sobre Nós & Estatutos":
     st.title("ℹ️ Sobre Nós & Estatutos do Clube")
     st.write("### Quem Somos")
