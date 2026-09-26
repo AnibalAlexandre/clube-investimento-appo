@@ -132,6 +132,7 @@ CSS_APPO = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Baloo+2:wght@600;700&display=swap');
 [data-testid="stAppViewContainer"] {{ background: #FBF8F6; }}
+[data-testid="stHeader"] {{ background: transparent; }}
 div[data-testid="stMetric"] {{ background: linear-gradient(135deg, #ffffff 0%, #F6EFF2 100%); border: 1px solid #ECDEE3; border-left: 4px solid {COR_MARCA}; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(124,31,62,0.08); }}
 .appo-hero {{ position: relative; overflow: hidden; background: linear-gradient(120deg, #4A1226 0%, {COR_MARCA} 55%, #A6486A 100%); color: #FFFFFF; border-radius: 14px; padding: 24px 30px; margin-bottom: 18px; display: flex; align-items: center; gap: 16px; }}
 .appo-hero::before {{ content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 2px, transparent 2px, transparent 16px); pointer-events: none; }}
@@ -153,8 +154,8 @@ div[data-testid="stMetric"] {{ background: linear-gradient(135deg, #ffffff 0%, #
 .appo-categoria-foto {{ position: relative; border-radius: 10px 10px 0 0; margin: -1rem -1rem 12px -1rem; height: 140px; background-size: cover; background-position: center; display: flex; align-items: flex-end; }}
 .appo-categoria-foto-overlay {{ position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%); border-radius: 10px 10px 0 0; }}
 .appo-categoria-foto span {{ position: relative; z-index: 1; color: #fff; font-weight: 700; padding: 12px 18px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; }}
-.appo-ticker-wrap {{ overflow: hidden; white-space: nowrap; background: #1A0E14; border-radius: 8px; padding: 9px 0; margin-bottom: 16px; }}
-.appo-ticker-move {{ display: inline-block; padding-left: 100%; animation: appo-scroll 45s linear infinite; font-family: monospace; font-size: 0.82rem; }}
+.appo-ticker-wrap {{ overflow: hidden; white-space: nowrap; background: none; border-top: 1px solid #ECDEE3; border-bottom: 1px solid #ECDEE3; padding: 8px 0; margin: 0 0 16px 0; }}
+.appo-ticker-move {{ display: inline-block; padding-left: 100%; animation: appo-scroll 170s linear infinite; font-family: monospace; font-size: 0.82rem; }}
 @keyframes appo-scroll {{ 0% {{ transform: translate(0,0); }} 100% {{ transform: translate(-100%,0); }} }}
 .appo-share a {{ text-decoration:none; color:#fff; padding:6px 14px; border-radius:8px; font-size:0.82rem; font-weight:600; }}
 </style>
@@ -223,7 +224,7 @@ def ticker_tape(df_activos: pd.DataFrame):
     itens = []
     for _, a in df_activos.iterrows():
         v = float(a["variacao"])
-        cor = "#4ADE80" if v > 0 else ("#F87171" if v < 0 else "#D1D5DB")
+        cor = "#16A34A" if v > 0 else ("#DC2626" if v < 0 else "#6B7280")
         itens.append(f'<span style="color:{cor}; margin-right:36px;">{a["ticker"] or a["nome"]} &nbsp;{kz(a["preco"])} &nbsp;({v:+.2f}%)</span>')
     conteudo = "".join(itens) * 3
     render_html(f'<div class="appo-ticker-wrap"><div class="appo-ticker-move"><span>{conteudo}</span></div></div>')
@@ -845,8 +846,8 @@ if pagina == "🏠 Início & Análises":
     col5.metric("Património Total", kz(total_patrimonio))
 
     indice = calcular_indice_mercado(_df_activos_ticker)
-    st.metric("📊 Índice APPO (média das acções cotadas)", pct_bruto(indice), delta=pct_bruto(indice))
-    st.caption("Como teria valorizado uma carteira investida em partes iguais em todas as acções acompanhadas pelo Clube.")
+    st.metric("📊 Barómetro BODIVA (cotação média do dia)", pct_bruto(indice), delta=pct_bruto(indice))
+    st.caption("Mostra se o conjunto das acções acompanhadas pelo Clube subiu ou desceu, em média, no dia — um indicador do mercado BODIVA, não necessariamente o desempenho da carteira do Clube.")
     st.divider()
 
     st.subheader("Distribuição do Património")
@@ -869,21 +870,21 @@ elif pagina == "📈 Cotações & Activos":
     if df_activos.empty:
         st.info("Ainda não existem activos registados.")
     else:
-        st.subheader("📊 Índice APPO — cotação média do mercado")
+        st.subheader("📊 Barómetro BODIVA — Cotação Média das Acções Negociadas")
         indice = calcular_indice_mercado(df_activos)
         col_i1, col_i2 = st.columns([1, 2])
         col_i1.metric("Variação média de hoje", pct_bruto(indice), delta=pct_bruto(indice))
-        col_i1.caption("Se tivesses investido em partes iguais em todas as acções cotadas pelo Clube, a tua carteira teria variado, em média, este valor.")
+        col_i1.caption("Indica se o mercado acompanhado pelo Clube (as acções cotadas na BODIVA) subiu ou desceu, em média, hoje — não reflecte necessariamente a carteira do Clube.")
         df_hist_indice = obter_historico_indice()
         with col_i2:
             if len(df_hist_indice) >= 2:
                 df_hist_indice["registado_em"] = pd.to_datetime(df_hist_indice["registado_em"])
-                st.line_chart(df_hist_indice.set_index("registado_em")[["indice_variacao"]].rename(columns={"indice_variacao": "Índice APPO — diário (%)"}))
+                st.line_chart(df_hist_indice.set_index("registado_em")[["indice_variacao"]].rename(columns={"indice_variacao": "Barómetro BODIVA — diário (%)"}))
             else:
-                st.info("O histórico diário do Índice APPO vai-se formando a cada dia em que o administrador actualizar as cotações.")
-        st.markdown("##### Tendência semanal do Índice APPO")
+                st.info("O histórico diário do Barómetro BODIVA vai-se formando a cada dia em que o administrador actualizar as cotações.")
+        st.markdown("##### Tendência Semanal do Barómetro BODIVA")
         if len(df_hist_indice) >= 2:
-            df_semanal = df_hist_indice.set_index("registado_em").resample("W")[["indice_variacao"]].mean().rename(columns={"indice_variacao": "Índice APPO — média semanal (%)"})
+            df_semanal = df_hist_indice.set_index("registado_em").resample("W")[["indice_variacao"]].mean().rename(columns={"indice_variacao": "Barómetro BODIVA — média semanal (%)"})
             if len(df_semanal) >= 2:
                 st.line_chart(df_semanal)
             else:
@@ -1248,7 +1249,7 @@ elif pagina == "🔐 Painel do Administrador":
 
     with aba_activos:
         st.subheader("Editar Cotações & Activos")
-        st.caption("Cada vez que guardas, o Índice APPO é recalculado e um novo ponto é registado no histórico.")
+        st.caption("Cada vez que guardas, o Barómetro BODIVA é recalculado e um novo ponto é registado no histórico.")
         df_activos = obter_activos()
         df_editado = st.data_editor(
             df_activos[["ticker", "nome", "tipo", "preco", "variacao"]], num_rows="dynamic", key="editor_activos",
@@ -1260,7 +1261,7 @@ elif pagina == "🔐 Painel do Administrador":
         )
         if st.button("Guardar alterações às cotações"):
             substituir_activos(df_editado)
-            st.success("Cotações e Índice APPO actualizados com sucesso.")
+            st.success("Cotações e Barómetro BODIVA actualizados com sucesso.")
             st.rerun()
 
     with aba_aval:
