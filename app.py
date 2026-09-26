@@ -4,12 +4,13 @@ Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios
 Aplicação web corporativa privada — Streamlit + PostgreSQL (Neon)
 """
 
+import io
 import os
 import secrets
 import textwrap
 import time
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import bcrypt
 import pandas as pd
@@ -18,6 +19,8 @@ import psycopg2.extras
 import requests
 import streamlit as st
 from fpdf import FPDF
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 from pypdf import PdfReader
 
 # =========================================================
@@ -155,7 +158,7 @@ div[data-testid="stMetric"] {{ background: linear-gradient(135deg, #ffffff 0%, #
 .appo-categoria-foto-overlay {{ position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%); border-radius: 10px 10px 0 0; }}
 .appo-categoria-foto span {{ position: relative; z-index: 1; color: #fff; font-weight: 700; padding: 12px 18px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; }}
 .appo-ticker-wrap {{ overflow: hidden; white-space: nowrap; background: none; border-top: 1px solid #ECDEE3; border-bottom: 1px solid #ECDEE3; padding: 8px 0; margin: 0 0 16px 0; }}
-.appo-ticker-move {{ display: inline-block; padding-left: 100%; animation: appo-scroll 170s linear infinite; font-family: monospace; font-size: 0.82rem; }}
+.appo-ticker-move {{ display: inline-block; padding-left: 100%; animation: appo-scroll 130s linear infinite; font-family: monospace; font-size: 0.82rem; }}
 @keyframes appo-scroll {{ 0% {{ transform: translate(0,0); }} 100% {{ transform: translate(-100%,0); }} }}
 .appo-share a {{ text-decoration:none; color:#fff; padding:6px 14px; border-radius:8px; font-size:0.82rem; font-weight:600; }}
 </style>
@@ -294,6 +297,60 @@ def multiplo(v) -> str:
         return f"{float(v):.2f}x"
     except (TypeError, ValueError):
         return "n/d"
+
+
+def fmt_dt(valor) -> str:
+    """Formata datas/horas de forma legível (sem microssegundos) para captions e exportações."""
+    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        return "n/d"
+    if isinstance(valor, str):
+        return valor
+    try:
+        return pd.Timestamp(valor).strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        return str(valor)
+
+
+def gerar_excel_bytes(df: pd.DataFrame, nome_folha: str = "Dados", colunas_moeda: list = None, colunas_percentagem: list = None, colunas_data: list = None, colunas_multiplo: list = None) -> bytes:
+    """Gera um ficheiro .xlsx devidamente formatado (cabeçalho, larguras, moeda/percentagem), evitando o
+    problema clássico de CSVs que abrem 'atabalhoados' no Excel em Portugal (onde a vírgula é o separador decimal)."""
+    colunas_moeda = colunas_moeda or []
+    colunas_percentagem = colunas_percentagem or []
+    colunas_data = colunas_data or []
+    colunas_multiplo = colunas_multiplo or []
+    df_export = df.copy()
+    for coluna in colunas_data:
+        if coluna in df_export.columns:
+            df_export[coluna] = df_export[coluna].apply(fmt_dt)
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df_export.to_excel(writer, sheet_name=nome_folha, index=False)
+        planilha = writer.sheets[nome_folha]
+        fonte_cabecalho = Font(bold=True, color="FFFFFF")
+        fundo_cabecalho = PatternFill("solid", fgColor="7C1F3E")
+        for indice_coluna, nome_coluna in enumerate(df_export.columns, start=1):
+            celula_cabecalho = planilha.cell(row=1, column=indice_coluna)
+            celula_cabecalho.font = fonte_cabecalho
+            celula_cabecalho.fill = fundo_cabecalho
+            celula_cabecalho.alignment = Alignment(horizontal="center")
+            if len(df_export) > 0:
+                largura_conteudo = int(df_export[nome_coluna].astype(str).map(len).max())
+            else:
+                largura_conteudo = 8
+            largura = max(12, min(42, largura_conteudo + 4, len(str(nome_coluna)) + 6))
+            planilha.column_dimensions[get_column_letter(indice_coluna)].width = largura
+            if nome_coluna in colunas_moeda:
+                for linha in range(2, len(df_export) + 2):
+                    planilha.cell(row=linha, column=indice_coluna).number_format = '#,##0 "Kz"'
+            if nome_coluna in colunas_percentagem:
+                for linha in range(2, len(df_export) + 2):
+                    planilha.cell(row=linha, column=indice_coluna).number_format = "+0.00%;-0.00%"
+            if nome_coluna in colunas_multiplo:
+                for linha in range(2, len(df_export) + 2):
+                    planilha.cell(row=linha, column=indice_coluna).number_format = '0.00"x"'
+        planilha.freeze_panes = "A2"
+    return buffer.getvalue()
 
 
 def cor_variacao(v) -> str:
@@ -531,14 +588,30 @@ def obter_log_acessos() -> pd.DataFrame:
 
 # ---------------- Resumo patrimonial ----------------
 def obter_resumo_patrimonial() -> dict:
-    linha = consultar_um("SELECT capital_subscrito, capital_realizado, investimentos, reservas, actualizado_em FROM resumo_patrimonial WHERE id = 1")
-    return {"capital_subscrito": float(linha[0] or 0), "capital_realizado": float(linha[1] or 0), "investimentos": float(linha[2]), "reservas": float(linha[3]), "actualizado_em": linha[4]}
+    """O Capital Realizado NÃO é um valor independente: é sempre igual à soma de Investimentos + Reservas,
+    porque é exactamente isso que ele é — o dinheiro que os sócios já entregaram, e que neste momento está
+    aplicado (Investimentos) ou guardado como liquidez (Reservas). O Capital Subscrito é apenas a promessa
+    total; o que falta entregar é Capital Subscrito − Capital Realizado (nos termos da Lei das Sociedades
+    Comerciais, que dá até um exercício económico para realizar o capital subscrito)."""
+    linha = consultar_um("SELECT capital_subscrito, investimentos, reservas, actualizado_em FROM resumo_patrimonial WHERE id = 1")
+    capital_subscrito = float(linha[0] or 0)
+    investimentos = float(linha[1])
+    reservas = float(linha[2])
+    capital_realizado = investimentos + reservas
+    return {
+        "capital_subscrito": capital_subscrito,
+        "capital_realizado": capital_realizado,
+        "capital_por_realizar": max(capital_subscrito - capital_realizado, 0.0),
+        "investimentos": investimentos,
+        "reservas": reservas,
+        "actualizado_em": linha[3],
+    }
 
 
-def actualizar_resumo_patrimonial(capital_subscrito, capital_realizado, investimentos, reservas):
-    executar("UPDATE resumo_patrimonial SET capital_social = %s, capital_subscrito = %s, capital_realizado = %s, investimentos = %s, reservas = %s, actualizado_em = NOW() WHERE id = 1", (capital_subscrito, capital_subscrito, capital_realizado, investimentos, reservas))
-    total = capital_realizado + investimentos + reservas
-    executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)", (capital_realizado, investimentos, reservas, total))
+def actualizar_resumo_patrimonial(capital_subscrito, investimentos, reservas):
+    capital_realizado = investimentos + reservas
+    executar("UPDATE resumo_patrimonial SET capital_social = %s, capital_subscrito = %s, capital_realizado = %s, investimentos = %s, reservas = %s, actualizado_em = NOW() WHERE id = 1", (capital_realizado, capital_subscrito, capital_realizado, investimentos, reservas))
+    executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)", (capital_realizado, investimentos, reservas, capital_realizado))
 
 
 def obter_historico_patrimonio() -> pd.DataFrame:
@@ -578,16 +651,21 @@ def obter_historico_indice() -> pd.DataFrame:
 
 
 def substituir_activos(df: pd.DataFrame):
+    """A Variação (%) já não é escrita manualmente: é sempre calculada comparando o novo preço com o preço
+    que estava registado antes desta gravação para o mesmo activo (por nome). Assim, o Barómetro BODIVA
+    passa a reflectir sempre a variação real face à cotação anterior."""
+    precos_anteriores = {linha["nome"]: float(linha["preco"]) for _, linha in obter_activos().iterrows()}
     executar("DELETE FROM activos")
     for _, linha in df.iterrows():
         nome = str(linha.get("nome", "")).strip()
         if not nome:
             continue
         tipo = str(linha.get("tipo", "Ação")).strip() or "Ação"
-        preco = float(linha.get("preco", 0) or 0)
-        variacao = float(linha.get("variacao", 0) or 0)
+        preco_novo = float(linha.get("preco", 0) or 0)
         ticker = str(linha.get("ticker", "") or "").strip().upper()
-        executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco, variacao, ticker))
+        preco_antigo = precos_anteriores.get(nome)
+        variacao = ((preco_novo - preco_antigo) / preco_antigo) * 100 if preco_antigo else 0.0
+        executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco_novo, variacao, ticker))
     registar_historico_indice(calcular_indice_mercado(obter_activos()))
 
 
@@ -656,12 +734,12 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(0, 8, "Resumo Patrimonial", ln=True)
     pdf.set_font("Helvetica", "", 11)
-    total = resumo["capital_realizado"] + resumo["investimentos"] + resumo["reservas"]
     pdf.cell(0, 7, f"Capital Subscrito: {kz(resumo['capital_subscrito'])}", ln=True)
-    pdf.cell(0, 7, f"Capital Realizado: {kz(resumo['capital_realizado'])}", ln=True)
-    pdf.cell(0, 7, f"Investimentos: {kz(resumo['investimentos'])}", ln=True)
-    pdf.cell(0, 7, f"Reservas: {kz(resumo['reservas'])}", ln=True)
-    pdf.cell(0, 7, f"Total: {kz(total)}", ln=True)
+    pdf.cell(0, 7, f"Capital Realizado (ja entregue): {kz(resumo['capital_realizado'])}", ln=True)
+    pdf.cell(0, 7, f"Capital por Realizar: {kz(resumo['capital_por_realizar'])}", ln=True)
+    pdf.cell(0, 7, f"  - dos quais, Investimentos: {kz(resumo['investimentos'])}", ln=True)
+    pdf.cell(0, 7, f"  - dos quais, Reservas: {kz(resumo['reservas'])}", ln=True)
+    pdf.cell(0, 7, f"Patrimonio Total do Clube (= Capital Realizado): {kz(resumo['capital_realizado'])}", ln=True)
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(0, 8, "Activos em Carteira", ln=True)
@@ -835,23 +913,26 @@ if pagina == "🏠 Início & Análises":
     hero("Clube de Investimento APPO", "Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios")
 
     resumo = obter_resumo_patrimonial()
-    total_patrimonio = resumo["capital_realizado"] + resumo["investimentos"] + resumo["reservas"]
+    total_patrimonio = resumo["capital_realizado"]
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     col1.metric("Capital Subscrito", kz(resumo["capital_subscrito"]))
-    col2.metric("Capital Realizado", kz(resumo["capital_realizado"]), delta=(f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}% do subscrito" if resumo["capital_subscrito"] else None), delta_color="off")
-    col3, col4, col5 = st.columns(3)
-    col3.metric("Investimentos", kz(resumo["investimentos"]))
-    col4.metric("Reservas", kz(resumo["reservas"]))
-    col5.metric("Património Total", kz(total_patrimonio))
+    col2.metric("Capital Realizado (já entregue)", kz(resumo["capital_realizado"]), delta=(f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}% do subscrito" if resumo["capital_subscrito"] else None), delta_color="off")
+    col3.metric("Capital por Realizar", kz(resumo["capital_por_realizar"]))
+    col4, col5, col6 = st.columns(3)
+    col4.metric("Investimentos", kz(resumo["investimentos"]))
+    col5.metric("Reservas", kz(resumo["reservas"]))
+    col6.metric("Património Total do Clube", kz(total_patrimonio))
+    st.caption("Património Total = Investimentos + Reservas, que é exactamente o Capital Realizado (o dinheiro já entregue pelos sócios). O Capital por Realizar ainda não entrou no Clube, por isso não conta para o património actual.")
 
     indice = calcular_indice_mercado(_df_activos_ticker)
     st.metric("📊 Barómetro BODIVA (cotação média do dia)", pct_bruto(indice), delta=pct_bruto(indice))
     st.caption("Mostra se o conjunto das acções acompanhadas pelo Clube subiu ou desceu, em média, no dia — um indicador do mercado BODIVA, não necessariamente o desempenho da carteira do Clube.")
     st.divider()
 
-    st.subheader("Distribuição do Património")
-    st.bar_chart(pd.DataFrame({"Categoria": ["Capital Realizado", "Investimentos", "Reservas"], "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]]}).set_index("Categoria"))
+    st.subheader("Distribuição do Capital do Clube")
+    st.bar_chart(pd.DataFrame({"Categoria": ["Investimentos", "Reservas", "Por Realizar"], "Montante (Kz)": [resumo["investimentos"], resumo["reservas"], resumo["capital_por_realizar"]]}).set_index("Categoria"))
+    st.caption("Investimentos e Reservas somam o Capital Realizado (o património actual). \"Por Realizar\" é a parte do Capital Subscrito que os sócios ainda vão entregar.")
 
     st.divider()
     banner_capa(IMG_GRAFICO, "Disciplina, transparência e visão de longo prazo", altura=130, escurecimento=0.48)
@@ -914,8 +995,15 @@ elif pagina == "📈 Cotações & Activos":
             filtro_tipo = st.selectbox("Filtrar por tipo de activo", tipos)
             df_filtrado = df_activos if filtro_tipo == "Todos" else df_activos[df_activos["tipo"] == filtro_tipo]
             st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
-            st.caption(f"Última actualização: {df_filtrado['actualizado_em'].max()}")
-            st.download_button("⬇️ Descarregar tabela em CSV", data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False).encode("utf-8"), file_name="cotacoes_appo.csv", mime="text/csv")
+            st.caption(f"Última actualização: {fmt_dt(df_filtrado['actualizado_em'].max())}")
+            df_export_cotacoes = df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].rename(columns={"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Preço (Kz)", "variacao": "Variação (%)"})
+            df_export_cotacoes["Variação (%)"] = df_export_cotacoes["Variação (%)"] / 100
+            st.download_button(
+                "⬇️ Descarregar tabela em Excel",
+                data=gerar_excel_bytes(df_export_cotacoes, "Cotações", colunas_moeda=["Preço (Kz)"], colunas_percentagem=["Variação (%)"]),
+                file_name="cotacoes_appo.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
             st.divider()
             st.subheader("Comparação de preços")
             st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": "Preço (Kz)"}))
@@ -928,16 +1016,18 @@ elif pagina == "💰 Contabilidade & Finanças":
     resumo = obter_resumo_patrimonial()
     df_resumo = pd.DataFrame(
         [
-            {"Categoria": "Capital Subscrito", "Descrição": "Total de capital comprometido pelos sócios", "Montante": kz(resumo["capital_subscrito"]), "Moeda": "AOA"},
-            {"Categoria": "Capital Realizado", "Descrição": "Parte do capital subscrito já efectivamente paga", "Montante": kz(resumo["capital_realizado"]), "Moeda": "AOA"},
-            {"Categoria": "Investimentos", "Descrição": "Carteira de acções e instrumentos financeiros cotados na BODIVA", "Montante": kz(resumo["investimentos"]), "Moeda": "AOA"},
-            {"Categoria": "Reservas", "Descrição": "Fundo de estabilização e liquidez para novas oportunidades", "Montante": kz(resumo["reservas"]), "Moeda": "AOA"},
+            {"Categoria": "Capital Subscrito", "Descrição": "Total de capital que os sócios se comprometeram a entregar", "Montante": kz(resumo["capital_subscrito"]), "Moeda": "AOA"},
+            {"Categoria": "Capital Realizado", "Descrição": "Parte do capital subscrito já efectivamente entregue (= Investimentos + Reservas)", "Montante": kz(resumo["capital_realizado"]), "Moeda": "AOA"},
+            {"Categoria": "Capital por Realizar", "Descrição": "Diferença entre o Subscrito e o Realizado, ainda a entregar pelos sócios", "Montante": kz(resumo["capital_por_realizar"]), "Moeda": "AOA"},
+            {"Categoria": "  ↳ Investimentos", "Descrição": "Parte do capital realizado aplicada em acções e instrumentos cotados na BODIVA", "Montante": kz(resumo["investimentos"]), "Moeda": "AOA"},
+            {"Categoria": "  ↳ Reservas", "Descrição": "Parte do capital realizado mantida em liquidez, como fundo de estabilização", "Montante": kz(resumo["reservas"]), "Moeda": "AOA"},
         ]
     )
     st.dataframe(df_resumo, hide_index=True)
-    total_patrimonio = resumo["capital_realizado"] + resumo["investimentos"] + resumo["reservas"]
-    st.metric("Património Total do Clube (Realizado + Investimentos + Reservas)", kz(total_patrimonio))
-    st.caption(f"Última actualização: {resumo['actualizado_em']}")
+    total_patrimonio = resumo["capital_realizado"]
+    st.metric("Património Total do Clube (Investimentos + Reservas = Capital Realizado)", kz(total_patrimonio))
+    st.caption("O Capital Subscrito ainda não entregue não conta como património do Clube — é apenas uma promessa dos sócios, prevista na Lei das Sociedades Comerciais para ser realizada dentro do exercício económico.")
+    st.caption(f"Última actualização: {fmt_dt(resumo['actualizado_em'])}")
 
 # =========================================================
 # PÁGINA: HISTÓRICO & RELATÓRIOS
@@ -959,8 +1049,15 @@ elif pagina == "📊 Histórico & Relatórios":
     else:
         df_exibir = df_movimentos.copy()
         df_exibir["montante_fmt"] = df_exibir["montante"].apply(kz)
-        st.dataframe(df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "criado_em"]].rename(columns={"tipo": "Tipo", "descricao": "Descrição", "montante_fmt": "Montante", "data_movimento": "Data", "criado_em": "Registado em"}), hide_index=True)
-        st.download_button("⬇️ Descarregar movimentos em CSV", data=df_movimentos.to_csv(index=False).encode("utf-8"), file_name="movimentos_appo.csv", mime="text/csv")
+        df_exibir["registado_fmt"] = df_exibir["criado_em"].apply(fmt_dt)
+        st.dataframe(df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "registado_fmt"]].rename(columns={"tipo": "Tipo", "descricao": "Descrição", "montante_fmt": "Montante", "data_movimento": "Data", "registado_fmt": "Registado em"}), hide_index=True)
+        df_export_mov = df_movimentos.rename(columns={"tipo": "Tipo", "descricao": "Descrição", "montante": "Montante (Kz)", "data_movimento": "Data", "criado_em": "Registado em"})
+        st.download_button(
+            "⬇️ Descarregar movimentos em Excel",
+            data=gerar_excel_bytes(df_export_mov, "Movimentos", colunas_moeda=["Montante (Kz)"], colunas_data=["Registado em"]),
+            file_name="movimentos_appo.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
     st.divider()
     st.subheader("Exportar relatório")
@@ -1022,6 +1119,14 @@ elif pagina == "📐 Avaliação de Activos":
             nota_indicador("<b>ROE</b> = rentabilidade sobre o capital próprio. <b>Payout</b> = fracção do lucro distribuída. <b>DY Real</b> = yield descontado da inflação.")
 
             st.markdown("##### Tabela de Sensibilidade — Valor Justo (Kz por acção)")
+            nota_indicador(
+                "Esta tabela responde a: <b>\"e se as nossas suposições estivessem um pouco erradas?\"</b> O Valor Justo (DDM) depende de duas "
+                "estimativas que ninguém sabe ao certo: o <b>Ke</b> (retorno que exigimos pelo risco do sector) e o <b>g</b> (crescimento futuro "
+                "assumido para os dividendos). Cada linha é um cenário diferente de Ke, cada coluna um cenário diferente de g. Regra geral: quanto "
+                "<b>maior o g</b> (mais optimista sobre o crescimento) ou <b>menor o Ke</b> (menos risco exigido), <b>maior</b> o valor justo estimado — "
+                "e vice-versa. Se o valor justo variar muito de canto a canto da tabela, é sinal de que a avaliação desta empresa é sensível às "
+                "suposições, e deve ser usada com mais cautela; se variar pouco, a estimativa é mais robusta."
+            )
             ke_base, g_base = m["ke"], av["crescimento_g"]
             cenarios_g = [max(0.0, g_base - 0.02), g_base, g_base + 0.02]
             cenarios_ke = [ke_base - 0.02, ke_base, ke_base + 0.02]
@@ -1034,14 +1139,41 @@ elif pagina == "📐 Avaliação de Activos":
             st.dataframe(pd.DataFrame(linhas, index=[f"Ke={ke_c*100:.1f}%" for ke_c in cenarios_ke]))
 
             st.markdown("##### Comparação Sectorial (todas as empresas)")
+            nota_indicador(
+                "Compara todas as empresas acompanhadas lado a lado pelos mesmos indicadores: <b>P/E</b> (quantos anos de lucro pagas pelo preço "
+                "actual — mais baixo pode ser mais barato, mas verifica sempre a razão); <b>P/BV</b> (preço face ao valor contabilístico da empresa); "
+                "<b>ROE</b> (rentabilidade que a empresa gera sobre o capital próprio dos seus accionistas — quanto maior, melhor, em geral); "
+                "<b>DY Nominal</b> (retorno anual só em dividendos, antes de descontar a inflação); e <b>Upside DDM</b> (se positivo, o modelo sugere "
+                "que a acção pode estar barata face ao seu valor justo estimado; se negativo, pode estar cara). Usa esta tabela para comparar "
+                "empresas do mesmo sector entre si — comparar banca com telecomunicações, por exemplo, é menos directo, porque têm níveis de risco "
+                "e de crescimento muito diferentes. Nenhum destes números, isolado, é uma recomendação de compra ou venda."
+            )
             linhas_comp = []
             for _, l in df_aval.iterrows():
                 av_l = {"sector": l["sector"], "preco": float(l["preco"]), "acoes_circulacao": float(l["acoes_circulacao"]), "lucro_liquido": float(l["lucro_liquido"]), "ganho_pontual": float(l["ganho_pontual"]), "capital_proprio": float(l["capital_proprio"]), "dividendo_total": float(l["dividendo_total"]), "crescimento_g": float(l["crescimento_g"])}
                 m_l = calcular_metricas_avaliacao(av_l, premissas)
-                linhas_comp.append({"Empresa": l["empresa"], "Sector": l["sector"], "P/E": multiplo(m_l["pe"]), "P/BV": multiplo(m_l["pbv"]), "ROE": pct(m_l["roe"]) if m_l["roe"] is not None else "n/d", "DY Nominal": pct(m_l["dy_nominal"]), "Upside DDM": pct(m_l["upside"]) if m_l["upside"] is not None else "n/d"})
+                linhas_comp.append({
+                    "Empresa": l["empresa"], "Sector": l["sector"],
+                    "P/E": m_l["pe"] if m_l["pe"] is not None else None,
+                    "P/BV": m_l["pbv"] if m_l["pbv"] is not None else None,
+                    "ROE": m_l["roe"] if m_l["roe"] is not None else None,
+                    "DY Nominal": m_l["dy_nominal"],
+                    "Upside DDM": m_l["upside"] if m_l["upside"] is not None else None,
+                })
             df_comp = pd.DataFrame(linhas_comp)
-            st.dataframe(df_comp, hide_index=True)
-            st.download_button("⬇️ Descarregar comparação sectorial em CSV", data=df_comp.to_csv(index=False).encode("utf-8"), file_name="comparacao_sectorial_appo.csv", mime="text/csv")
+            df_comp_exibir = df_comp.copy()
+            df_comp_exibir["P/E"] = df_comp_exibir["P/E"].apply(multiplo)
+            df_comp_exibir["P/BV"] = df_comp_exibir["P/BV"].apply(multiplo)
+            df_comp_exibir["ROE"] = df_comp_exibir["ROE"].apply(lambda v: pct(v) if v is not None else "n/d")
+            df_comp_exibir["DY Nominal"] = df_comp_exibir["DY Nominal"].apply(pct)
+            df_comp_exibir["Upside DDM"] = df_comp_exibir["Upside DDM"].apply(lambda v: pct(v) if v is not None else "n/d")
+            st.dataframe(df_comp_exibir, hide_index=True)
+            st.download_button(
+                "⬇️ Descarregar comparação sectorial em Excel",
+                data=gerar_excel_bytes(df_comp, "Comparação Sectorial", colunas_percentagem=["ROE", "DY Nominal", "Upside DDM"], colunas_multiplo=["P/E", "P/BV"]),
+                file_name="comparacao_sectorial_appo.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
 
 # =========================================================
 # PÁGINA: CONVERSOR DE MOEDA (automático + histórico automático)
@@ -1081,14 +1213,40 @@ elif pagina == "💱 Conversor de Moeda":
         st.caption("Tabela indisponível de momento.")
 
     st.divider()
-    st.subheader("📈 Tendência do Kwanza (histórico próprio, acumulado automaticamente)")
+    st.subheader("📈 Evolução das Cotações do Kwanza")
     df_hist_cambio = obter_historico_cambio()
     if len(df_hist_cambio) >= 2:
-        moeda_grafico = st.selectbox("Ver tendência de", ["usd", "eur", "gbp", "zar", "cny", "brl"], format_func=lambda x: x.upper())
-        st.line_chart(df_hist_cambio.set_index("registado_em")[[moeda_grafico]].rename(columns={moeda_grafico: f"1 AOA em {moeda_grafico.upper()}"}))
-        st.caption("Este histórico é construído automaticamente pela própria app — sem ninguém precisar de inserir nada — sempre que alguém abre esta página num novo dia.")
+        df_hist_cambio["registado_em"] = pd.to_datetime(df_hist_cambio["registado_em"])
+        col_m, col_p = st.columns([1, 2])
+        moeda_grafico = col_m.selectbox("Moeda", ["usd", "eur", "gbp", "zar", "cny", "brl"], format_func=lambda x: x.upper())
+        periodo = col_p.radio("Período", ["7D", "1M", "3M", "6M", "1A", "Máx.", "Personalizado"], horizontal=True)
+
+        data_min, data_max = df_hist_cambio["registado_em"].min(), df_hist_cambio["registado_em"].max()
+        janelas = {"7D": 7, "1M": 30, "3M": 91, "6M": 182, "1A": 365}
+        if periodo == "Personalizado":
+            col_di, col_df = st.columns(2)
+            data_inicio = col_di.date_input("Data Início", value=max(data_min, data_max - timedelta(days=30)).date(), min_value=data_min.date(), max_value=data_max.date())
+            data_fim = col_df.date_input("Data Fim", value=data_max.date(), min_value=data_min.date(), max_value=data_max.date())
+            df_periodo = df_hist_cambio[(df_hist_cambio["registado_em"] >= pd.Timestamp(data_inicio)) & (df_hist_cambio["registado_em"] <= pd.Timestamp(data_fim))]
+        elif periodo == "Máx.":
+            df_periodo = df_hist_cambio
+        else:
+            limite = data_max - timedelta(days=janelas[periodo])
+            df_periodo = df_hist_cambio[df_hist_cambio["registado_em"] >= limite]
+
+        if len(df_periodo) >= 2:
+            st.line_chart(df_periodo.set_index("registado_em")[[moeda_grafico]].rename(columns={moeda_grafico: f"1 AOA em {moeda_grafico.upper()}"}))
+        else:
+            st.info("Ainda não há pontos suficientes neste período em concreto — experimenta um período mais alargado.")
+        st.caption(
+            "Este gráfico é construído com o histórico diário que a própria app vai acumulando automaticamente, sem ninguém precisar de inserir nada, "
+            "sempre que alguém abre esta página num novo dia. Nota importante: não existe, de momento, uma fonte externa gratuita de cotações "
+            "históricas do Kwanza (a maioria exige uma subscrição paga); por isso este histórico só cobre os dias em que a app esteve activa e alguém "
+            "visitou esta página — não recua a datas anteriores ao início da recolha. Se quiseres um histórico verdadeiramente completo desde já "
+            "(30 dias, 1 ano, etc.), a alternativa é subscrever uma API paga de câmbio histórico (ex.: exchangerate.host/apilayer) e eu integro-a."
+        )
     else:
-        st.info("Ainda há poucos dias de histórico acumulado. Volta aqui em dias diferentes para veres a tendência a formar-se sozinha.")
+        st.info("Ainda há poucos dias de histórico acumulado. Volta aqui em dias diferentes para veres a tendência a formar-se — ou considera uma API paga de câmbio histórico para preencher o passado de imediato.")
 
 # =========================================================
 # PÁGINA: SIMULADOR DE INVESTIMENTO
@@ -1231,37 +1389,38 @@ elif pagina == "🔐 Painel do Administrador":
 
     with aba_resumo:
         st.subheader("Editar Resumo Patrimonial")
-        st.caption("O Capital Realizado deve ser sempre ≤ ao Capital Subscrito.")
+        st.caption("O Capital Realizado já não se edita directamente: é sempre igual a Investimentos + Reservas (é o mesmo dinheiro, só que aplicado ou guardado). Edita apenas o Capital Subscrito, os Investimentos e as Reservas.")
         resumo = obter_resumo_patrimonial()
         with st.form("form_editar_resumo"):
             novo_subscrito = st.number_input("Capital Subscrito (Kz)", min_value=0.0, step=10000.0, value=float(resumo["capital_subscrito"]))
-            novo_realizado = st.number_input("Capital Realizado (Kz)", min_value=0.0, step=10000.0, value=float(resumo["capital_realizado"]))
             novo_investimentos = st.number_input("Investimentos (Kz)", min_value=0.0, step=10000.0, value=float(resumo["investimentos"]))
             novas_reservas = st.number_input("Reservas (Kz)", min_value=0.0, step=10000.0, value=float(resumo["reservas"]))
+            novo_realizado_preview = novo_investimentos + novas_reservas
+            st.metric("Capital Realizado (calculado automaticamente)", kz(novo_realizado_preview))
+            st.caption(f"Capital por Realizar (calculado): {kz(max(novo_subscrito - novo_realizado_preview, 0.0))}")
             guardar_resumo = st.form_submit_button("Guardar alterações")
         if guardar_resumo:
-            if novo_realizado > novo_subscrito:
-                st.error("O Capital Realizado não pode ser maior do que o Capital Subscrito.")
+            if novo_realizado_preview > novo_subscrito:
+                st.error("Investimentos + Reservas não pode ser maior do que o Capital Subscrito — isso significaria realizar mais capital do que os sócios prometeram.")
             else:
-                actualizar_resumo_patrimonial(novo_subscrito, novo_realizado, novo_investimentos, novas_reservas)
+                actualizar_resumo_patrimonial(novo_subscrito, novo_investimentos, novas_reservas)
                 st.success("Resumo patrimonial actualizado e novo ponto de histórico registado.")
                 st.rerun()
 
     with aba_activos:
         st.subheader("Editar Cotações & Activos")
-        st.caption("Cada vez que guardas, o Barómetro BODIVA é recalculado e um novo ponto é registado no histórico.")
+        st.caption("A Variação (%) já não se preenche à mão: ao guardares, é calculada automaticamente comparando o novo Preço com o preço que estava registado antes desta gravação para o mesmo activo. Um activo novo (sem preço anterior) começa com 0.00%. O Barómetro BODIVA e o seu histórico são recalculados de seguida.")
         df_activos = obter_activos()
         df_editado = st.data_editor(
-            df_activos[["ticker", "nome", "tipo", "preco", "variacao"]], num_rows="dynamic", key="editor_activos",
+            df_activos[["ticker", "nome", "tipo", "preco"]], num_rows="dynamic", key="editor_activos",
             column_config={
                 "ticker": st.column_config.TextColumn("Ticker", max_chars=12), "nome": "Nome do activo", "tipo": "Tipo",
                 "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
-                "variacao": st.column_config.NumberColumn("Variação (%)", step=0.01, format="%.2f"),
             },
         )
         if st.button("Guardar alterações às cotações"):
             substituir_activos(df_editado)
-            st.success("Cotações e Barómetro BODIVA actualizados com sucesso.")
+            st.success("Cotações guardadas. Variação calculada automaticamente e Barómetro BODIVA actualizado com sucesso.")
             st.rerun()
 
     with aba_aval:
