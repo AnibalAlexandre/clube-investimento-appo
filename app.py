@@ -19,8 +19,6 @@ import psycopg2.extras
 import requests
 import streamlit as st
 from fpdf import FPDF
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
 from pypdf import PdfReader
 
 # =========================================================
@@ -313,7 +311,12 @@ def fmt_dt(valor) -> str:
 
 def gerar_excel_bytes(df: pd.DataFrame, nome_folha: str = "Dados", colunas_moeda: list = None, colunas_percentagem: list = None, colunas_data: list = None, colunas_multiplo: list = None) -> bytes:
     """Gera um ficheiro .xlsx devidamente formatado (cabeçalho, larguras, moeda/percentagem), evitando o
-    problema clássico de CSVs que abrem 'atabalhoados' no Excel em Portugal (onde a vírgula é o separador decimal)."""
+    problema clássico de CSVs que abrem 'atabalhoados' no Excel em Portugal (onde a vírgula é o separador decimal).
+    Importa o openpyxl aqui dentro (e não no topo do ficheiro) para que, se a dependência faltar no servidor,
+    apenas esta função falhe — a app continua a arrancar normalmente."""
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
     colunas_moeda = colunas_moeda or []
     colunas_percentagem = colunas_percentagem or []
     colunas_data = colunas_data or []
@@ -351,6 +354,21 @@ def gerar_excel_bytes(df: pd.DataFrame, nome_folha: str = "Dados", colunas_moeda
                     planilha.cell(row=linha, column=indice_coluna).number_format = '0.00"x"'
         planilha.freeze_panes = "A2"
     return buffer.getvalue()
+
+
+def gerar_download_planilha(df: pd.DataFrame, nome_base: str, nome_folha: str = "Dados", colunas_moeda: list = None, colunas_percentagem: list = None, colunas_data: list = None, colunas_multiplo: list = None):
+    """Devolve (bytes, nome_ficheiro, mime) prontos a passar a st.download_button.
+    Tenta gerar .xlsx formatado; se o openpyxl não estiver instalado no servidor, cai em segurança
+    para .csv (separador ';' e codificação UTF-8 com BOM, que o Excel em português lê bem) — nunca rebenta a página."""
+    try:
+        conteudo = gerar_excel_bytes(df, nome_folha, colunas_moeda, colunas_percentagem, colunas_data, colunas_multiplo)
+        return conteudo, f"{nome_base}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    except ImportError:
+        df_export = df.copy()
+        for coluna in (colunas_data or []):
+            if coluna in df_export.columns:
+                df_export[coluna] = df_export[coluna].apply(fmt_dt)
+        return df_export.to_csv(index=False, sep=";").encode("utf-8-sig"), f"{nome_base}.csv", "text/csv"
 
 
 def cor_variacao(v) -> str:
@@ -998,12 +1016,8 @@ elif pagina == "📈 Cotações & Activos":
             st.caption(f"Última actualização: {fmt_dt(df_filtrado['actualizado_em'].max())}")
             df_export_cotacoes = df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].rename(columns={"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Preço (Kz)", "variacao": "Variação (%)"})
             df_export_cotacoes["Variação (%)"] = df_export_cotacoes["Variação (%)"] / 100
-            st.download_button(
-                "⬇️ Descarregar tabela em Excel",
-                data=gerar_excel_bytes(df_export_cotacoes, "Cotações", colunas_moeda=["Preço (Kz)"], colunas_percentagem=["Variação (%)"]),
-                file_name="cotacoes_appo.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+            dados_dl, nome_dl, mime_dl = gerar_download_planilha(df_export_cotacoes, "cotacoes_appo", "Cotações", colunas_moeda=["Preço (Kz)"], colunas_percentagem=["Variação (%)"])
+            st.download_button("⬇️ Descarregar tabela em Excel", data=dados_dl, file_name=nome_dl, mime=mime_dl)
             st.divider()
             st.subheader("Comparação de preços")
             st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": "Preço (Kz)"}))
@@ -1052,12 +1066,8 @@ elif pagina == "📊 Histórico & Relatórios":
         df_exibir["registado_fmt"] = df_exibir["criado_em"].apply(fmt_dt)
         st.dataframe(df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "registado_fmt"]].rename(columns={"tipo": "Tipo", "descricao": "Descrição", "montante_fmt": "Montante", "data_movimento": "Data", "registado_fmt": "Registado em"}), hide_index=True)
         df_export_mov = df_movimentos.rename(columns={"tipo": "Tipo", "descricao": "Descrição", "montante": "Montante (Kz)", "data_movimento": "Data", "criado_em": "Registado em"})
-        st.download_button(
-            "⬇️ Descarregar movimentos em Excel",
-            data=gerar_excel_bytes(df_export_mov, "Movimentos", colunas_moeda=["Montante (Kz)"], colunas_data=["Registado em"]),
-            file_name="movimentos_appo.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+        dados_dl, nome_dl, mime_dl = gerar_download_planilha(df_export_mov, "movimentos_appo", "Movimentos", colunas_moeda=["Montante (Kz)"], colunas_data=["Registado em"])
+        st.download_button("⬇️ Descarregar movimentos em Excel", data=dados_dl, file_name=nome_dl, mime=mime_dl)
 
     st.divider()
     st.subheader("Exportar relatório")
@@ -1168,12 +1178,8 @@ elif pagina == "📐 Avaliação de Activos":
             df_comp_exibir["DY Nominal"] = df_comp_exibir["DY Nominal"].apply(pct)
             df_comp_exibir["Upside DDM"] = df_comp_exibir["Upside DDM"].apply(lambda v: pct(v) if v is not None else "n/d")
             st.dataframe(df_comp_exibir, hide_index=True)
-            st.download_button(
-                "⬇️ Descarregar comparação sectorial em Excel",
-                data=gerar_excel_bytes(df_comp, "Comparação Sectorial", colunas_percentagem=["ROE", "DY Nominal", "Upside DDM"], colunas_multiplo=["P/E", "P/BV"]),
-                file_name="comparacao_sectorial_appo.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+            dados_dl, nome_dl, mime_dl = gerar_download_planilha(df_comp, "comparacao_sectorial_appo", "Comparação Sectorial", colunas_percentagem=["ROE", "DY Nominal", "Upside DDM"], colunas_multiplo=["P/E", "P/BV"])
+            st.download_button("⬇️ Descarregar comparação sectorial em Excel", data=dados_dl, file_name=nome_dl, mime=mime_dl)
 
 # =========================================================
 # PÁGINA: CONVERSOR DE MOEDA (automático + histórico automático)
