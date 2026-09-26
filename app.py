@@ -37,7 +37,7 @@ if "df_activos" not in st.session_state:
 # FUNÇÕES AUXILIARES & CORREÇÕES DE ERROS
 # ==========================================
 
-# 1. Correção 'Styler' object has no attribute 'applymap'
+# 1. Estilização de cores sem deprecação do Pandas
 def cor_variacao(val):
     if isinstance(val, (int, float)):
         if val > 0:
@@ -52,13 +52,12 @@ def tabela_cotacoes_estilizada(df):
         "preco": "{:,.2f} Kz",
         "variacao": "{:+.2f}%"
     })
-    # pandas >= 2.1 usa .map() em vez de .applymap()
     if hasattr(styler, "map"):
         return styler.map(cor_variacao, subset=["variacao"])
     else:
         return styler.applymap(cor_variacao, subset=["variacao"])
 
-# 2. Correção TypeError no PDF (string argument without an encoding)
+# 2. Geração segura de PDF em Bytes
 def gerar_relatorio_pdf(resumo, ativos, movimentos):
     pdf = FPDF()
     pdf.add_page()
@@ -78,7 +77,7 @@ def gerar_relatorio_pdf(resumo, ativos, movimentos):
     else:
         return bytes(str(out), 'latin1')
 
-# 3. Correção TypeError: object of type 'float' has no len() no Excel
+# 3. Geração segura de Excel (CORRIGIDO O INDENTATIONERROR)
 def gerar_excel_bytes(df_export, nome_aba="Dados"):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -86,8 +85,7 @@ def gerar_excel_bytes(df_export, nome_aba="Dados"):
         worksheet = writer.sheets[nome_aba]
         
         for i, col in enumerate(df_export.columns):
-            # Converter toda a coluna para string antes de calcular a largura max
-             max_len = max(
+            max_len = max(
                 df_export[col].astype(str).fillna('').map(len).max(),
                 len(str(col))
             ) + 3
@@ -95,10 +93,10 @@ def gerar_excel_bytes(df_export, nome_aba="Dados"):
             
     return output.getvalue()
 
-# 4. Correção pypdf.errors.PdfStreamError
+# 4. Leitura segura de PDF com resete de buffer
 def extrair_texto_pdf(uploaded_pdf):
     try:
-        uploaded_pdf.seek(0)  # Repor o ponteiro do buffer de leitura
+        uploaded_pdf.seek(0)
         reader = PdfReader(uploaded_pdf)
         texto = ""
         for page in reader.pages:
@@ -170,7 +168,7 @@ elif opcao_menu == "📐 Avaliação de Activos":
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-# --- 5. REGRA 50/30/20 (SIMULADOR INTERATIVO RESTAURADO) ---
+# --- 5. REGRA 50/30/20 ---
 elif opcao_menu == "🧮 Regra 50/30/20":
     st.title("🧮 Simulador de Orçamento Familiar (Regra 50/30/20)")
     st.write("Organize o seu rendimento mensal segundo a regra de alocação financeira recomendada.")
@@ -222,7 +220,7 @@ elif opcao_menu == "📚 Biblioteca Educativa":
         st.subheader("Gestão de Risco e Diversificação")
         st.write("Diversificar ativos minimiza o risco não-sistemático da carteira...")
 
-# --- 7. SOBRE NÓS & ESTATUTOS (PÚBLICO - SEM UPLOAD) ---
+# --- 7. SOBRE NÓS & ESTATUTOS (PÚBLICO) ---
 elif opcao_menu == "ℹ️ Sobre Nós & Estatutos":
     st.title("ℹ️ Sobre Nós & Estatutos do Clube")
     st.write("### Quem Somos")
@@ -242,7 +240,7 @@ elif opcao_menu == "ℹ️ Sobre Nós & Estatutos":
     st.write("#### Conteúdo Informativo")
     st.info(st.session_state["estatutos_texto"])
 
-# --- 8. PAINEL DO ADMINISTRADOR (GESTÃO GLOBAL E UPLOAD RESTRITO) ---
+# --- 8. PAINEL DO ADMINISTRADOR ---
 elif opcao_menu == "🔐 Painel do Administrador":
     st.title("🔐 Painel de Administração")
     
@@ -252,7 +250,6 @@ elif opcao_menu == "🔐 Painel do Administrador":
         "⚙️ Definições Globais"
     ])
     
-    # Aba 1: Edição de Cotações com Nomes Explícitos nas Colunas
     with aba_cotacoes:
         st.subheader("Editar Cotações de Activos")
         df_editavel = st.session_state["df_activos"].copy()
@@ -274,7 +271,6 @@ elif opcao_menu == "🔐 Painel do Administrador":
             st.session_state["df_activos"] = df_editado
             st.success("Cotações atualizadas com sucesso!")
 
-    # Aba 2: Upload de Estatutos Exclusivo do Admin
     with aba_estatutos:
         st.subheader("Carregar / Atualizar Ficheiro dos Estatutos (PDF)")
         uploaded_pdf = st.file_uploader("Selecione o ficheiro PDF dos Estatutos", type=["pdf"])
@@ -284,12 +280,10 @@ elif opcao_menu == "🔐 Painel do Administrador":
             bytes_data = uploaded_pdf.read()
             st.session_state["estatutos_pdf_bytes"] = bytes_data
             
-            # Extrair texto de forma segura
             texto_ext = extrair_texto_pdf(uploaded_pdf)
             st.session_state["estatutos_texto"] = texto_ext
             st.success("Ficheiro dos Estatutos carregado e atualizado no portal com sucesso!")
 
-    # Aba 3: Definições e Avisos Globais
     with aba_definicoes:
         st.subheader("Definições Gerais do Portal")
         novo_texto_sobre = st.text_area("Texto de Apresentação 'Sobre Nós':", value="O Clube de Investimento APPO promove a literacia financeira...")
