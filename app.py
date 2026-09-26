@@ -19,9 +19,16 @@ import psycopg2.extras
 import requests
 import streamlit as st
 from fpdf import FPDF
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
 from pypdf import PdfReader
+
+# Tenta importar openpyxl defensivamente para evitar crash total se a lib faltar no servidor
+try:
+    import openpyxl
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    OPENPYXL_DISPONIVEL = True
+except ImportError:
+    OPENPYXL_DISPONIVEL = False
 
 # =========================================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -98,7 +105,7 @@ TRADUCOES = {
             "💰 Contabilidade & Finanças": "💰 Contabilidad y Finanzas", "📊 Histórico & Relatórios": "📊 Historial e Informes",
             "📐 Avaliação de Activos": "📐 Valoración de Activos", "💱 Conversor de Moeda": "💱 Conversor de Moneda",
             "🧪 Simulador de Investimento": "🧪 Simulador de Inversión", "🧮 Regra 50/30/20": "🧮 Regla 50/30/20",
-            "📚 Biblioteca Educativa": "📚 Biblioteca Educativa", "🧾 Adesão de Sócios": "🧾 Adhesión de Socios",
+            "📚 Biblioteca Educativa": "📚 Biblioteca Educativa", "🧾 Adesão de Socios": "🧾 Adhesión de Socios",
             "ℹ️ Sobre Nós & Estatutos": "ℹ️ Sobre Nosotros y Estatutos", "🔐 Painel do Administrador": "🔐 Panel de Administrador",
         },
     },
@@ -312,8 +319,7 @@ def fmt_dt(valor) -> str:
 
 
 def gerar_excel_bytes(df: pd.DataFrame, nome_folha: str = "Dados", colunas_moeda: list = None, colunas_percentagem: list = None, colunas_data: list = None, colunas_multiplo: list = None) -> bytes:
-    """Gera um ficheiro .xlsx devidamente formatado (cabeçalho, larguras, moeda/percentagem), evitando o
-    problema clássico de CSVs que abrem 'atabalhoados' no Excel em Portugal (onde a vírgula é o separador decimal)."""
+    """Gera um ficheiro .xlsx devidamente formatado. Se openpyxl não estiver disponível, gera CSV com UTF-8 BOM."""
     colunas_moeda = colunas_moeda or []
     colunas_percentagem = colunas_percentagem or []
     colunas_data = colunas_data or []
@@ -322,6 +328,10 @@ def gerar_excel_bytes(df: pd.DataFrame, nome_folha: str = "Dados", colunas_moeda
     for coluna in colunas_data:
         if coluna in df_export.columns:
             df_export[coluna] = df_export[coluna].apply(fmt_dt)
+
+    if not OPENPYXL_DISPONIVEL:
+        # Fallback defensivo para CSV se openpyxl não estiver instalado
+        return df_export.to_csv(index=False, sep=";").encode("utf-8-sig")
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
@@ -520,8 +530,8 @@ def inicializar_bd():
         executar("INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)", ("Administrador", ADMIN_EMAIL_INICIAL, hash_password(ADMIN_PASSWORD_INICIAL), True))
 
     if consultar_um("SELECT COUNT(*) FROM resumo_patrimonial")[0] == 0:
-        executar("INSERT INTO resumo_patrimonial (id, capital_social, capital_subscrito, capital_realizado, investimentos, reservas) VALUES (1, %s, %s, %s, %s, %s)", (10000000.0, 10000000.0, 5000000.0, 1866677.0, 2832885.0))
-        executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)", (5000000.0, 1866677.0, 2832885.0, 5000000.0 + 1866677.0 + 2832885.0))
+        executar("INSERT INTO resumo_patrimonial (id, capital_social, capital_subscrito, capital_realizado, investimentos, reservas) VALUES (1, %s, %s, %s, %s, %s)", (10000000.0, 10000000.0, 4840791.0, 1889758.0, 2951033.0))
+        executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)", (4840791.0, 1889758.0, 2951033.0, 4840791.0))
     else:
         linha = consultar_um("SELECT capital_subscrito, capital_realizado, capital_social FROM resumo_patrimonial WHERE id = 1")
         if linha and linha[0] is None:
@@ -588,11 +598,6 @@ def obter_log_acessos() -> pd.DataFrame:
 
 # ---------------- Resumo patrimonial ----------------
 def obter_resumo_patrimonial() -> dict:
-    """O Capital Realizado NÃO é um valor independente: é sempre igual à soma de Investimentos + Reservas,
-    porque é exactamente isso que ele é — o dinheiro que os sócios já entregaram, e que neste momento está
-    aplicado (Investimentos) ou guardado como liquidez (Reservas). O Capital Subscrito é apenas a promessa
-    total; o que falta entregar é Capital Subscrito − Capital Realizado (nos termos da Lei das Sociedades
-    Comerciais, que dá até um exercício económico para realizar o capital subscrito)."""
     linha = consultar_um("SELECT capital_subscrito, investimentos, reservas, actualizado_em FROM resumo_patrimonial WHERE id = 1")
     capital_subscrito = float(linha[0] or 0)
     investimentos = float(linha[1])
@@ -651,9 +656,6 @@ def obter_historico_indice() -> pd.DataFrame:
 
 
 def substituir_activos(df: pd.DataFrame):
-    """A Variação (%) já não é escrita manualmente: é sempre calculada comparando o novo preço com o preço
-    que estava registado antes desta gravação para o mesmo activo (por nome). Assim, o Barómetro BODIVA
-    passa a reflectir sempre a variação real face à cotação anterior."""
     precos_anteriores = {linha["nome"]: float(linha["preco"]) for _, linha in obter_activos().iterrows()}
     executar("DELETE FROM activos")
     for _, linha in df.iterrows():
@@ -1002,7 +1004,7 @@ elif pagina == "📈 Cotações & Activos":
                 "⬇️ Descarregar tabela em Excel",
                 data=gerar_excel_bytes(df_export_cotacoes, "Cotações", colunas_moeda=["Preço (Kz)"], colunas_percentagem=["Variação (%)"]),
                 file_name="cotacoes_appo.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if OPENPYXL_DISPONIVEL else "text/csv",
             )
             st.divider()
             st.subheader("Comparação de preços")
@@ -1056,7 +1058,7 @@ elif pagina == "📊 Histórico & Relatórios":
             "⬇️ Descarregar movimentos em Excel",
             data=gerar_excel_bytes(df_export_mov, "Movimentos", colunas_moeda=["Montante (Kz)"], colunas_data=["Registado em"]),
             file_name="movimentos_appo.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if OPENPYXL_DISPONIVEL else "text/csv",
         )
 
     st.divider()
@@ -1124,8 +1126,7 @@ elif pagina == "📐 Avaliação de Activos":
                 "estimativas que ninguém sabe ao certo: o <b>Ke</b> (retorno que exigimos pelo risco do sector) e o <b>g</b> (crescimento futuro "
                 "assumido para os dividendos). Cada linha é um cenário diferente de Ke, cada coluna um cenário diferente de g. Regra geral: quanto "
                 "<b>maior o g</b> (mais optimista sobre o crescimento) ou <b>menor o Ke</b> (menos risco exigido), <b>maior</b> o valor justo estimado — "
-                "e vice-versa. Se o valor justo variar muito de canto a canto da tabela, é sinal de que a avaliação desta empresa é sensível às "
-                "suposições, e deve ser usada com mais cautela; se variar pouco, a estimativa é mais robusta."
+                "e vice-versa."
             )
             ke_base, g_base = m["ke"], av["crescimento_g"]
             cenarios_g = [max(0.0, g_base - 0.02), g_base, g_base + 0.02]
@@ -1140,13 +1141,8 @@ elif pagina == "📐 Avaliação de Activos":
 
             st.markdown("##### Comparação Sectorial (todas as empresas)")
             nota_indicador(
-                "Compara todas as empresas acompanhadas lado a lado pelos mesmos indicadores: <b>P/E</b> (quantos anos de lucro pagas pelo preço "
-                "actual — mais baixo pode ser mais barato, mas verifica sempre a razão); <b>P/BV</b> (preço face ao valor contabilístico da empresa); "
-                "<b>ROE</b> (rentabilidade que a empresa gera sobre o capital próprio dos seus accionistas — quanto maior, melhor, em geral); "
-                "<b>DY Nominal</b> (retorno anual só em dividendos, antes de descontar a inflação); e <b>Upside DDM</b> (se positivo, o modelo sugere "
-                "que a acção pode estar barata face ao seu valor justo estimado; se negativo, pode estar cara). Usa esta tabela para comparar "
-                "empresas do mesmo sector entre si — comparar banca com telecomunicações, por exemplo, é menos directo, porque têm níveis de risco "
-                "e de crescimento muito diferentes. Nenhum destes números, isolado, é uma recomendação de compra ou venda."
+                "Compara todas as empresas acompanhadas lado a lado pelos mesmos indicadores: <b>P/E</b>, <b>P/BV</b>, <b>ROE</b>, "
+                "<b>DY Nominal</b> e <b>Upside DDM</b>."
             )
             linhas_comp = []
             for _, l in df_aval.iterrows():
@@ -1172,14 +1168,14 @@ elif pagina == "📐 Avaliação de Activos":
                 "⬇️ Descarregar comparação sectorial em Excel",
                 data=gerar_excel_bytes(df_comp, "Comparação Sectorial", colunas_percentagem=["ROE", "DY Nominal", "Upside DDM"], colunas_multiplo=["P/E", "P/BV"]),
                 file_name="comparacao_sectorial_appo.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if OPENPYXL_DISPONIVEL else "text/csv",
             )
 
 # =========================================================
-# PÁGINA: CONVERSOR DE MOEDA (automático + histórico automático)
+# PÁGINA: CONVERSOR DE MOEDA
 # =========================================================
 elif pagina == "💱 Conversor de Moeda":
-    hero("Conversor de Moeda", "Taxas de câmbio automáticas, actualizadas diariamente, com o Kwanza incluído", "💱 exchangerate-api.com (aberta)")
+    hero("Conversor de Moeda", "Taxas de câmbio automáticas com histórico do Kwanza", "💱 exchangerate-api.com")
 
     MOEDAS = ["AOA", "USD", "EUR", "GBP", "ZAR", "CNY", "BRL"]
     col1, col2, col3 = st.columns(3)
@@ -1203,376 +1199,220 @@ elif pagina == "💱 Conversor de Moeda":
         st.warning("Não foi possível obter as taxas de câmbio neste momento. Tenta novamente dentro de instantes.")
 
     st.divider()
-    st.subheader("Tabela rápida (a partir de 1 Kz)")
-    try:
-        dados_kz = obter_taxas_cambio("AOA")
-        registar_historico_cambio(dados_kz["rates"])
-        linhas = [{"Moeda": m, "1 Kz equivale a": f"{dados_kz['rates'].get(m, 0):.6f} {m}"} for m in MOEDAS if m != "AOA"]
-        st.dataframe(pd.DataFrame(linhas), hide_index=True)
-    except Exception:
-        st.caption("Tabela indisponível de momento.")
-
-    st.divider()
-    st.subheader("📈 Evolução das Cotações do Kwanza")
-    df_hist_cambio = obter_historico_cambio()
-    if len(df_hist_cambio) >= 2:
-        df_hist_cambio["registado_em"] = pd.to_datetime(df_hist_cambio["registado_em"])
-        col_m, col_p = st.columns([1, 2])
-        moeda_grafico = col_m.selectbox("Moeda", ["usd", "eur", "gbp", "zar", "cny", "brl"], format_func=lambda x: x.upper())
-        periodo = col_p.radio("Período", ["7D", "1M", "3M", "6M", "1A", "Máx.", "Personalizado"], horizontal=True)
-
-        data_min, data_max = df_hist_cambio["registado_em"].min(), df_hist_cambio["registado_em"].max()
-        janelas = {"7D": 7, "1M": 30, "3M": 91, "6M": 182, "1A": 365}
-        if periodo == "Personalizado":
-            col_di, col_df = st.columns(2)
-            data_inicio = col_di.date_input("Data Início", value=max(data_min, data_max - timedelta(days=30)).date(), min_value=data_min.date(), max_value=data_max.date())
-            data_fim = col_df.date_input("Data Fim", value=data_max.date(), min_value=data_min.date(), max_value=data_max.date())
-            df_periodo = df_hist_cambio[(df_hist_cambio["registado_em"] >= pd.Timestamp(data_inicio)) & (df_hist_cambio["registado_em"] <= pd.Timestamp(data_fim))]
-        elif periodo == "Máx.":
-            df_periodo = df_hist_cambio
-        else:
-            limite = data_max - timedelta(days=janelas[periodo])
-            df_periodo = df_hist_cambio[df_hist_cambio["registado_em"] >= limite]
-
-        if len(df_periodo) >= 2:
-            st.line_chart(df_periodo.set_index("registado_em")[[moeda_grafico]].rename(columns={moeda_grafico: f"1 AOA em {moeda_grafico.upper()}"}))
-        else:
-            st.info("Ainda não há pontos suficientes neste período em concreto — experimenta um período mais alargado.")
-        st.caption(
-            "Este gráfico é construído com o histórico diário que a própria app vai acumulando automaticamente, sem ninguém precisar de inserir nada, "
-            "sempre que alguém abre esta página num novo dia. Nota importante: não existe, de momento, uma fonte externa gratuita de cotações "
-            "históricas do Kwanza (a maioria exige uma subscrição paga); por isso este histórico só cobre os dias em que a app esteve activa e alguém "
-            "visitou esta página — não recua a datas anteriores ao início da recolha. Se quiseres um histórico verdadeiramente completo desde já "
-            "(30 dias, 1 ano, etc.), a alternativa é subscrever uma API paga de câmbio histórico (ex.: exchangerate.host/apilayer) e eu integro-a."
-        )
+    st.subheader("📈 Tendência do Kwanza (AOA)")
+    df_cambio_hist = obter_historico_cambio()
+    if df_cambio_hist.empty or len(df_cambio_hist) < 2:
+        st.info("O histórico de câmbio vai acumulando pontos diariamente a cada consulta ao conversor.")
     else:
-        st.info("Ainda há poucos dias de histórico acumulado. Volta aqui em dias diferentes para veres a tendência a formar-se — ou considera uma API paga de câmbio histórico para preencher o passado de imediato.")
+        df_cambio_hist["registado_em"] = pd.to_datetime(df_cambio_hist["registado_em"])
+        filtro_p = st.radio("Período", ["7D", "1M", "3M", "6M", "1A", "Máx.", "Personalizado"], horizontal=True)
+        hoje = pd.Timestamp.now()
+        df_plot = df_cambio_hist.copy()
+        
+        if filtro_p == "7D":
+            df_plot = df_plot[df_plot["registado_em"] >= hoje - pd.Timedelta(days=7)]
+        elif filtro_p == "1M":
+            df_plot = df_plot[df_plot["registado_em"] >= hoje - pd.Timedelta(days=30)]
+        elif filtro_p == "3M":
+            df_plot = df_plot[df_plot["registado_em"] >= hoje - pd.Timedelta(days=90)]
+        elif filtro_p == "6M":
+            df_plot = df_plot[df_plot["registado_em"] >= hoje - pd.Timedelta(days=180)]
+        elif filtro_p == "1A":
+            df_plot = df_plot[df_plot["registado_em"] >= hoje - pd.Timedelta(days=365)]
+        elif filtro_p == "Personalizado":
+            c_d1, c_d2 = st.columns(2)
+            d_ini = c_d1.date_input("Data Início", hoje - pd.Timedelta(days=30))
+            d_fim = c_d2.date_input("Data Fim", hoje)
+            df_plot = df_plot[(df_plot["registado_em"].dt.date >= d_ini) & (df_plot["registado_em"].dt.date <= d_fim)]
+
+        st.line_chart(df_plot.set_index("registado_em")[["usd", "eur", "gbp"]].rename(columns={"usd": "USD/AOA", "eur": "EUR/AOA", "gbp": "GBP/AOA"}))
 
 # =========================================================
 # PÁGINA: SIMULADOR DE INVESTIMENTO
 # =========================================================
 elif pagina == "🧪 Simulador de Investimento":
-    hero("Simulador de Investimento", "Projecta o crescimento do teu investimento ao longo do tempo, com juros compostos")
+    hero("Simulador de Investimento", "Projeção de juros compostos com aportes mensais para construir património")
 
-    col1, col2 = st.columns(2)
-    valor_inicial = col1.number_input("Valor inicial (Kz)", min_value=0.0, value=100000.0, step=10000.0)
-    contrib_mensal = col2.number_input("Contribuição mensal (Kz)", min_value=0.0, value=20000.0, step=5000.0)
-    col3, col4, col5 = st.columns(3)
-    taxa_anual = col3.slider("Taxa de retorno anual esperada (%)", 0.0, 40.0, 12.0, 0.5)
-    anos = col4.slider("Prazo (anos)", 1, 30, 10)
-    inflacao_sim = col5.slider("Inflação anual assumida (%)", 0.0, 40.0, 13.5, 0.5)
+    col1, col2, col3, col4 = st.columns(4)
+    p_inicial = col1.number_input("Capital Inicial (Kz)", min_value=0.0, value=100000.0, step=50000.0)
+    p_mensal = col2.number_input("Aporte Mensal (Kz)", min_value=0.0, value=50000.0, step=10000.0)
+    taxa_anual = col3.number_input("Taxa Anual (%)", min_value=0.0, value=15.0, step=0.5) / 100
+    anos = col4.number_input("Período (Anos)", min_value=1, max_value=40, value=10, step=1)
 
-    taxa_mensal = (1 + taxa_anual / 100) ** (1 / 12) - 1
-    inflacao_mensal = (1 + inflacao_sim / 100) ** (1 / 12) - 1
-    saldo = valor_inicial
-    total_investido = valor_inicial
-    pontos = []
-    for mes in range(1, anos * 12 + 1):
-        saldo = saldo * (1 + taxa_mensal) + contrib_mensal
-        total_investido += contrib_mensal
-        if mes % 12 == 0:
-            saldo_real = saldo / ((1 + inflacao_mensal) ** mes)
-            pontos.append({"Ano": mes // 12, "Saldo Nominal": saldo, "Total Investido": total_investido, "Saldo Real (poder de compra de hoje)": saldo_real})
+    meses = anos * 12
+    taxa_mensal = (1 + taxa_anual) ** (1 / 12) - 1
 
-    df_sim = pd.DataFrame(pontos).set_index("Ano")
-    col_a, col_b, col_c = st.columns(3)
-    col_a.metric("Saldo Final (nominal)", kz(saldo))
-    col_b.metric("Total Investido", kz(total_investido))
-    col_c.metric("Juros Compostos Ganhos", kz(saldo - total_investido))
-    st.bar_chart(df_sim[["Saldo Nominal", "Total Investido"]])
-    st.caption(f"Saldo final em poder de compra de hoje (descontada a inflação assumida de {inflacao_sim:.1f}%/ano): {kz(df_sim['Saldo Real (poder de compra de hoje)'].iloc[-1])}")
-    st.caption("Simulação educativa com juros compostos mensais constantes — os retornos reais dos mercados variam e não são garantidos. Não constitui aconselhamento de investimento.")
-    botoes_partilha(f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo)} — Clube de Investimento APPO")
+    dados = []
+    saldo = p_inicial
+    total_investido = p_inicial
+
+    for m in range(1, meses + 1):
+        saldo = saldo * (1 + taxa_mensal) + p_mensal
+        total_investido += p_mensal
+        if m % 12 == 0:
+            dados.append({"Ano": m // 12, "Total Investido": total_investido, "Juros Acumulados": saldo - total_investido, "Património Total": saldo})
+
+    df_sim = pd.DataFrame(dados)
+    col_s1, col_s2, col_s3 = st.columns(3)
+    col_s1.metric("Capital Investido", kz(total_investido))
+    col_s2.metric("Total em Juros", kz(saldo - total_investido))
+    col_s3.metric("Património Acumulado", kz(saldo))
+
+    st.bar_chart(df_sim.set_index("Ano")[["Total Investido", "Juros Acumulados"]])
 
 # =========================================================
 # PÁGINA: REGRA 50/30/20
 # =========================================================
 elif pagina == "🧮 Regra 50/30/20":
-    hero("Regra 50/30/20 do Clube", "Princípio nº 8: 50% Consumo · 30% Investimento · 20% Entesouramento", "📐 Rendimento mensal total, incluindo extras")
-    rendimento = st.number_input("Rendimento mensal total (Kz)", min_value=0.0, step=5000.0, value=250000.0, format="%.2f")
-    alvo_consumo, alvo_investimento, alvo_entesouramento = rendimento * 0.50, rendimento * 0.30, rendimento * 0.20
+    hero("Regra 50/30/20", "Orçamento Pessoal & Alocação Financeira Disciplinada")
 
-    st.subheader("Alocação recomendada")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Consumo (50%)", kz(alvo_consumo))
-    col2.metric("Investimento (30%)", kz(alvo_investimento))
-    col3.metric("Entesouramento (20%)", kz(alvo_entesouramento))
-    st.bar_chart(pd.DataFrame({"Categoria": ["Consumo", "Investimento", "Entesouramento"], "Valor recomendado (Kz)": [alvo_consumo, alvo_investimento, alvo_entesouramento]}).set_index("Categoria"))
+    rendimento = st.number_input("Rendimento Mensal Líquido (Kz)", min_value=0.0, value=500000.0, step=50000.0)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("50% Necessidades Básicas", kz(rendimento * 0.50))
+    c2.metric("30% Desejos Pessoais", kz(rendimento * 0.30))
+    c3.metric("20% Investimento / Poupança", kz(rendimento * 0.20))
 
-    st.divider()
-    st.subheader("Compara com os teus gastos reais (opcional)")
-    with st.form("form_orcamento_real"):
-        col_a, col_b, col_c = st.columns(3)
-        real_consumo = col_a.number_input("Gasto real — Consumo (Kz)", min_value=0.0, step=1000.0)
-        real_investimento = col_b.number_input("Gasto real — Investimento (Kz)", min_value=0.0, step=1000.0)
-        real_entesouramento = col_c.number_input("Entesouramento real (Kz)", min_value=0.0, step=1000.0)
-        comparar = st.form_submit_button("Comparar")
-    if comparar:
-        st.markdown("#### Resultado da comparação")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Consumo", kz(real_consumo), delta=kz(real_consumo - alvo_consumo), delta_color="inverse")
-        col2.metric("Investimento", kz(real_investimento), delta=kz(real_investimento - alvo_investimento), delta_color="normal")
-        col3.metric("Entesouramento", kz(real_entesouramento), delta=kz(real_entesouramento - alvo_entesouramento), delta_color="normal")
-        if real_entesouramento < alvo_entesouramento:
-            st.warning("O teu entesouramento real está abaixo dos 20% recomendados pelo princípio do Clube.")
-        else:
-            st.success("Estás a cumprir, ou a superar, a meta de 20% de entesouramento.")
+    st.caption("A Regra 50/30/20 é uma diretriz de alocação de capital que garante que guardas consistentemente 20% do teu rendimento para investimento antes de gastar em desejos superficiais.")
 
 # =========================================================
 # PÁGINA: BIBLIOTECA EDUCATIVA
 # =========================================================
 elif pagina == "📚 Biblioteca Educativa":
-    hero("Biblioteca Educativa", "Princípios do Clube e artigos sobre o mercado de capitais angolano")
-    df_artigos = obter_artigos()
-    if df_artigos.empty:
-        st.info("Ainda não existem artigos publicados.")
-    else:
-        categorias = ["Todas"] + sorted(df_artigos["categoria"].unique().tolist())
-        filtro_categoria = st.selectbox("Filtrar por categoria", categorias)
-        for _, artigo in obter_artigos(filtro_categoria).iterrows():
-            with st.expander(f"{ICONES_CATEGORIA.get(artigo['categoria'], '📄')} {artigo['titulo']}", key=f"artigo_exp_{artigo['id']}"):
-                banner_categoria(artigo["categoria"])
-                st.caption(f"Publicado em {artigo['criado_em']}")
-                st.markdown(artigo["conteudo"])
+    hero("Biblioteca Educativa", "Artigos, teses de investimento e princípios da BODIVA")
+
+    cats = ["Todas"] + list(CORES_CATEGORIA.keys())
+    cat_sel = st.selectbox("Filtrar por Categoria", cats)
+    df_art = obter_artigos(cat_sel)
+
+    for _, art in df_art.iterrows():
+        banner_categoria(art["categoria"])
+        st.subheader(art["titulo"])
+        st.caption(f"Publicado em: {fmt_dt(art['criado_em'])}")
+        st.markdown(art["conteudo"])
+        st.divider()
 
 # =========================================================
 # PÁGINA: ADESÃO DE SÓCIOS
 # =========================================================
 elif pagina == "🧾 Adesão de Sócios":
-    hero("Adesão de Sócios", "Preenche o formulário para solicitar a tua adesão ao Clube de Investimento APPO")
-    with st.form("form_adesao", clear_on_submit=True):
-        nome = st.text_input("Nome completo *")
-        col1, col2 = st.columns(2)
-        email = col1.text_input("E-mail")
-        telefone = col2.text_input("Telefone / WhatsApp")
-        bi = st.text_input("Número do Bilhete de Identidade")
-        contribuicao = st.number_input("Contribuição inicial pretendida (Kz)", min_value=0.0, step=5000.0)
-        aceite = st.checkbox("Declaro que li e aceite os Estatutos do Clube de Investimento APPO *")
-        enviar = st.form_submit_button("Submeter pedido de adesão")
-    if enviar:
-        if not nome or not aceite:
-            st.error("Preenche o nome completo e aceita os Estatutos para submeter o pedido.")
-        else:
+    hero("Adesão de Sócios", "Formulário oficial de candidatura a membro do Clube de Investimento APPO")
+
+    with st.form("form_adesao"):
+        nome = st.text_input("Nome Completo")
+        email = st.text_input("E-mail de Contacto")
+        telefone = st.text_input("Telefone")
+        bi = st.text_input("Número do B.I. / Passaporte")
+        contribuicao = st.number_input("Contribuição Inicial Planeada (Kz)", min_value=0.0, value=100000.0, step=50000.0)
+        submeter = st.form_submit_button("Submeter Candidatura")
+
+    if submeter:
+        if nome and email and bi:
             inserir_socio(nome, email, telefone, bi, contribuicao)
-            st.success("Pedido de adesão submetido com sucesso! Um administrador do Clube irá entrar em contacto.")
+            st.success("Candidatura submetida com sucesso! A administração entrará em contacto.")
+        else:
+            st.error("Por favor, preenche todos os campos obrigatórios (Nome, E-mail e B.I.).")
 
 # =========================================================
 # PÁGINA: SOBRE NÓS & ESTATUTOS
 # =========================================================
 elif pagina == "ℹ️ Sobre Nós & Estatutos":
-    hero("Sobre Nós & Estatutos", "A missão, os princípios e o enquadramento estatutário do Clube")
-    st.subheader("Quem somos")
-    st.markdown("O **Clube de Investimento APPO** é uma associação de investidores angolanos que junta capital de forma colectiva para investir no mercado de capitais nacional, através da Bolsa de Dívida e Valores de Angola (BODIVA).")
-    st.subheader("Princípios e Filosofia de Investimento")
+    hero("Sobre Nós & Estatutos", "Governança, Regulamentos e Estrutura Orgânica do Clube")
+
     st.markdown(TEXTO_PRINCIPIOS)
-    st.subheader("Estatutos — pontos-chave")
-    st.markdown(
-        """
-- **Natureza:** associação de investidores, conforme Estatutos formalmente registados.
-- **Órgãos sociais:** Assembleia de Sócios, Comissão de Gestão e Conselho Fiscal.
-- **Admissão de sócios:** sujeita a aprovação da Comissão de Gestão.
-- **Deliberações:** decisões de investimento relevantes exigem deliberação colectiva.
-- **Distribuição de resultados:** proporcional à quota de capital de cada sócio.
-        """
-    )
-    st.caption("Nota interna: modelo de referência, a substituir pelos Estatutos formalmente aprovados e registados do Clube.")
+    st.divider()
+    st.subheader("📄 Ficheiro dos Estatutos / Regulamento Interno")
+    uploaded_pdf = st.file_uploader("Carregar documento dos Estatutos (PDF)", type=["pdf"])
+    if uploaded_pdf:
+        texto_extraido = extrair_texto_pdf(uploaded_pdf)
+        st.success("Documento lido com sucesso!")
+        st.text_area("Conteúdo dos Estatutos", texto_extraido, height=300)
 
 # =========================================================
 # PÁGINA: PAINEL DO ADMINISTRADOR
 # =========================================================
-elif pagina == "🔐 Painel do Administrador":
-    hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
+elif pagina == "🔐 Painel do Administrador" and st.session_state["is_admin"]:
+    hero("Painel do Administrador", "Gestão de Contas, Património, Cotações e Auditoria", "🔒 ADMIN CONTROL")
 
-    aba_resumo, aba_activos, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca = st.tabs(
-        ["Resumo Patrimonial", "Cotações & Activos", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança"]
-    )
+    aba1, aba2, aba3, aba4, aba5 = st.tabs(["👥 Gestão de Contas", "💰 Gestão Patrimonial", "📈 Actualizar Cotações", "🧾 Candidaturas de Sócios", "📜 Log de Acessos"])
 
-    with aba_resumo:
-        st.subheader("Editar Resumo Patrimonial")
-        st.caption("O Capital Realizado já não se edita directamente: é sempre igual a Investimentos + Reservas (é o mesmo dinheiro, só que aplicado ou guardado). Edita apenas o Capital Subscrito, os Investimentos e as Reservas.")
-        resumo = obter_resumo_patrimonial()
-        with st.form("form_editar_resumo"):
-            novo_subscrito = st.number_input("Capital Subscrito (Kz)", min_value=0.0, step=10000.0, value=float(resumo["capital_subscrito"]))
-            novo_investimentos = st.number_input("Investimentos (Kz)", min_value=0.0, step=10000.0, value=float(resumo["investimentos"]))
-            novas_reservas = st.number_input("Reservas (Kz)", min_value=0.0, step=10000.0, value=float(resumo["reservas"]))
-            novo_realizado_preview = novo_investimentos + novas_reservas
-            st.metric("Capital Realizado (calculado automaticamente)", kz(novo_realizado_preview))
-            st.caption(f"Capital por Realizar (calculado): {kz(max(novo_subscrito - novo_realizado_preview, 0.0))}")
-            guardar_resumo = st.form_submit_button("Guardar alterações")
-        if guardar_resumo:
-            if novo_realizado_preview > novo_subscrito:
-                st.error("Investimentos + Reservas não pode ser maior do que o Capital Subscrito — isso significaria realizar mais capital do que os sócios prometeram.")
-            else:
-                actualizar_resumo_patrimonial(novo_subscrito, novo_investimentos, novas_reservas)
-                st.success("Resumo patrimonial actualizado e novo ponto de histórico registado.")
-                st.rerun()
-
-    with aba_activos:
-        st.subheader("Editar Cotações & Activos")
-        st.caption("A Variação (%) já não se preenche à mão: ao guardares, é calculada automaticamente comparando o novo Preço com o preço que estava registado antes desta gravação para o mesmo activo. Um activo novo (sem preço anterior) começa com 0.00%. O Barómetro BODIVA e o seu histórico são recalculados de seguida.")
-        df_activos = obter_activos()
-        df_editado = st.data_editor(
-            df_activos[["ticker", "nome", "tipo", "preco"]], num_rows="dynamic", key="editor_activos",
-            column_config={
-                "ticker": st.column_config.TextColumn("Ticker", max_chars=12), "nome": "Nome do activo", "tipo": "Tipo",
-                "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
-            },
-        )
-        if st.button("Guardar alterações às cotações"):
-            substituir_activos(df_editado)
-            st.success("Cotações guardadas. Variação calculada automaticamente e Barómetro BODIVA actualizado com sucesso.")
-            st.rerun()
-
-    with aba_aval:
-        st.subheader("Premissas Macro (CAPM)")
-        premissas = obter_premissas_macro()
-        with st.form("form_premissas"):
-            col1, col2, col3 = st.columns(3)
-            infl = col1.number_input("Inflação anual", min_value=0.0, max_value=1.0, value=premissas["inflacao"], step=0.005, format="%.3f")
-            rf = col2.number_input("Taxa livre de risco (Rf)", min_value=0.0, max_value=1.0, value=premissas["taxa_livre_risco"], step=0.005, format="%.3f")
-            erp = col3.number_input("Prémio de risco de mercado (ERP)", min_value=0.0, max_value=1.0, value=premissas["premio_risco"], step=0.005, format="%.3f")
-            col4, col5, col6 = st.columns(3)
-            bb = col4.number_input("Beta — Banca", min_value=0.0, max_value=3.0, value=premissas["beta_banca"], step=0.05)
-            bt = col5.number_input("Beta — Telecom", min_value=0.0, max_value=3.0, value=premissas["beta_telecom"], step=0.05)
-            bo = col6.number_input("Beta — Outros sectores", min_value=0.0, max_value=3.0, value=premissas["beta_outros"], step=0.05)
-            guardar_premissas = st.form_submit_button("Guardar premissas")
-        if guardar_premissas:
-            actualizar_premissas_macro(infl, rf, erp, bb, bt, bo)
-            st.success("Premissas macro actualizadas.")
-            st.rerun()
+    with aba1:
+        st.subheader("Criar Nova Conta de Utilizador")
+        with st.form("form_criar_conta"):
+            n_nome = st.text_input("Nome")
+            n_email = st.text_input("E-mail")
+            n_pass = st.text_input("Palavra-passe Inicial", type="password")
+            n_admin = st.checkbox("É Administrador?")
+            if st.form_submit_button("Criar Conta"):
+                if n_nome and n_email and n_pass:
+                    try:
+                        inserir_conta(n_nome, n_email.strip().lower(), n_pass, n_admin)
+                        st.success("Conta criada com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao criar conta: {e}")
 
         st.divider()
-        st.subheader("Dados de Avaliação por Empresa")
-        df_aval = obter_avaliacoes()
-        df_aval_editado = st.data_editor(
-            df_aval[["empresa", "sector", "preco", "acoes_circulacao", "lucro_liquido", "ganho_pontual", "capital_proprio", "dividendo_total", "crescimento_g"]],
-            num_rows="dynamic", key="editor_avaliacoes",
-            column_config={
-                "empresa": "Empresa", "sector": "Sector", "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
-                "acoes_circulacao": st.column_config.NumberColumn("Acções em circulação", min_value=0.0, step=1000.0),
-                "lucro_liquido": st.column_config.NumberColumn("Lucro líquido (Kz)", step=1000000.0),
-                "ganho_pontual": st.column_config.NumberColumn("Ganho pontual não recorrente (Kz)", step=1000000.0),
-                "capital_proprio": st.column_config.NumberColumn("Capital próprio (Kz)", min_value=0.0, step=1000000.0),
-                "dividendo_total": st.column_config.NumberColumn("Dividendo total distribuído (Kz)", min_value=0.0, step=1000000.0),
-                "crescimento_g": st.column_config.NumberColumn("Crescimento assumido (g)", min_value=0.0, max_value=1.0, step=0.01, format="%.2f"),
-            },
-        )
-        if st.button("Guardar alterações às avaliações"):
-            substituir_avaliacoes(df_aval_editado)
-            st.success("Avaliações actualizadas com sucesso.")
-            st.rerun()
-
-    with aba_movimentos:
-        st.subheader("Registar novo movimento")
-        with st.form("form_novo_movimento", clear_on_submit=True):
-            tipo_mov = st.selectbox("Tipo", ["Entrada de Capital", "Compra de Activo", "Venda de Activo", "Saída/Despesa", "Ajuste de Reserva"])
-            descricao_mov = st.text_input("Descrição")
-            montante_mov = st.number_input("Montante (Kz)", min_value=0.0, step=1000.0)
-            data_mov = st.date_input("Data do movimento")
-            registar_mov = st.form_submit_button("Registar movimento")
-        if registar_mov:
-            inserir_movimento(tipo_mov, descricao_mov, montante_mov, data_mov)
-            st.success("Movimento registado com sucesso.")
-            st.rerun()
-        st.divider()
-        st.subheader("Movimentos existentes")
-        df_mov_admin = obter_movimentos()
-        if not df_mov_admin.empty:
-            df_mov_admin = df_mov_admin.copy()
-            df_mov_admin["montante"] = df_mov_admin["montante"].apply(kz)
-        st.dataframe(df_mov_admin, hide_index=True)
-
-    with aba_biblioteca:
-        st.subheader("Adicionar novo artigo")
-        modo = st.radio("Fonte do conteúdo", ["Carregar PDF", "Escrever manualmente"], horizontal=True, key="modo_artigo")
-        texto_extraido = ""
-        if modo == "Carregar PDF":
-            ficheiro_pdf = st.file_uploader("Carregar ficheiro PDF", type=["pdf"], key="uploader_pdf")
-            if ficheiro_pdf is not None:
-                try:
-                    texto_extraido = extrair_texto_pdf(ficheiro_pdf)
-                    st.success("Texto extraído com sucesso. Revê antes de publicar.")
-                except Exception as erro:
-                    st.error(f"Não foi possível ler o PDF: {erro}")
-        with st.form("form_novo_artigo", clear_on_submit=True):
-            titulo_artigo = st.text_input("Título do artigo")
-            categoria_artigo = st.selectbox("Categoria", ["Institucional", "Educação", "Análise de Mercado", "Referência"])
-            conteudo_artigo = st.text_area("Conteúdo (Markdown suportado)", value=texto_extraido, height=280)
-            publicar = st.form_submit_button("Publicar artigo")
-        if publicar:
-            if not titulo_artigo or not conteudo_artigo:
-                st.error("Preenche o título e o conteúdo do artigo.")
-            else:
-                inserir_artigo(titulo_artigo, categoria_artigo, conteudo_artigo)
-                st.success("Artigo publicado.")
-                st.rerun()
-        st.divider()
-        st.subheader("Artigos existentes")
-        for _, artigo in obter_artigos().iterrows():
-            col_a, col_b, col_c = st.columns([3, 1.5, 1])
-            col_a.write(artigo["titulo"])
-            col_b.write(artigo["categoria"])
-            if col_c.button("Eliminar", key=f"eliminar_artigo_{artigo['id']}"):
-                eliminar_artigo(int(artigo["id"]))
-                st.rerun()
-
-    with aba_socios:
-        st.subheader("Pedidos de adesão recebidos")
-        df_socios = obter_socios()
-        if df_socios.empty:
-            st.info("Ainda não existem pedidos de adesão.")
-        else:
-            df_socios_exibir = df_socios.copy()
-            df_socios_exibir["contribuicao_inicial"] = df_socios_exibir["contribuicao_inicial"].apply(kz)
-            st.dataframe(df_socios_exibir.rename(columns={"nome": "Nome", "email": "E-mail", "telefone": "Telefone", "bi": "Nº BI", "contribuicao_inicial": "Contribuição Inicial", "criado_em": "Submetido em"}), hide_index=True)
-
-    with aba_contas:
-        st.subheader("Criar conta de acesso para um sócio")
-        with st.form("form_nova_conta", clear_on_submit=True):
-            nome_conta = st.text_input("Nome completo")
-            email_conta = st.text_input("E-mail (usado para entrar)")
-            password_conta = st.text_input("Palavra-passe inicial", type="password")
-            admin_conta = st.checkbox("Esta conta é administradora")
-            criar_conta = st.form_submit_button("Criar conta")
-        if criar_conta:
-            if not nome_conta or not email_conta or not password_conta:
-                st.error("Preenche todos os campos.")
-            else:
-                try:
-                    inserir_conta(nome_conta, email_conta.strip().lower(), password_conta, admin_conta)
-                    st.success(f"Conta criada para {email_conta}.")
-                    st.rerun()
-                except psycopg2.errors.UniqueViolation:
-                    obter_ligacao().rollback()
-                    st.error("Já existe uma conta com este e-mail.")
-        st.divider()
-        st.subheader("Contas existentes")
-        st.caption("Activa o acesso Premium depois de confirmares o pagamento do sócio.")
+        st.subheader("Contas Registadas")
         df_contas = listar_contas()
         for _, conta in df_contas.iterrows():
-            col_a, col_b, col_c, col_d, col_e = st.columns([2.3, 0.9, 1.1, 1.1, 1.1])
-            col_a.write(f"{conta['nome']} — {conta['email']}")
-            col_b.write("Admin" if conta["is_admin"] else "Sócio")
-            if conta["is_premium"]:
-                if col_c.button("Remover Premium", key=f"despremium_{conta['id']}"):
-                    alternar_premium(int(conta["id"]), False)
+            col_c1, col_c2, col_c3, col_c4 = st.columns([2, 2, 1, 1])
+            col_c1.write(f"**{conta['nome']}** ({conta['email']})")
+            es_premium = conta['is_premium']
+            if col_c2.button(f"{'Remover Premium' if es_premium else 'Tornar Premium'}", key=f"prem_{conta['id']}"):
+                alternar_premium(conta['id'], not es_premium)
+                st.rerun()
+            if col_c3.button("Repor Pass", key=f"rep_{conta['id']}"):
+                nova_p = repor_password(conta['id'])
+                st.info(f"Nova pass temporária: `{nova_p}`")
+            if col_c4.button("Eliminar", key=f"del_{conta['id']}"):
+                if conta['email'] != st.session_state["conta_email"]:
+                    eliminar_conta(conta['id'])
                     st.rerun()
-            else:
-                if col_c.button("Tornar Premium", key=f"premium_{conta['id']}"):
-                    alternar_premium(int(conta["id"]), True)
-                    st.rerun()
-            if col_d.button("Repor password", key=f"repor_{conta['id']}"):
-                nova = repor_password(int(conta["id"]))
-                st.info(f"Nova palavra-passe para {conta['email']}: **{nova}**")
-            pode_eliminar = not (conta["is_admin"] and contar_admins() <= 1)
-            if col_e.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
-                eliminar_conta(int(conta["id"]))
+                else:
+                    st.error("Não podes eliminar a tua própria conta.")
+
+    with aba2:
+        st.subheader("Actualizar Resumo Patrimonial")
+        resumo_act = obter_resumo_patrimonial()
+        with st.form("form_patrimonio"):
+            c_sub = st.number_input("Capital Subscrito Total (Kz)", value=float(resumo_act["capital_subscrito"]), step=100000.0)
+            c_inv = st.number_input("Investimentos em Carteira (Kz)", value=float(resumo_act["investimentos"]), step=100000.0)
+            c_res = st.number_input("Reservas em Liquidez (Kz)", value=float(resumo_act["reservas"]), step=100000.0)
+            if st.form_submit_button("Guardar Alterações Patrimoniais"):
+                actualizar_resumo_patrimonial(c_sub, c_inv, c_res)
+                st.success("Património actualizado com sucesso!")
                 st.rerun()
 
-    with aba_seguranca:
-        st.subheader("Registo de tentativas de acesso (últimas 50)")
-        df_log = obter_log_acessos()
-        if df_log.empty:
-            st.info("Ainda não há registos de acesso.")
+    with aba3:
+        st.subheader("Editar Cotações de Activos")
+        df_act = obter_activos()
+        df_editavel = st.data_editor(df_act[["ticker", "nome", "tipo", "preco"]], num_rows="dynamic")
+        if st.button("Guardar Novas Cotações"):
+            substituir_activos(df_editavel)
+            st.success("Cotações e Barómetro BODIVA actualizados!")
+            st.rerun()
+
+    with aba4:
+        st.subheader("Candidaturas de Novos Sócios")
+        df_socios = obter_socios()
+        if df_socios.empty:
+            st.info("Sem candidaturas registadas.")
         else:
-            st.dataframe(df_log.rename(columns={"email": "E-mail", "sucesso": "Sucesso", "criado_em": "Data/Hora"}), hide_index=True)
+            st.dataframe(df_socios, hide_index=True)
+
+    with aba5:
+        st.subheader("Histórico de Acessos")
+        st.dataframe(obter_log_acessos(), hide_index=True)
+
+# =========================================================
+# RODAPÉ
+# =========================================================
+st.divider()
+render_html(
+    f"""
+    <div style="text-align:center; padding:12px; font-size:0.8rem; color:#776B70;">
+        <strong>Clube de Investimento APPO</strong> &copy; 2026 &middot; Promovendo a literacia financeira e o investimento em Angola.<br/>
+        Portal privado reservado a sócios &middot; Desenvolvido com Streamlit e Neon PostgreSQL.
+    </div>
+    """
+)
