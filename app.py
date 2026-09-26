@@ -8,6 +8,7 @@ import os
 import secrets
 import textwrap
 import time
+import urllib.parse
 from datetime import datetime
 
 import bcrypt
@@ -22,12 +23,7 @@ from pypdf import PdfReader
 # =========================================================
 # CONFIGURAÇÃO DA PÁGINA
 # =========================================================
-st.set_page_config(
-    page_title="Clube de Investimento APPO",
-    page_icon="🕐",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title="Clube de Investimento APPO", page_icon="🕐", layout="wide", initial_sidebar_state="expanded")
 
 
 def render_html(html: str):
@@ -35,95 +31,90 @@ def render_html(html: str):
 
 
 # =========================================================
-# IMAGENS (Unsplash, licença livre — URLs estáveis)
+# IMAGENS (Unsplash, licença livre)
 # =========================================================
 IMG_SKYLINE = "https://images.unsplash.com/photo-1602552283771-c533ac53ce80?fm=jpg&q=70&w=1600&auto=format&fit=crop"
 IMG_GRAFICO = "https://images.unsplash.com/photo-1745270917449-c2e2c5806586?fm=jpg&q=70&w=1600&auto=format&fit=crop"
 IMG_REUNIAO = "https://images.unsplash.com/photo-1517048676732-d65bc937f952?fm=jpg&q=70&w=1600&auto=format&fit=crop"
 IMG_LIVROS = "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?fm=jpg&q=70&w=1600&auto=format&fit=crop"
-
-IMAGENS_CATEGORIA = {
-    "Institucional": IMG_REUNIAO, "Educação": IMG_LIVROS,
-    "Análise de Mercado": IMG_GRAFICO, "Referência": IMG_SKYLINE,
-}
+IMAGENS_CATEGORIA = {"Institucional": IMG_REUNIAO, "Educação": IMG_LIVROS, "Análise de Mercado": IMG_GRAFICO, "Referência": IMG_SKYLINE}
 
 # =========================================================
-# IDIOMAS — navegação e ecrã de login traduzidos
+# IDIOMAS
 # =========================================================
 TRADUCOES = {
     "Português": {
         "tagline": "Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios",
-        "login_titulo": "Acesso reservado a sócios", "email": "E-mail", "password": "Palavra-passe",
-        "entrar": "Entrar", "erro_login": "E-mail ou palavra-passe incorrectos. Contacta um administrador do Clube.",
+        "login_titulo": "Acesso reservado a sócios", "email": "E-mail", "password": "Palavra-passe", "entrar": "Entrar",
+        "erro_login": "E-mail ou palavra-passe incorrectos. Contacta um administrador do Clube.",
         "sessao": "Sessão", "terminar_sessao": "Terminar sessão",
         "nav_map": {
             "🏠 Início & Análises": "🏠 Início & Análises", "📈 Cotações & Activos": "📈 Cotações & Activos",
             "💰 Contabilidade & Finanças": "💰 Contabilidade & Finanças", "📊 Histórico & Relatórios": "📊 Histórico & Relatórios",
             "📐 Avaliação de Activos": "📐 Avaliação de Activos", "💱 Conversor de Moeda": "💱 Conversor de Moeda",
-            "🧮 Regra 50/30/20": "🧮 Regra 50/30/20", "📚 Biblioteca Educativa": "📚 Biblioteca Educativa",
-            "🧾 Adesão de Sócios": "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos": "ℹ️ Sobre Nós & Estatutos",
-            "🔐 Painel do Administrador": "🔐 Painel do Administrador",
+            "🧪 Simulador de Investimento": "🧪 Simulador de Investimento", "🧮 Regra 50/30/20": "🧮 Regra 50/30/20",
+            "📚 Biblioteca Educativa": "📚 Biblioteca Educativa", "🧾 Adesão de Sócios": "🧾 Adesão de Sócios",
+            "ℹ️ Sobre Nós & Estatutos": "ℹ️ Sobre Nós & Estatutos", "🔐 Painel do Administrador": "🔐 Painel do Administrador",
         },
     },
     "English": {
         "tagline": "Official BODIVA Quotes, Accounting and Membership Portal",
-        "login_titulo": "Members-only access", "email": "E-mail", "password": "Password",
-        "entrar": "Sign in", "erro_login": "Incorrect e-mail or password. Contact a Club administrator.",
+        "login_titulo": "Members-only access", "email": "E-mail", "password": "Password", "entrar": "Sign in",
+        "erro_login": "Incorrect e-mail or password. Contact a Club administrator.",
         "sessao": "Session", "terminar_sessao": "Sign out",
         "nav_map": {
             "🏠 Início & Análises": "🏠 Home & Analysis", "📈 Cotações & Activos": "📈 Quotes & Assets",
             "💰 Contabilidade & Finanças": "💰 Accounting & Finance", "📊 Histórico & Relatórios": "📊 History & Reports",
             "📐 Avaliação de Activos": "📐 Asset Valuation", "💱 Conversor de Moeda": "💱 Currency Converter",
-            "🧮 Regra 50/30/20": "🧮 50/30/20 Rule", "📚 Biblioteca Educativa": "📚 Learning Library",
-            "🧾 Adesão de Sócios": "🧾 Membership Application", "ℹ️ Sobre Nós & Estatutos": "ℹ️ About Us & Bylaws",
-            "🔐 Painel do Administrador": "🔐 Admin Panel",
+            "🧪 Simulador de Investimento": "🧪 Investment Simulator", "🧮 Regra 50/30/20": "🧮 50/30/20 Rule",
+            "📚 Biblioteca Educativa": "📚 Learning Library", "🧾 Adesão de Sócios": "🧾 Membership Application",
+            "ℹ️ Sobre Nós & Estatutos": "ℹ️ About Us & Bylaws", "🔐 Painel do Administrador": "🔐 Admin Panel",
         },
     },
     "Français": {
         "tagline": "Portail Officiel des Cotations BODIVA, Comptabilité et Adhésion",
-        "login_titulo": "Accès réservé aux membres", "email": "E-mail", "password": "Mot de passe",
-        "entrar": "Se connecter", "erro_login": "E-mail ou mot de passe incorrect. Contactez un administrateur.",
+        "login_titulo": "Accès réservé aux membres", "email": "E-mail", "password": "Mot de passe", "entrar": "Se connecter",
+        "erro_login": "E-mail ou mot de passe incorrect. Contactez un administrateur.",
         "sessao": "Session", "terminar_sessao": "Se déconnecter",
         "nav_map": {
             "🏠 Início & Análises": "🏠 Accueil & Analyses", "📈 Cotações & Activos": "📈 Cotations & Actifs",
             "💰 Contabilidade & Finanças": "💰 Comptabilité & Finances", "📊 Histórico & Relatórios": "📊 Historique & Rapports",
             "📐 Avaliação de Activos": "📐 Évaluation des Actifs", "💱 Conversor de Moeda": "💱 Convertisseur de Devises",
-            "🧮 Regra 50/30/20": "🧮 Règle 50/30/20", "📚 Biblioteca Educativa": "📚 Bibliothèque Éducative",
-            "🧾 Adesão de Sócios": "🧾 Adhésion des Membres", "ℹ️ Sobre Nós & Estatutos": "ℹ️ À propos & Statuts",
-            "🔐 Painel do Administrador": "🔐 Panneau d'Administration",
+            "🧪 Simulador de Investimento": "🧪 Simulateur d'Investissement", "🧮 Regra 50/30/20": "🧮 Règle 50/30/20",
+            "📚 Biblioteca Educativa": "📚 Bibliothèque Éducative", "🧾 Adesão de Sócios": "🧾 Adhésion des Membres",
+            "ℹ️ Sobre Nós & Estatutos": "ℹ️ À propos & Statuts", "🔐 Painel do Administrador": "🔐 Panneau d'Administration",
         },
     },
     "Español": {
         "tagline": "Portal Oficial de Cotizaciones BODIVA, Contabilidad y Adhesión",
-        "login_titulo": "Acceso reservado a socios", "email": "Correo electrónico", "password": "Contraseña",
-        "entrar": "Entrar", "erro_login": "Correo o contraseña incorrectos. Contacta a un administrador del Club.",
+        "login_titulo": "Acceso reservado a socios", "email": "Correo electrónico", "password": "Contraseña", "entrar": "Entrar",
+        "erro_login": "Correo o contraseña incorrectos. Contacta a un administrador del Club.",
         "sessao": "Sesión", "terminar_sessao": "Cerrar sesión",
         "nav_map": {
             "🏠 Início & Análises": "🏠 Inicio y Análisis", "📈 Cotações & Activos": "📈 Cotizaciones y Activos",
             "💰 Contabilidade & Finanças": "💰 Contabilidad y Finanzas", "📊 Histórico & Relatórios": "📊 Historial e Informes",
             "📐 Avaliação de Activos": "📐 Valoración de Activos", "💱 Conversor de Moeda": "💱 Conversor de Moneda",
-            "🧮 Regra 50/30/20": "🧮 Regla 50/30/20", "📚 Biblioteca Educativa": "📚 Biblioteca Educativa",
-            "🧾 Adesão de Sócios": "🧾 Adhesión de Socios", "ℹ️ Sobre Nós & Estatutos": "ℹ️ Sobre Nosotros y Estatutos",
-            "🔐 Painel do Administrador": "🔐 Panel de Administrador",
+            "🧪 Simulador de Investimento": "🧪 Simulador de Inversión", "🧮 Regra 50/30/20": "🧮 Regla 50/30/20",
+            "📚 Biblioteca Educativa": "📚 Biblioteca Educativa", "🧾 Adesão de Sócios": "🧾 Adhesión de Socios",
+            "ℹ️ Sobre Nós & Estatutos": "ℹ️ Sobre Nosotros y Estatutos", "🔐 Painel do Administrador": "🔐 Panel de Administrador",
         },
     },
     "中文 (Mandarim)": {
         "tagline": "BODIVA官方行情、会计与会员门户",
-        "login_titulo": "仅限会员访问", "email": "电子邮件", "password": "密码",
-        "entrar": "登录", "erro_login": "邮箱或密码错误。请联系俱乐部管理员。",
+        "login_titulo": "仅限会员访问", "email": "电子邮件", "password": "密码", "entrar": "登录",
+        "erro_login": "邮箱或密码错误。请联系俱乐部管理员。",
         "sessao": "会话", "terminar_sessao": "退出登录",
         "nav_map": {
             "🏠 Início & Análises": "🏠 首页与分析", "📈 Cotações & Activos": "📈 行情与资产",
             "💰 Contabilidade & Finanças": "💰 会计与财务", "📊 Histórico & Relatórios": "📊 历史与报告",
             "📐 Avaliação de Activos": "📐 资产估值", "💱 Conversor de Moeda": "💱 货币换算器",
-            "🧮 Regra 50/30/20": "🧮 50/30/20法则", "📚 Biblioteca Educativa": "📚 教育图书馆",
-            "🧾 Adesão de Sócios": "🧾 会员申请", "ℹ️ Sobre Nós & Estatutos": "ℹ️ 关于我们与章程",
-            "🔐 Painel do Administrador": "🔐 管理员面板",
+            "🧪 Simulador de Investimento": "🧪 投资模拟器", "🧮 Regra 50/30/20": "🧮 50/30/20法则",
+            "📚 Biblioteca Educativa": "📚 教育图书馆", "🧾 Adesão de Sócios": "🧾 会员申请",
+            "ℹ️ Sobre Nós & Estatutos": "ℹ️ 关于我们与章程", "🔐 Painel do Administrador": "🔐 管理员面板",
         },
     },
 }
 LISTA_IDIOMAS = list(TRADUCOES.keys())
-
 if "idioma" not in st.session_state:
     st.session_state["idioma"] = "Português"
 
@@ -140,24 +131,10 @@ COR_MARCA = "#7C1F3E"
 CSS_APPO = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Baloo+2:wght@600;700&display=swap');
-
 [data-testid="stAppViewContainer"] {{ background: #FBF8F6; }}
-div[data-testid="stMetric"] {{
-    background: linear-gradient(135deg, #ffffff 0%, #F6EFF2 100%);
-    border: 1px solid #ECDEE3; border-left: 4px solid {COR_MARCA};
-    border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(124,31,62,0.08);
-}}
-.appo-hero {{
-    position: relative; overflow: hidden;
-    background: linear-gradient(120deg, #4A1226 0%, {COR_MARCA} 55%, #A6486A 100%);
-    color: #FFFFFF; border-radius: 14px; padding: 24px 30px; margin-bottom: 18px;
-    display: flex; align-items: center; gap: 16px;
-}}
-.appo-hero::before {{
-    content: ""; position: absolute; inset: 0;
-    background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 2px, transparent 2px, transparent 16px);
-    pointer-events: none;
-}}
+div[data-testid="stMetric"] {{ background: linear-gradient(135deg, #ffffff 0%, #F6EFF2 100%); border: 1px solid #ECDEE3; border-left: 4px solid {COR_MARCA}; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(124,31,62,0.08); }}
+.appo-hero {{ position: relative; overflow: hidden; background: linear-gradient(120deg, #4A1226 0%, {COR_MARCA} 55%, #A6486A 100%); color: #FFFFFF; border-radius: 14px; padding: 24px 30px; margin-bottom: 18px; display: flex; align-items: center; gap: 16px; }}
+.appo-hero::before {{ content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 2px, transparent 2px, transparent 16px); pointer-events: none; }}
 .appo-hero > * {{ position: relative; z-index: 1; }}
 .appo-hero h1 {{ margin: 0; font-size: 1.6rem; line-height: 1.2; }}
 .appo-hero p {{ margin: 4px 0 0 0; opacity: 0.9; font-size: 0.9rem; }}
@@ -176,6 +153,10 @@ div[data-testid="stMetric"] {{
 .appo-categoria-foto {{ position: relative; border-radius: 10px 10px 0 0; margin: -1rem -1rem 12px -1rem; height: 140px; background-size: cover; background-position: center; display: flex; align-items: flex-end; }}
 .appo-categoria-foto-overlay {{ position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%); border-radius: 10px 10px 0 0; }}
 .appo-categoria-foto span {{ position: relative; z-index: 1; color: #fff; font-weight: 700; padding: 12px 18px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; }}
+.appo-ticker-wrap {{ overflow: hidden; white-space: nowrap; background: #1A0E14; border-radius: 8px; padding: 9px 0; margin-bottom: 16px; }}
+.appo-ticker-move {{ display: inline-block; padding-left: 100%; animation: appo-scroll 45s linear infinite; font-family: monospace; font-size: 0.82rem; }}
+@keyframes appo-scroll {{ 0% {{ transform: translate(0,0); }} 100% {{ transform: translate(-100%,0); }} }}
+.appo-share a {{ text-decoration:none; color:#fff; padding:6px 14px; border-radius:8px; font-size:0.82rem; font-weight:600; }}
 </style>
 """
 st.markdown(CSS_APPO, unsafe_allow_html=True)
@@ -204,14 +185,7 @@ def logo_com_texto(tamanho: int = 130, cor: str = COR_MARCA):
 
 
 def hero(titulo: str, subtitulo: str, badge: str = "🇦🇴 BODIVA · Kwanzas (Kz)"):
-    render_html(
-        f"""
-        <div class="appo-hero">
-            {logo_svg(58, "#FFFFFF")}
-            <div><h1>{titulo}</h1><p>{subtitulo}</p><span class="appo-badge">{badge}</span></div>
-        </div>
-        """
-    )
+    render_html(f'<div class="appo-hero">{logo_svg(58, "#FFFFFF")}<div><h1>{titulo}</h1><p>{subtitulo}</p><span class="appo-badge">{badge}</span></div></div>')
 
 
 def banner_capa(imagem_url: str, texto: str, altura: int = 170, escurecimento: float = 0.5):
@@ -233,13 +207,7 @@ def banner_categoria(categoria: str):
     icone = ICONES_CATEGORIA.get(categoria, "📄")
     imagem = IMAGENS_CATEGORIA.get(categoria)
     if imagem:
-        render_html(
-            f"""
-            <div class="appo-categoria-foto" style="background-image:url('{imagem}');">
-                <div class="appo-categoria-foto-overlay"></div><span>{icone} {categoria}</span>
-            </div>
-            """
-        )
+        render_html(f'<div class="appo-categoria-foto" style="background-image:url(\'{imagem}\');"><div class="appo-categoria-foto-overlay"></div><span>{icone} {categoria}</span></div>')
     else:
         cor = CORES_CATEGORIA.get(categoria, COR_MARCA)
         render_html(f'<div class="appo-categoria-banner" style="background:linear-gradient(120deg, {cor}cc, {cor});"><span style="font-size:1.3rem;">{icone}</span><span>{categoria}</span></div>')
@@ -247,6 +215,34 @@ def banner_categoria(categoria: str):
 
 def nota_indicador(texto: str):
     render_html(f'<div class="appo-indicador-nota">💡 {texto}</div>')
+
+
+def ticker_tape(df_activos: pd.DataFrame):
+    if df_activos.empty:
+        return
+    itens = []
+    for _, a in df_activos.iterrows():
+        v = float(a["variacao"])
+        cor = "#4ADE80" if v > 0 else ("#F87171" if v < 0 else "#D1D5DB")
+        itens.append(f'<span style="color:{cor}; margin-right:36px;">{a["ticker"] or a["nome"]} &nbsp;{kz(a["preco"])} &nbsp;({v:+.2f}%)</span>')
+    conteudo = "".join(itens) * 3
+    render_html(f'<div class="appo-ticker-wrap"><div class="appo-ticker-move"><span>{conteudo}</span></div></div>')
+
+
+def botoes_partilha(texto: str):
+    cod = urllib.parse.quote(texto)
+    wa = f"https://wa.me/?text={cod}"
+    tw = f"https://twitter.com/intent/tweet?text={cod}"
+    fb = f"https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fclube-investimento-appo.onrender.com&quote={cod}"
+    render_html(
+        f"""
+        <div class="appo-share" style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+            <a href="{wa}" target="_blank" style="background:#25D366;">💬 WhatsApp</a>
+            <a href="{tw}" target="_blank" style="background:#111;">𝕏 X / Twitter</a>
+            <a href="{fb}" target="_blank" style="background:#1877F2;">📘 Facebook</a>
+        </div>
+        """
+    )
 
 
 # =========================================================
@@ -317,8 +313,7 @@ def tabela_cotacoes_estilizada(df_activos: pd.DataFrame):
     df_disp = df_disp.rename(columns={"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Preço", "variacao": "Variação", "mercado": "Mercado"})
     df_disp = df_disp[["Ticker", "Activo", "Tipo", "Mercado", "Preço", "Variação"]]
     return (
-        df_disp.style.format({"Preço": kz, "Variação": pct_bruto})
-        .applymap(cor_variacao, subset=["Variação"])
+        df_disp.style.format({"Preço": kz, "Variação": pct_bruto}).applymap(cor_variacao, subset=["Variação"])
         .set_properties(subset=["Ticker"], **{"font-family": "monospace", "letter-spacing": "0.4px"})
         .set_properties(subset=["Preço"], **{"font-weight": "600"})
     )
@@ -349,137 +344,35 @@ def obter_taxas_cambio(base: str) -> dict:
 # =========================================================
 TEXTO_PRINCIPIOS = """
 ### Missão
-
 O Clube de Investimento APPO existe para promover a literacia financeira e o acesso
 disciplinado ao mercado de capitais angolano, permitindo que os seus sócios construam
 património de forma colectiva, informada e sustentável através da Bolsa de Dívida e
 Valores de Angola (BODIVA).
 
 ### Princípios Fundamentais
-
-1. **Disciplina antes de intuição** — toda a alocação de capital segue um processo de
-   análise documentado, nunca impulso.
-2. **Horizonte de longo prazo** — a volatilidade normal do mercado é aceite como parte
-   do ciclo, não como motivo de venda precipitada.
-3. **Diversificação prudente** — nunca mais de 10% da carteira num único activo, nem
-   mais de 20% num único sector.
-4. **Transparência e prestação de contas** — todas as posições e resultados são
-   registados e disponibilizados aos sócios.
-5. **Literacia financeira como pilar** — o Clube mantém uma biblioteca educativa
-   actualizada para que cada sócio compreenda os mecanismos do mercado.
-6. **Decisões colectivas** — nenhum sócio actua unilateralmente em nome do Clube.
-7. **Gestão de risco activa** — mantém-se sempre uma reserva de liquidez para
-   aproveitar oportunidades sem vender posições em momentos desfavoráveis.
-8. **Regra 50/30/20** — cada sócio é encorajado a não gastar mais de 50% do seu
-   rendimento mensal total (incluindo extras) em consumo, a alocar 30% a investimento,
-   e a reservar 20% para entesouramento.
-9. **Nenhuma posição sem tese registada** — nenhuma compra é feita sem uma linha no
-   diário de tese, escrita antes da decisão, com o critério que provaria a tese errada.
+1. **Disciplina antes de intuição**
+2. **Horizonte de longo prazo**
+3. **Diversificação prudente**
+4. **Transparência e prestação de contas**
+5. **Literacia financeira como pilar**
+6. **Decisões colectivas**
+7. **Gestão de risco activa**
+8. **Regra 50/30/20** — 50% consumo, 30% investimento, 20% entesouramento.
+9. **Nenhuma posição sem tese registada**
 """
 
-TEXTO_EX_DIVIDENDO = """
-A **data ex-dividendo** é o dia a partir do qual quem compra uma acção já não tem
-direito a receber o próximo dividendo anunciado. Só quem já era detentor da acção
-antes dessa data recebe o pagamento.
-
-**Sequência típica:** anúncio → data ex-dividendo (o preço ajusta-se em baixa,
-aproximadamente no valor do dividendo) → data de registo → data de pagamento.
-"""
-
-TEXTO_RATEIO = """
-O **rateio** é o mecanismo usado quando a procura por acções numa Oferta Pública de
-Venda (OPV) excede a oferta disponível. Em vez de servir os pedidos por ordem de
-chegada, a bolsa distribui as acções proporcionalmente entre os subscritores.
-
-**Exemplo real (BODIVA, Julho de 2026):** na OPV da Unitel, a procura pelos 7,5
-milhões de acções colocadas à venda ultrapassou os 9 milhões de títulos — cerca de
-120% acima da oferta — pelo que se aplicou rateio.
-"""
-
-TEXTO_OPV_UNITEL = """
-Em Julho de 2026, o Estado angolano, através do IGAPE, colocou à venda **15% do
-capital social da Unitel** através de uma OPV enquadrada no PROPRIV.
-
-**Números principais:**
-- Acções colocadas à venda: 7,5 milhões (13% ao público, 2% aos trabalhadores)
-- Intervalo de preço: 36.036 – 40.040 Kz por acção
-- Período de subscrição: 6 a 24 de Julho de 2026
-- Procura total: 9.054.299 títulos (~120% acima da oferta)
-- Montante encaixado pelo Estado: ~300,3 mil milhões de Kz
-
-**Contexto:** foi a maior OPV de sempre em Angola, e a primeira empresa de
-telecomunicações admitida à negociação na BODIVA.
-"""
-
-TEXTO_OPV_SBA = """
-A 11 de Setembro de 2026, o Estado angolano lançou a OPV de **34% do capital social
-do Standard Bank Angola (SBA)**, tornando-o a terceira instituição bancária angolana
-em bolsa.
-
-**Números principais:**
-- Acções colocadas à venda: 4,76 milhões (24% reservado ao Standard Bank Group, 10%
-  ao público)
-- Intervalo de preço para o público: 41.220 – 50.000 Kz por acção
-- Período de subscrição: 11 a 25 de Setembro de 2026
-- Valor bruto máximo estimado: ~208,5 mil milhões de Kz
-
-**Contexto:** o Standard Bank Group (accionista de referência) exerceu o seu direito
-de preferência para reforçar a posição, em vez de a reduzir.
-"""
-
-TEXTO_INVESTIDOR_VS_TRADER = """
-Segundo **Benjamin Graham**, um investidor distingue-se de um *trader* por três atitudes:
-
-1. **Sente-se dono do negócio**, não apenas detentor de papéis.
-2. **Exige uma margem de segurança elevada**.
-3. **Aceita pensar diferente da maioria** — menos de 5% dos participantes do mercado
-   seguem esta lógica, segundo estimativas do professor Lowenstein (Columbia).
-
-*Adaptado de material de formação do Clube, com base nos ensinamentos de Benjamin Graham.*
-"""
-
-TEXTO_DIVIDENDOS_GUIA = """
-Receber um dividendo depende de três datas, e confundi-las é o erro mais comum de
-quem começa:
-
-- **Data da Assembleia Geral** — aprova o valor, mas não determina quem o recebe.
-- **Data de registo (ex-dividendo)** — a data que importa.
-- **Data de pagamento** — quando o dinheiro chega, semanas depois.
-
-**Exemplo real (ciclo 2026, referente a 2025):** Assembleias entre 25 e 31 de Março;
-data de registo comum a 10 de Abril; pagamentos entre 13 e 17 de Abril.
-
-**Onde confirmar sempre:** cmc.ao, secção de comunicados dos emitentes.
-"""
-
-TEXTO_DANGOTE = """
-Em Setembro de 2026, a Dangote Petroleum Refinery abriu capital na bolsa da Nigéria
-(NGX) — a maior OPV de sempre em África.
-
-**Números:** ₦525 por acção (~0,40 USD); avaliação implícita de 49 mil milhões USD;
-free-float de apenas ~3,3%.
-
-*Nota: mercado fora do âmbito da BODIVA (Nigéria, Naira) — referência educativa.*
-"""
-
-TEXTO_REGRAS_BODIVA = """
-Principais regras de funcionamento do Mercado de Bolsa da BODIVA (Regra Nº 2/18,
-registada na CMC):
-
-- **Admissão de acções:** dispersão mínima de 5% do capital pelo mercado;
-  capitalização bolsista mínima de 500 milhões de Kz.
-- **Lote mínimo de negociação:** 1 acção.
-- **Limites de variação de preço (acções):** 25% (estática) e 20% (dinâmica).
-- **Liquidação:** ciclo D+1.
-
-*Fonte: Regra BODIVA Nº 2/18 do Mercado de Bolsa, 18 de Dezembro de 2018.*
-"""
+TEXTO_EX_DIVIDENDO = "A **data ex-dividendo** é o dia a partir do qual quem compra uma acção já não tem direito ao próximo dividendo anunciado."
+TEXTO_RATEIO = "O **rateio** distribui proporcionalmente as acções de uma OPV quando a procura excede a oferta."
+TEXTO_OPV_UNITEL = "Em Julho de 2026, o Estado colocou à venda 15% do capital da Unitel via OPV — a maior de sempre em Angola."
+TEXTO_OPV_SBA = "Em Setembro de 2026, o Estado lançou a OPV de 34% do Standard Bank Angola."
+TEXTO_INVESTIDOR_VS_TRADER = "Segundo Benjamin Graham, um investidor sente-se dono do negócio, exige margem de segurança, e pensa diferente da maioria."
+TEXTO_DIVIDENDOS_GUIA = "Três datas decidem se recebes um dividendo: Assembleia Geral, data de registo (a que importa), e data de pagamento."
+TEXTO_DANGOTE = "A Dangote Refinery abriu capital na NGX em 2026 — mercado fora do âmbito da BODIVA, referência educativa."
+TEXTO_REGRAS_BODIVA = "Regra BODIVA 2/18: dispersão mínima 5%, lote mínimo 1 acção, variação máxima 25% estática, liquidação D+1."
 
 ACTIVOS_INICIAIS = [
-    ("UNTLAAAA", "Unitel", "Ação", 38000.0, 0.0),
-    ("SBAAAAAA", "Standard Bank Angola", "Ação", 45000.0, 0.0),
-    ("BFAAAAAA", "Banco de Fomento Angola (BFA)", "Ação", 12500.0, 0.0),
-    ("BDVAAAAA", "BODIVA", "Ação", 82400.0, 0.0),
+    ("UNTLAAAA", "Unitel", "Ação", 38000.0, 0.0), ("SBAAAAAA", "Standard Bank Angola", "Ação", 45000.0, 0.0),
+    ("BFAAAAAA", "Banco de Fomento Angola (BFA)", "Ação", 12500.0, 0.0), ("BDVAAAAA", "BODIVA", "Ação", 82400.0, 0.0),
 ]
 
 ARTIGOS_INICIAIS = [
@@ -547,88 +440,30 @@ def consultar_df(sql, parametros=None) -> pd.DataFrame:
 
 
 def inicializar_bd():
-    executar(
-        """CREATE TABLE IF NOT EXISTS contas (
-            id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL, is_admin BOOLEAN NOT NULL DEFAULT FALSE,
-            criado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
-    )
+    executar("""CREATE TABLE IF NOT EXISTS contas (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, is_admin BOOLEAN NOT NULL DEFAULT FALSE, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE")
-    executar(
-        """CREATE TABLE IF NOT EXISTS log_acessos (
-            id SERIAL PRIMARY KEY, email TEXT, sucesso BOOLEAN NOT NULL,
-            criado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
-    )
-    executar(
-        """CREATE TABLE IF NOT EXISTS resumo_patrimonial (
-            id INTEGER PRIMARY KEY CHECK (id = 1), capital_social NUMERIC NOT NULL,
-            investimentos NUMERIC NOT NULL, reservas NUMERIC NOT NULL,
-            actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
-    )
+    executar("""CREATE TABLE IF NOT EXISTS log_acessos (id SERIAL PRIMARY KEY, email TEXT, sucesso BOOLEAN NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS resumo_patrimonial (id INTEGER PRIMARY KEY CHECK (id = 1), capital_social NUMERIC NOT NULL, investimentos NUMERIC NOT NULL, reservas NUMERIC NOT NULL, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("ALTER TABLE resumo_patrimonial ADD COLUMN IF NOT EXISTS capital_subscrito NUMERIC")
     executar("ALTER TABLE resumo_patrimonial ADD COLUMN IF NOT EXISTS capital_realizado NUMERIC")
-    executar(
-        """CREATE TABLE IF NOT EXISTS historico_patrimonio (
-            id SERIAL PRIMARY KEY, capital_social NUMERIC NOT NULL, investimentos NUMERIC NOT NULL,
-            reservas NUMERIC NOT NULL, total NUMERIC NOT NULL, registado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
-    )
-    executar(
-        """CREATE TABLE IF NOT EXISTS movimentos (
-            id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, descricao TEXT, montante NUMERIC NOT NULL,
-            data_movimento DATE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
-    )
-    executar(
-        """CREATE TABLE IF NOT EXISTS activos (
-            id SERIAL PRIMARY KEY, nome TEXT NOT NULL, tipo TEXT NOT NULL, preco NUMERIC NOT NULL,
-            variacao NUMERIC NOT NULL DEFAULT 0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
-    )
+    executar("""CREATE TABLE IF NOT EXISTS historico_patrimonio (id SERIAL PRIMARY KEY, capital_social NUMERIC NOT NULL, investimentos NUMERIC NOT NULL, reservas NUMERIC NOT NULL, total NUMERIC NOT NULL, registado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS movimentos (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, descricao TEXT, montante NUMERIC NOT NULL, data_movimento DATE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS activos (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, tipo TEXT NOT NULL, preco NUMERIC NOT NULL, variacao NUMERIC NOT NULL DEFAULT 0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS ticker TEXT NOT NULL DEFAULT ''")
-    executar(
-        """CREATE TABLE IF NOT EXISTS artigos (
-            id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL,
-            conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
-    )
-    executar(
-        """CREATE TABLE IF NOT EXISTS socios (
-            id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT,
-            contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
-    )
-    executar(
-        """CREATE TABLE IF NOT EXISTS premissas_macro (
-            id INTEGER PRIMARY KEY CHECK (id = 1), inflacao NUMERIC NOT NULL DEFAULT 0.135,
-            taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18, premio_risco NUMERIC NOT NULL DEFAULT 0.055,
-            beta_banca NUMERIC NOT NULL DEFAULT 1.0, beta_telecom NUMERIC NOT NULL DEFAULT 0.9,
-            beta_outros NUMERIC NOT NULL DEFAULT 1.0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
-    )
-    executar(
-        """CREATE TABLE IF NOT EXISTS avaliacoes (
-            id SERIAL PRIMARY KEY, empresa TEXT UNIQUE NOT NULL, sector TEXT NOT NULL,
-            preco NUMERIC NOT NULL DEFAULT 0, acoes_circulacao NUMERIC NOT NULL DEFAULT 0,
-            lucro_liquido NUMERIC NOT NULL DEFAULT 0, ganho_pontual NUMERIC NOT NULL DEFAULT 0,
-            capital_proprio NUMERIC NOT NULL DEFAULT 0, dividendo_total NUMERIC NOT NULL DEFAULT 0,
-            crescimento_g NUMERIC NOT NULL DEFAULT 0.08, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())"""
-    )
-    executar(
-        """CREATE TABLE IF NOT EXISTS favoritos (
-            conta_id INTEGER NOT NULL, activo_id INTEGER NOT NULL, PRIMARY KEY (conta_id, activo_id))"""
-    )
+    executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS socios (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT, contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS premissas_macro (id INTEGER PRIMARY KEY CHECK (id = 1), inflacao NUMERIC NOT NULL DEFAULT 0.135, taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18, premio_risco NUMERIC NOT NULL DEFAULT 0.055, beta_banca NUMERIC NOT NULL DEFAULT 1.0, beta_telecom NUMERIC NOT NULL DEFAULT 0.9, beta_outros NUMERIC NOT NULL DEFAULT 1.0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS avaliacoes (id SERIAL PRIMARY KEY, empresa TEXT UNIQUE NOT NULL, sector TEXT NOT NULL, preco NUMERIC NOT NULL DEFAULT 0, acoes_circulacao NUMERIC NOT NULL DEFAULT 0, lucro_liquido NUMERIC NOT NULL DEFAULT 0, ganho_pontual NUMERIC NOT NULL DEFAULT 0, capital_proprio NUMERIC NOT NULL DEFAULT 0, dividendo_total NUMERIC NOT NULL DEFAULT 0, crescimento_g NUMERIC NOT NULL DEFAULT 0.08, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS favoritos (conta_id INTEGER NOT NULL, activo_id INTEGER NOT NULL, PRIMARY KEY (conta_id, activo_id))""")
+    executar("""CREATE TABLE IF NOT EXISTS historico_cambio_aoa (registado_em DATE PRIMARY KEY, usd NUMERIC, eur NUMERIC, gbp NUMERIC, zar NUMERIC, cny NUMERIC, brl NUMERIC)""")
+    executar("""CREATE TABLE IF NOT EXISTS historico_indice_mercado (registado_em DATE PRIMARY KEY, indice_variacao NUMERIC NOT NULL)""")
 
     if consultar_um("SELECT COUNT(*) FROM contas")[0] == 0:
-        executar(
-            "INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)",
-            ("Administrador", ADMIN_EMAIL_INICIAL, hash_password(ADMIN_PASSWORD_INICIAL), True),
-        )
+        executar("INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)", ("Administrador", ADMIN_EMAIL_INICIAL, hash_password(ADMIN_PASSWORD_INICIAL), True))
 
     if consultar_um("SELECT COUNT(*) FROM resumo_patrimonial")[0] == 0:
-        executar(
-            "INSERT INTO resumo_patrimonial (id, capital_social, capital_subscrito, capital_realizado, "
-            "investimentos, reservas) VALUES (1, %s, %s, %s, %s, %s)",
-            (10000000.0, 10000000.0, 5000000.0, 1866677.0, 2832885.0),
-        )
-        executar(
-            "INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)",
-            (5000000.0, 1866677.0, 2832885.0, 5000000.0 + 1866677.0 + 2832885.0),
-        )
+        executar("INSERT INTO resumo_patrimonial (id, capital_social, capital_subscrito, capital_realizado, investimentos, reservas) VALUES (1, %s, %s, %s, %s, %s)", (10000000.0, 10000000.0, 5000000.0, 1866677.0, 2832885.0))
+        executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)", (5000000.0, 1866677.0, 2832885.0, 5000000.0 + 1866677.0 + 2832885.0))
     else:
         linha = consultar_um("SELECT capital_subscrito, capital_realizado, capital_social FROM resumo_patrimonial WHERE id = 1")
         if linha and linha[0] is None:
@@ -651,10 +486,7 @@ def inicializar_bd():
 
     for empresa, sector, preco, acoes, lucro, ganho, cap_proprio, div_total, g in AVALIACOES_INICIAIS:
         if not consultar_um("SELECT 1 FROM avaliacoes WHERE empresa = %s", (empresa,)):
-            executar(
-                "INSERT INTO avaliacoes (empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, crescimento_g) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (empresa, sector, preco, acoes, lucro, ganho, cap_proprio, div_total, g),
-            )
+            executar("INSERT INTO avaliacoes (empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, crescimento_g) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)", (empresa, sector, preco, acoes, lucro, ganho, cap_proprio, div_total, g))
 
 
 # ---------------- Contas ----------------
@@ -696,17 +528,14 @@ def obter_log_acessos() -> pd.DataFrame:
     return consultar_df("SELECT email, sucesso, criado_em FROM log_acessos ORDER BY criado_em DESC LIMIT 50")
 
 
-# ---------------- Resumo patrimonial e histórico ----------------
+# ---------------- Resumo patrimonial ----------------
 def obter_resumo_patrimonial() -> dict:
     linha = consultar_um("SELECT capital_subscrito, capital_realizado, investimentos, reservas, actualizado_em FROM resumo_patrimonial WHERE id = 1")
     return {"capital_subscrito": float(linha[0] or 0), "capital_realizado": float(linha[1] or 0), "investimentos": float(linha[2]), "reservas": float(linha[3]), "actualizado_em": linha[4]}
 
 
 def actualizar_resumo_patrimonial(capital_subscrito, capital_realizado, investimentos, reservas):
-    executar(
-        "UPDATE resumo_patrimonial SET capital_social = %s, capital_subscrito = %s, capital_realizado = %s, investimentos = %s, reservas = %s, actualizado_em = NOW() WHERE id = 1",
-        (capital_subscrito, capital_subscrito, capital_realizado, investimentos, reservas),
-    )
+    executar("UPDATE resumo_patrimonial SET capital_social = %s, capital_subscrito = %s, capital_realizado = %s, investimentos = %s, reservas = %s, actualizado_em = NOW() WHERE id = 1", (capital_subscrito, capital_subscrito, capital_realizado, investimentos, reservas))
     total = capital_realizado + investimentos + reservas
     executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)", (capital_realizado, investimentos, reservas, total))
 
@@ -724,9 +553,27 @@ def obter_movimentos() -> pd.DataFrame:
     return consultar_df("SELECT tipo, descricao, montante, data_movimento, criado_em FROM movimentos ORDER BY data_movimento DESC, criado_em DESC")
 
 
-# ---------------- Activos + Favoritos ----------------
+# ---------------- Activos + Favoritos + Índice ----------------
 def obter_activos() -> pd.DataFrame:
     return consultar_df("SELECT id, ticker, nome, tipo, preco, variacao, actualizado_em FROM activos ORDER BY nome")
+
+
+def calcular_indice_mercado(df_activos: pd.DataFrame) -> float:
+    acoes = df_activos[df_activos["tipo"] == "Ação"]
+    return float(acoes["variacao"].mean()) if not acoes.empty else 0.0
+
+
+def registar_historico_indice(valor: float):
+    hoje = datetime.now().date()
+    executar(
+        "INSERT INTO historico_indice_mercado (registado_em, indice_variacao) VALUES (%s, %s) "
+        "ON CONFLICT (registado_em) DO UPDATE SET indice_variacao = EXCLUDED.indice_variacao",
+        (hoje, valor),
+    )
+
+
+def obter_historico_indice() -> pd.DataFrame:
+    return consultar_df("SELECT indice_variacao, registado_em FROM historico_indice_mercado ORDER BY registado_em")
 
 
 def substituir_activos(df: pd.DataFrame):
@@ -740,6 +587,7 @@ def substituir_activos(df: pd.DataFrame):
         variacao = float(linha.get("variacao", 0) or 0)
         ticker = str(linha.get("ticker", "") or "").strip().upper()
         executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco, variacao, ticker))
+    registar_historico_indice(calcular_indice_mercado(obter_activos()))
 
 
 def obter_favoritos(conta_id: int) -> set:
@@ -751,6 +599,19 @@ def definir_favoritos(conta_id: int, ids_seleccionados: list):
     executar("DELETE FROM favoritos WHERE conta_id = %s", (conta_id,))
     for aid in ids_seleccionados:
         executar("INSERT INTO favoritos (conta_id, activo_id) VALUES (%s, %s)", (conta_id, aid))
+
+
+# ---------------- Câmbio (automático + histórico automático) ----------------
+def registar_historico_cambio(rates: dict):
+    hoje = datetime.now().date()
+    executar(
+        "INSERT INTO historico_cambio_aoa (registado_em, usd, eur, gbp, zar, cny, brl) VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (registado_em) DO NOTHING",
+        (hoje, rates.get("USD"), rates.get("EUR"), rates.get("GBP"), rates.get("ZAR"), rates.get("CNY"), rates.get("BRL")),
+    )
+
+
+def obter_historico_cambio() -> pd.DataFrame:
+    return consultar_df("SELECT registado_em, usd, eur, gbp, zar, cny, brl FROM historico_cambio_aoa ORDER BY registado_em")
 
 
 # ---------------- Artigos ----------------
@@ -825,10 +686,7 @@ def obter_premissas_macro() -> dict:
 
 
 def actualizar_premissas_macro(inflacao, rf, erp, beta_banca, beta_telecom, beta_outros):
-    executar(
-        "UPDATE premissas_macro SET inflacao=%s, taxa_livre_risco=%s, premio_risco=%s, beta_banca=%s, beta_telecom=%s, beta_outros=%s, actualizado_em=NOW() WHERE id = 1",
-        (inflacao, rf, erp, beta_banca, beta_telecom, beta_outros),
-    )
+    executar("UPDATE premissas_macro SET inflacao=%s, taxa_livre_risco=%s, premio_risco=%s, beta_banca=%s, beta_telecom=%s, beta_outros=%s, actualizado_em=NOW() WHERE id = 1", (inflacao, rf, erp, beta_banca, beta_telecom, beta_outros))
 
 
 def obter_avaliacoes() -> pd.DataFrame:
@@ -843,11 +701,7 @@ def substituir_avaliacoes(df: pd.DataFrame):
             continue
         executar(
             "INSERT INTO avaliacoes (empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, crescimento_g) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            (
-                empresa, str(linha.get("sector", "") or ""), float(linha.get("preco", 0) or 0), float(linha.get("acoes_circulacao", 0) or 0),
-                float(linha.get("lucro_liquido", 0) or 0), float(linha.get("ganho_pontual", 0) or 0), float(linha.get("capital_proprio", 0) or 0),
-                float(linha.get("dividendo_total", 0) or 0), float(linha.get("crescimento_g", 0) or 0),
-            ),
+            (empresa, str(linha.get("sector", "") or ""), float(linha.get("preco", 0) or 0), float(linha.get("acoes_circulacao", 0) or 0), float(linha.get("lucro_liquido", 0) or 0), float(linha.get("ganho_pontual", 0) or 0), float(linha.get("capital_proprio", 0) or 0), float(linha.get("dividendo_total", 0) or 0), float(linha.get("crescimento_g", 0) or 0)),
         )
 
 
@@ -952,9 +806,9 @@ st.sidebar.caption(f"{textos['sessao']}: {st.session_state['conta_nome']} ({st.s
 st.sidebar.divider()
 
 PAGINAS = [
-    "🏠 Início & Análises", "📈 Cotações & Activos", "💰 Contabilidade & Finanças",
-    "📊 Histórico & Relatórios", "📐 Avaliação de Activos", "💱 Conversor de Moeda",
-    "🧮 Regra 50/30/20", "📚 Biblioteca Educativa", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos",
+    "🏠 Início & Análises", "📈 Cotações & Activos", "💰 Contabilidade & Finanças", "📊 Histórico & Relatórios",
+    "📐 Avaliação de Activos", "💱 Conversor de Moeda", "🧪 Simulador de Investimento", "🧮 Regra 50/30/20",
+    "📚 Biblioteca Educativa", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos",
 ]
 if st.session_state["is_admin"]:
     PAGINAS.append("🔐 Painel do Administrador")
@@ -968,6 +822,10 @@ if st.sidebar.button(textos["terminar_sessao"]):
     st.rerun()
 
 st.sidebar.caption(f"Última actualização da página: {agora()}")
+
+# Fita de cotações, visível em todas as páginas
+_df_activos_ticker = obter_activos()
+ticker_tape(_df_activos_ticker)
 
 # =========================================================
 # PÁGINA: INÍCIO & ANÁLISES
@@ -985,20 +843,21 @@ if pagina == "🏠 Início & Análises":
     col3.metric("Investimentos", kz(resumo["investimentos"]))
     col4.metric("Reservas", kz(resumo["reservas"]))
     col5.metric("Património Total", kz(total_patrimonio))
-    st.caption(f"Património Total = Capital Realizado + Investimentos + Reservas. Última actualização: {resumo['actualizado_em']}")
+
+    indice = calcular_indice_mercado(_df_activos_ticker)
+    st.metric("📊 Índice APPO (média das acções cotadas)", pct_bruto(indice), delta=pct_bruto(indice))
+    st.caption("Como teria valorizado uma carteira investida em partes iguais em todas as acções acompanhadas pelo Clube.")
     st.divider()
 
     st.subheader("Distribuição do Património")
-    df_patrimonio = pd.DataFrame({"Categoria": ["Capital Realizado", "Investimentos", "Reservas"], "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]]}).set_index("Categoria")
-    st.bar_chart(df_patrimonio)
+    st.bar_chart(pd.DataFrame({"Categoria": ["Capital Realizado", "Investimentos", "Reservas"], "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]]}).set_index("Categoria"))
 
     st.divider()
     banner_capa(IMG_GRAFICO, "Disciplina, transparência e visão de longo prazo", altura=130, escurecimento=0.48)
 
     st.subheader("📌 Cotações em destaque")
-    df_activos = obter_activos()
-    if not df_activos.empty:
-        st.dataframe(tabela_cotacoes_estilizada(df_activos), hide_index=True)
+    if not _df_activos_ticker.empty:
+        st.dataframe(tabela_cotacoes_estilizada(_df_activos_ticker), hide_index=True)
 
 # =========================================================
 # PÁGINA: COTAÇÕES & ACTIVOS
@@ -1006,10 +865,33 @@ if pagina == "🏠 Início & Análises":
 elif pagina == "📈 Cotações & Activos":
     hero("Cotações & Activos", "Instrumentos financeiros cotados na BODIVA acompanhados pelo Clube", "🇦🇴 BODIVA DIRECTA")
 
-    df_activos = obter_activos()
+    df_activos = _df_activos_ticker
     if df_activos.empty:
         st.info("Ainda não existem activos registados.")
     else:
+        st.subheader("📊 Índice APPO — cotação média do mercado")
+        indice = calcular_indice_mercado(df_activos)
+        col_i1, col_i2 = st.columns([1, 2])
+        col_i1.metric("Variação média de hoje", pct_bruto(indice), delta=pct_bruto(indice))
+        col_i1.caption("Se tivesses investido em partes iguais em todas as acções cotadas pelo Clube, a tua carteira teria variado, em média, este valor.")
+        df_hist_indice = obter_historico_indice()
+        with col_i2:
+            if len(df_hist_indice) >= 2:
+                df_hist_indice["registado_em"] = pd.to_datetime(df_hist_indice["registado_em"])
+                st.line_chart(df_hist_indice.set_index("registado_em")[["indice_variacao"]].rename(columns={"indice_variacao": "Índice APPO — diário (%)"}))
+            else:
+                st.info("O histórico diário do Índice APPO vai-se formando a cada dia em que o administrador actualizar as cotações.")
+        st.markdown("##### Tendência semanal do Índice APPO")
+        if len(df_hist_indice) >= 2:
+            df_semanal = df_hist_indice.set_index("registado_em").resample("W")[["indice_variacao"]].mean().rename(columns={"indice_variacao": "Índice APPO — média semanal (%)"})
+            if len(df_semanal) >= 2:
+                st.line_chart(df_semanal)
+            else:
+                st.caption("Ainda não há pelo menos duas semanas de histórico para mostrar a tendência semanal.")
+        else:
+            st.caption("Ainda não há histórico suficiente para a vista semanal.")
+        st.divider()
+
         aba_fav, aba_todos = st.tabs(["⭐ Favoritos", "📋 Todos os Activos"])
         conta_id = st.session_state["conta_id"]
         favoritos_actuais = obter_favoritos(conta_id)
@@ -1108,13 +990,13 @@ elif pagina == "📐 Avaliação de Activos":
         col2.metric("P/E", multiplo(m["pe"]))
         col3.metric("P/BV", multiplo(m["pbv"]))
         col4.metric("Dividend Yield", pct(m["dy_nominal"]))
-        nota_indicador("<b>P/E</b> = quantos anos de lucro actual pagas pelo preço da acção. <b>P/BV</b> = preço face ao valor contabilístico por acção. <b>Dividend Yield</b> = retorno anual só em dividendos, ao preço de hoje.")
+        nota_indicador("<b>P/E</b> = anos de lucro que pagas pelo preço. <b>P/BV</b> = preço face ao valor contabilístico. <b>Dividend Yield</b> = retorno anual em dividendos.")
 
         col5, col6, col7 = st.columns(3)
         col5.metric("Valor Justo (DDM)", kz(m["valor_justo"]) if m["valor_justo"] is not None else "n/d")
         col6.metric("Upside / Downside", pct(m["upside"]) if m["upside"] is not None else "n/d")
         col7.metric("Custo de Capital (Ke)", pct(m["ke"]))
-        nota_indicador("<b>Valor Justo (DDM)</b> é uma estimativa, não uma certeza. <b>Upside/Downside</b> compara com o preço de mercado. <b>Ke</b> é o retorno mínimo exigido para compensar o risco do sector.")
+        nota_indicador("<b>Valor Justo (DDM)</b> é uma estimativa. <b>Upside/Downside</b> compara com o mercado. <b>Ke</b> é o retorno mínimo exigido pelo risco do sector.")
 
         if m["upside"] is not None:
             if m["upside"] > 0.15:
@@ -1124,20 +1006,19 @@ elif pagina == "📐 Avaliação de Activos":
             else:
                 st.info("O modelo DDM sugere que o preço de mercado está próximo do valor estimado.")
 
-        st.caption("Modelo de Dividendos Descontados (DDM/Gordon Growth): Valor Justo = D1 ÷ (Ke − g). Usar como cross-check à leitura de múltiplos, nunca isoladamente.")
+        st.caption("DDM/Gordon Growth: Valor Justo = D1 ÷ (Ke − g). Usar como cross-check, nunca isoladamente.")
 
         st.divider()
         st.subheader("⭐ Análise Aprofundada (Premium)")
 
         if not st.session_state["is_premium"]:
-            render_html('<div class="appo-premium-lock"><strong>Esta secção é exclusiva para sócios Premium.</strong><br/>Inclui comparação sectorial, tabela de sensibilidade, ROE e Dividend Yield real.<br/><br/>Fala com um administrador do Clube para activares o teu acesso Premium.</div>')
+            render_html('<div class="appo-premium-lock"><strong>Esta secção é exclusiva para sócios Premium.</strong><br/>Comparação sectorial, sensibilidade, ROE e Dividend Yield real.<br/><br/>Fala com um administrador para activares o Premium.</div>')
         else:
-            st.markdown("##### Indicadores adicionais")
             col_a, col_b, col_c = st.columns(3)
             col_a.metric("ROE", pct(m["roe"]) if m["roe"] is not None else "n/d")
             col_b.metric("Payout", pct(m["payout"]) if m["payout"] is not None else "n/d")
             col_c.metric("Dividend Yield Real", pct(m["dy_real"]))
-            nota_indicador("<b>ROE</b> = rentabilidade sobre o capital próprio. <b>Payout</b> = fracção do lucro distribuída. <b>Dividend Yield Real</b> = yield descontado da inflação.")
+            nota_indicador("<b>ROE</b> = rentabilidade sobre o capital próprio. <b>Payout</b> = fracção do lucro distribuída. <b>DY Real</b> = yield descontado da inflação.")
 
             st.markdown("##### Tabela de Sensibilidade — Valor Justo (Kz por acção)")
             ke_base, g_base = m["ke"], av["crescimento_g"]
@@ -1160,13 +1041,12 @@ elif pagina == "📐 Avaliação de Activos":
             df_comp = pd.DataFrame(linhas_comp)
             st.dataframe(df_comp, hide_index=True)
             st.download_button("⬇️ Descarregar comparação sectorial em CSV", data=df_comp.to_csv(index=False).encode("utf-8"), file_name="comparacao_sectorial_appo.csv", mime="text/csv")
-            st.caption("Sectores diferentes não são directamente comparáveis por P/E. Ferramenta educativa; não constitui aconselhamento de investimento.")
 
 # =========================================================
-# PÁGINA: CONVERSOR DE MOEDA
+# PÁGINA: CONVERSOR DE MOEDA (automático + histórico automático)
 # =========================================================
 elif pagina == "💱 Conversor de Moeda":
-    hero("Conversor de Moeda", "Taxas de câmbio actualizadas diariamente, com o Kwanza incluído", "💱 exchangerate-api.com")
+    hero("Conversor de Moeda", "Taxas de câmbio automáticas, actualizadas diariamente, com o Kwanza incluído", "💱 exchangerate-api.com (aberta)")
 
     MOEDAS = ["AOA", "USD", "EUR", "GBP", "ZAR", "CNY", "BRL"]
     col1, col2, col3 = st.columns(3)
@@ -1176,13 +1056,16 @@ elif pagina == "💱 Conversor de Moeda":
 
     try:
         dados_cambio = obter_taxas_cambio(moeda_de)
+        if moeda_de == "AOA":
+            registar_historico_cambio(dados_cambio["rates"])
         taxa = dados_cambio["rates"].get(moeda_para)
         if taxa is None:
             st.error("Esta moeda não está disponível na fonte de dados neste momento.")
         else:
             resultado = valor * taxa
             st.metric(f"{valor:,.2f} {moeda_de} equivale a", f"{resultado:,.2f} {moeda_para}")
-            st.caption(f"Taxa: 1 {moeda_de} = {taxa:.6f} {moeda_para}. Actualizado: {dados_cambio['actualizado']}. Fonte: exchangerate-api.com (aberta, actualização diária).")
+            st.caption(f"Taxa: 1 {moeda_de} = {taxa:.6f} {moeda_para}. Actualizado: {dados_cambio['actualizado']}.")
+            botoes_partilha(f"{valor:,.2f} {moeda_de} = {resultado:,.2f} {moeda_para} — Clube de Investimento APPO")
     except Exception:
         st.warning("Não foi possível obter as taxas de câmbio neste momento. Tenta novamente dentro de instantes.")
 
@@ -1190,10 +1073,57 @@ elif pagina == "💱 Conversor de Moeda":
     st.subheader("Tabela rápida (a partir de 1 Kz)")
     try:
         dados_kz = obter_taxas_cambio("AOA")
+        registar_historico_cambio(dados_kz["rates"])
         linhas = [{"Moeda": m, "1 Kz equivale a": f"{dados_kz['rates'].get(m, 0):.6f} {m}"} for m in MOEDAS if m != "AOA"]
         st.dataframe(pd.DataFrame(linhas), hide_index=True)
     except Exception:
         st.caption("Tabela indisponível de momento.")
+
+    st.divider()
+    st.subheader("📈 Tendência do Kwanza (histórico próprio, acumulado automaticamente)")
+    df_hist_cambio = obter_historico_cambio()
+    if len(df_hist_cambio) >= 2:
+        moeda_grafico = st.selectbox("Ver tendência de", ["usd", "eur", "gbp", "zar", "cny", "brl"], format_func=lambda x: x.upper())
+        st.line_chart(df_hist_cambio.set_index("registado_em")[[moeda_grafico]].rename(columns={moeda_grafico: f"1 AOA em {moeda_grafico.upper()}"}))
+        st.caption("Este histórico é construído automaticamente pela própria app — sem ninguém precisar de inserir nada — sempre que alguém abre esta página num novo dia.")
+    else:
+        st.info("Ainda há poucos dias de histórico acumulado. Volta aqui em dias diferentes para veres a tendência a formar-se sozinha.")
+
+# =========================================================
+# PÁGINA: SIMULADOR DE INVESTIMENTO
+# =========================================================
+elif pagina == "🧪 Simulador de Investimento":
+    hero("Simulador de Investimento", "Projecta o crescimento do teu investimento ao longo do tempo, com juros compostos")
+
+    col1, col2 = st.columns(2)
+    valor_inicial = col1.number_input("Valor inicial (Kz)", min_value=0.0, value=100000.0, step=10000.0)
+    contrib_mensal = col2.number_input("Contribuição mensal (Kz)", min_value=0.0, value=20000.0, step=5000.0)
+    col3, col4, col5 = st.columns(3)
+    taxa_anual = col3.slider("Taxa de retorno anual esperada (%)", 0.0, 40.0, 12.0, 0.5)
+    anos = col4.slider("Prazo (anos)", 1, 30, 10)
+    inflacao_sim = col5.slider("Inflação anual assumida (%)", 0.0, 40.0, 13.5, 0.5)
+
+    taxa_mensal = (1 + taxa_anual / 100) ** (1 / 12) - 1
+    inflacao_mensal = (1 + inflacao_sim / 100) ** (1 / 12) - 1
+    saldo = valor_inicial
+    total_investido = valor_inicial
+    pontos = []
+    for mes in range(1, anos * 12 + 1):
+        saldo = saldo * (1 + taxa_mensal) + contrib_mensal
+        total_investido += contrib_mensal
+        if mes % 12 == 0:
+            saldo_real = saldo / ((1 + inflacao_mensal) ** mes)
+            pontos.append({"Ano": mes // 12, "Saldo Nominal": saldo, "Total Investido": total_investido, "Saldo Real (poder de compra de hoje)": saldo_real})
+
+    df_sim = pd.DataFrame(pontos).set_index("Ano")
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("Saldo Final (nominal)", kz(saldo))
+    col_b.metric("Total Investido", kz(total_investido))
+    col_c.metric("Juros Compostos Ganhos", kz(saldo - total_investido))
+    st.bar_chart(df_sim[["Saldo Nominal", "Total Investido"]])
+    st.caption(f"Saldo final em poder de compra de hoje (descontada a inflação assumida de {inflacao_sim:.1f}%/ano): {kz(df_sim['Saldo Real (poder de compra de hoje)'].iloc[-1])}")
+    st.caption("Simulação educativa com juros compostos mensais constantes — os retornos reais dos mercados variam e não são garantidos. Não constitui aconselhamento de investimento.")
+    botoes_partilha(f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo)} — Clube de Investimento APPO")
 
 # =========================================================
 # PÁGINA: REGRA 50/30/20
@@ -1318,6 +1248,7 @@ elif pagina == "🔐 Painel do Administrador":
 
     with aba_activos:
         st.subheader("Editar Cotações & Activos")
+        st.caption("Cada vez que guardas, o Índice APPO é recalculado e um novo ponto é registado no histórico.")
         df_activos = obter_activos()
         df_editado = st.data_editor(
             df_activos[["ticker", "nome", "tipo", "preco", "variacao"]], num_rows="dynamic", key="editor_activos",
@@ -1329,7 +1260,7 @@ elif pagina == "🔐 Painel do Administrador":
         )
         if st.button("Guardar alterações às cotações"):
             substituir_activos(df_editado)
-            st.success("Cotações actualizadas com sucesso.")
+            st.success("Cotações e Índice APPO actualizados com sucesso.")
             st.rerun()
 
     with aba_aval:
@@ -1357,7 +1288,7 @@ elif pagina == "🔐 Painel do Administrador":
             df_aval[["empresa", "sector", "preco", "acoes_circulacao", "lucro_liquido", "ganho_pontual", "capital_proprio", "dividendo_total", "crescimento_g"]],
             num_rows="dynamic", key="editor_avaliacoes",
             column_config={
-                "empresa": "Empresa", "sector": "Sector", "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=100.0),
+                "empresa": "Empresa", "sector": "Sector", "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
                 "acoes_circulacao": st.column_config.NumberColumn("Acções em circulação", min_value=0.0, step=1000.0),
                 "lucro_liquido": st.column_config.NumberColumn("Lucro líquido (Kz)", step=1000000.0),
                 "ganho_pontual": st.column_config.NumberColumn("Ganho pontual não recorrente (Kz)", step=1000000.0),
