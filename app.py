@@ -276,6 +276,8 @@ def kz(valor) -> str:
 
 def pct(valor) -> str:
     try:
+        if valor is None or pd.isna(valor):
+            return "n/d"
         return f"{float(valor)*100:+.2f}%"
     except (TypeError, ValueError):
         return "0.00%"
@@ -283,15 +285,17 @@ def pct(valor) -> str:
 
 def pct_bruto(valor) -> str:
     try:
+        if valor is None or pd.isna(valor):
+            return "n/d"
         return f"{float(valor):+.2f}%"
     except (TypeError, ValueError):
         return "0.00%"
 
 
 def multiplo(v) -> str:
-    if v is None:
-        return "n/d"
     try:
+        if v is None or pd.isna(v):
+            return "n/d"
         return f"{float(v):.2f}x"
     except (TypeError, ValueError):
         return "n/d"
@@ -338,7 +342,7 @@ def gerar_excel_bytes(df: pd.DataFrame, nome_folha: str = "Dados", colunas_moeda
             celula_cabecalho.fill = fundo_cabecalho
             celula_cabecalho.alignment = Alignment(horizontal="center")
             if len(df_export) > 0:
-                largura_conteudo = int(df_export[nome_coluna].astype(str).map(len).max())
+                largura_conteudo = max((len(str(v)) for v in df_export[nome_coluna].tolist() if pd.notna(v)), default=8)
             else:
                 largura_conteudo = 8
             largura = max(12, min(42, largura_conteudo + 4, len(str(nome_coluna)) + 6))
@@ -389,7 +393,7 @@ def tabela_cotacoes_estilizada(df_activos: pd.DataFrame):
     df_disp = df_disp.rename(columns={"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Preço", "variacao": "Variação", "mercado": "Mercado"})
     df_disp = df_disp[["Ticker", "Activo", "Tipo", "Mercado", "Preço", "Variação"]]
     return (
-        df_disp.style.format({"Preço": kz, "Variação": pct_bruto}).applymap(cor_variacao, subset=["Variação"])
+        df_disp.style.format({"Preço": kz, "Variação": pct_bruto}).map(cor_variacao, subset=["Variação"])
         .set_properties(subset=["Ticker"], **{"font-family": "monospace", "letter-spacing": "0.4px"})
         .set_properties(subset=["Preço"], **{"font-weight": "600"})
     )
@@ -1172,12 +1176,15 @@ elif pagina == "📐 Avaliação de Activos":
                 })
             df_comp = pd.DataFrame(linhas_comp)
             df_comp_exibir = df_comp.copy()
-            df_comp_exibir["P/E"] = df_comp_exibir["P/E"].apply(multiplo)
-            df_comp_exibir["P/BV"] = df_comp_exibir["P/BV"].apply(multiplo)
-            df_comp_exibir["ROE"] = df_comp_exibir["ROE"].apply(lambda v: pct(v) if v is not None else "n/d")
-            df_comp_exibir["DY Nominal"] = df_comp_exibir["DY Nominal"].apply(pct)
-            df_comp_exibir["Upside DDM"] = df_comp_exibir["Upside DDM"].apply(lambda v: pct(v) if v is not None else "n/d")
-            st.dataframe(df_comp_exibir, hide_index=True)
+            df_comp_exibir["P/E"] = df_comp_exibir["P/E"].apply(lambda v: multiplo(v) if pd.notna(v) else "n/d")
+            df_comp_exibir["P/BV"] = df_comp_exibir["P/BV"].apply(lambda v: multiplo(v) if pd.notna(v) else "n/d")
+            df_comp_exibir["ROE"] = df_comp_exibir["ROE"].apply(lambda v: pct(v) if pd.notna(v) else "n/d")
+            df_comp_exibir["DY Nominal"] = df_comp_exibir["DY Nominal"].apply(lambda v: pct(v) if pd.notna(v) else "n/d")
+            df_comp_exibir["Upside DDM"] = df_comp_exibir["Upside DDM"].apply(lambda v: pct(v) if pd.notna(v) else "n/d")
+            st.dataframe(
+                df_comp_exibir, hide_index=True,
+                column_config={"Empresa": st.column_config.TextColumn("Empresa", width="medium")},
+            )
             dados_dl, nome_dl, mime_dl = gerar_download_planilha(df_comp, "comparacao_sectorial_appo", "Comparação Sectorial", colunas_percentagem=["ROE", "DY Nominal", "Upside DDM"], colunas_multiplo=["P/E", "P/BV"])
             st.download_button("⬇️ Descarregar comparação sectorial em Excel", data=dados_dl, file_name=nome_dl, mime=mime_dl)
 
