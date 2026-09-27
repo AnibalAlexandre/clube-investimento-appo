@@ -33,10 +33,11 @@ def render_html(html: str):
 # =========================================================
 # IMAGENS
 # =========================================================
-IMG_SKYLINE = "https://images.unsplash.com/photo-1602552283771-c533ac53ce80?fm=jpg&q=70&w=1600&auto=format&fit=crop"
-IMG_GRAFICO = "https://images.unsplash.com/photo-1745270917449-c2e2c5806586?fm=jpg&q=70&w=1600&auto=format&fit=crop"
-IMG_REUNIAO = "https://images.unsplash.com/photo-1517048676732-d65bc937f952?fm=jpg&q=70&w=1600&auto=format&fit=crop"
-IMG_LIVROS  = "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?fm=jpg&q=70&w=1600&auto=format&fit=crop"
+# Painel de cotações tipo Bloomberg — azul néon, gráficos de velas, dados vibrantes (Pexels CC0)
+IMG_SKYLINE = "https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&cs=tinysrgb&w=1600"
+IMG_GRAFICO = "https://images.pexels.com/photos/6802042/pexels-photo-6802042.jpeg?auto=compress&cs=tinysrgb&w=1600"
+IMG_REUNIAO = "https://images.pexels.com/photos/7567443/pexels-photo-7567443.jpeg?auto=compress&cs=tinysrgb&w=1600"
+IMG_LIVROS  = "https://images.pexels.com/photos/6801874/pexels-photo-6801874.jpeg?auto=compress&cs=tinysrgb&w=1600"
 IMAGENS_CATEGORIA = {"Institucional": IMG_REUNIAO, "Educação": IMG_LIVROS, "Análise de Mercado": IMG_GRAFICO, "Referência": IMG_SKYLINE}
 
 # =========================================================
@@ -1015,7 +1016,7 @@ div[data-testid="stMetric"] {{ background: linear-gradient(135deg, #ffffff 0%, #
 .appo-categoria-foto-overlay {{ position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%); border-radius: 10px 10px 0 0; }}
 .appo-categoria-foto span {{ position: relative; z-index: 1; color: #fff; font-weight: 700; padding: 12px 18px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; }}
 .appo-ticker-wrap {{ overflow: hidden; white-space: nowrap; background: transparent; border-bottom: 1px solid #ECDEE3; padding: 8px 0; margin-bottom: 16px; }}
-.appo-ticker-move {{ display: inline-block; padding-left: 100%; animation: appo-scroll 95s linear infinite; font-family: monospace; font-size: 0.82rem; }}
+.appo-ticker-move {{ display: inline-block; padding-left: 100%; animation: appo-scroll 135s linear infinite; font-family: monospace; font-size: 0.82rem; }}
 @keyframes appo-scroll {{ 0% {{ transform: translate(0,0); }} 100% {{ transform: translate(-100%,0); }} }}
 .appo-share a {{ text-decoration:none; color:#fff; padding:6px 14px; border-radius:8px; font-size:0.82rem; font-weight:600; }}
 </style>
