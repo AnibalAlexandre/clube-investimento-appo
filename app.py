@@ -1182,7 +1182,7 @@ def tabela_cotacoes_estilizada(df_activos: pd.DataFrame):
     return (
         df_disp.style
         .format({cols["preco"]: kz, cols["variacao"]: pct_bruto})
-        .applymap(cor_variacao, subset=[cols["variacao"]])
+        .map(cor_variacao, subset=[cols["variacao"]])
         .set_properties(subset=[cols["ticker"]], **{"font-family": "monospace", "letter-spacing": "0.4px"})
         .set_properties(subset=[cols["preco"]], **{"font-weight": "600"})
     )
