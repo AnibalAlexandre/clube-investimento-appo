@@ -1506,12 +1506,20 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(0, 8, tx["pdf_resumo"], ln=True)
     pdf.set_font("Helvetica", "", 11)
-    total = resumo["capital_realizado"] + resumo["investimentos"] + resumo["reservas"]
-    pdf.cell(0, 7, f"{tx['pdf_subscrito']} {kz(resumo['capital_subscrito'])}", ln=True)
-    pdf.cell(0, 7, f"{tx['pdf_realizado']} {kz(resumo['capital_realizado'])}", ln=True)
-    pdf.cell(0, 7, f"{tx['pdf_investimentos']} {kz(resumo['investimentos'])}", ln=True)
-    pdf.cell(0, 7, f"{tx['pdf_reservas']} {kz(resumo['reservas'])}", ln=True)
-    pdf.cell(0, 7, f"{tx['pdf_total']} {kz(total)}", ln=True)
+    capital_subscrito    = resumo["capital_subscrito"]
+    capital_realizado    = resumo["capital_realizado"]
+    capital_por_realizar = capital_subscrito - capital_realizado
+    investimentos        = resumo["investimentos"]
+    reservas             = resumo["reservas"]
+    # Patrimonio Total = Capital Realizado (investimentos e reservas sao subdivisoes, nao valores adicionais)
+    patrimonio_total     = capital_realizado
+
+    pdf.cell(0, 7, f"Capital Subscrito: {kz(capital_subscrito)}", ln=True)
+    pdf.cell(0, 7, f"Capital Realizado (ja entregue): {kz(capital_realizado)}", ln=True)
+    pdf.cell(0, 7, f"Capital por Realizar: {kz(capital_por_realizar)}", ln=True)
+    pdf.cell(0, 7, f"  - dos quais, Investimentos: {kz(investimentos)}", ln=True)
+    pdf.cell(0, 7, f"  - dos quais, Reservas: {kz(reservas)}", ln=True)
+    pdf.cell(0, 7, f"Patrimonio Total do Clube (= Capital Realizado): {kz(patrimonio_total)}", ln=True)
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(0, 8, tx["pdf_activos"], ln=True)
@@ -1905,6 +1913,32 @@ elif pagina == "📐 Avaliação de Activos":
                                      cols_comp["Upside DDM"]: pct(m_l["upside"]) if m_l["upside"] is not None else "n/d"})
             df_comp = pd.DataFrame(linhas_comp)
             st.dataframe(df_comp, hide_index=True)
+
+            # Interpretação automática da tabela comparativa
+            with st.expander("💡 Como interpretar esta tabela?"):
+                st.markdown("""
+**P/E (Price-to-Earnings):** Quantos anos de lucro estás a pagar pelo preço actual.
+- P/E < 8x → potencialmente barato para o contexto angolano
+- P/E 8–15x → zona de fair value
+- P/E > 15x → caro, exige crescimento elevado para justificar
+
+**P/BV (Price-to-Book Value):** Preço face ao valor contabilístico dos activos.
+- P/BV < 1x → estás a comprar activos abaixo do valor de balanço (atenção: pode indicar problema estrutural)
+- P/BV 1–2x → razoável para banca angolana
+- P/BV > 2x → só justificado por ROE elevado e consistente
+
+**ROE (Return on Equity):** Rentabilidade do capital próprio.
+- ROE > 15% → empresa cria valor acima do custo de capital estimado (Ke ≈ 18%)
+- ROE < Ke → empresa destrói valor para o accionista a longo prazo
+
+**Dividend Yield (DY Nominal):** Retorno em dividendos ao preço actual.
+- Com inflação angolana ~13,5%, um DY < 13,5% significa retorno real negativo em dividendos
+
+**Upside DDM:** Diferença entre o valor justo estimado pelo modelo DDM e o preço de mercado.
+- Positivo → modelo sugere subvalorização; Negativo → sobrevalorização
+- ⚠️ O DDM é sensível às premissas de crescimento (g) e custo de capital (Ke) — usar sempre como uma referência, não como verdade absoluta.
+                """)
+
             st.download_button(tx["aval_descarregar_comp"],
                                data=df_comp.to_csv(index=False).encode("utf-8"),
                                file_name="comparacao_sectorial_appo.csv", mime="text/csv")
@@ -1961,43 +1995,197 @@ elif pagina == "💱 Conversor de Moeda":
         st.info(tx["conv_historico_info"])
 
 # =========================================================
-# PÁGINA: SIMULADOR DE INVESTIMENTO
+# PÁGINA: SIMULADOR DE INVESTIMENTO — BODIVA VIRTUAL
 # =========================================================
 elif pagina == "🧪 Simulador de Investimento":
     tx = t()
-    hero("🧪 " + tx["nav_map"]["🧪 Simulador de Investimento"].replace("🧪 ", ""), tx["sim_hero_sub"])
+    hero("🧪 BODIVA Virtual — Simulador de Investimento", "Começa com 3 000 000 Kz e testa as tuas estratégias na bolsa angolana sem risco real", "🎮 Home Broker APPO · Dinheiro Virtual")
 
-    col1, col2 = st.columns(2)
-    valor_inicial  = col1.number_input(tx["sim_valor_inicial"],   min_value=0.0, value=100000.0, step=10000.0)
-    contrib_mensal = col2.number_input(tx["sim_contrib_mensal"],  min_value=0.0, value=20000.0,  step=5000.0)
-    col3, col4, col5 = st.columns(3)
-    taxa_anual    = col3.slider(tx["sim_taxa"],     0.0, 40.0, 12.0, 0.5)
-    anos          = col4.slider(tx["sim_anos"],     1,   30,   10)
-    inflacao_sim  = col5.slider(tx["sim_inflacao"], 0.0, 40.0, 13.5, 0.5)
+    # Inicializar carteira virtual na sessão
+    if "sim_carteira" not in st.session_state:
+        st.session_state["sim_carteira"] = {}   # {ticker: {"qtd": int, "preco_medio": float}}
+        st.session_state["sim_saldo_caixa"] = 3_000_000.0
+        st.session_state["sim_historico"] = []  # lista de operações
 
-    taxa_mensal    = (1 + taxa_anual   / 100) ** (1 / 12) - 1
-    inflacao_mensal= (1 + inflacao_sim / 100) ** (1 / 12) - 1
-    saldo          = valor_inicial
-    total_investido= valor_inicial
-    pontos = []
-    for mes in range(1, anos * 12 + 1):
-        saldo          = saldo * (1 + taxa_mensal) + contrib_mensal
-        total_investido += contrib_mensal
-        if mes % 12 == 0:
-            saldo_real = saldo / ((1 + inflacao_mensal) ** mes)
-            pontos.append({"Ano": mes // 12, "Saldo Nominal": saldo, "Total Investido": total_investido, "Saldo Real": saldo_real})
+    df_activos_sim = _df_activos_ticker.copy()
 
-    df_sim = pd.DataFrame(pontos).set_index("Ano")
-    chart_cols = tx["sim_chart_cols"]
-    col_a, col_b, col_c = st.columns(3)
-    col_a.metric(tx["sim_saldo_nominal"], kz(saldo))
-    col_b.metric(tx["sim_total_investido"], kz(total_investido))
-    col_c.metric(tx["sim_juros"], kz(saldo - total_investido))
-    st.bar_chart(df_sim[["Saldo Nominal", "Total Investido"]].rename(columns=chart_cols))
-    st.caption(f"{tx['sim_caption1']} {inflacao_sim:.1f}{tx['sim_caption2']} {kz(df_sim['Saldo Real'].iloc[-1])}")
-    st.caption(tx["sim_disclaimer"])
-    texto_sim = tx["sim_partilha"].format(vi=kz(valor_inicial), cm=kz(contrib_mensal), a=anos, t=f"{taxa_anual:.1f}", sf=kz(saldo))
-    botoes_partilha(texto_sim)
+    aba_broker, aba_carteira, aba_compostos = st.tabs(["📊 Home Broker APPO", "💼 Minha Carteira Virtual", "📈 Simulador de Juros Compostos"])
+
+    # ── ABA 1: HOME BROKER ──────────────────────────────────────────
+    with aba_broker:
+        render_html(f"""
+        <div style="background:linear-gradient(120deg,#0B3D91,#1a6fcc); border-radius:12px; padding:16px 20px; margin-bottom:16px; color:#fff;">
+            <div style="font-size:0.8rem; opacity:0.8; letter-spacing:1px; text-transform:uppercase;">Saldo disponível em caixa</div>
+            <div style="font-size:2.2rem; font-weight:700; margin:4px 0;">{kz(st.session_state['sim_saldo_caixa'])}</div>
+            <div style="font-size:0.75rem; opacity:0.7;">💡 Dinheiro virtual — sem risco real · Dotação inicial: 3 000 000 Kz</div>
+        </div>
+        """)
+
+        if df_activos_sim.empty:
+            st.info("Ainda não existem activos cotados para negociar.")
+        else:
+            col_sel, col_dir = st.columns([1.4, 1])
+            with col_sel:
+                st.subheader("📋 Painel de Cotações")
+                acoes_sim = df_activos_sim[df_activos_sim["tipo"] == "Ação"] if not df_activos_sim.empty else df_activos_sim
+                if not acoes_sim.empty:
+                    st.dataframe(
+                        acoes_sim[["ticker","nome","preco","variacao"]].rename(
+                            columns={"ticker":"Ticker","nome":"Activo","preco":"Preço (Kz)","variacao":"Variação (%)"}
+                        ).style.format({"Preço (Kz)": kz, "Variação (%)": pct_bruto})
+                        .applymap(lambda v: cor_variacao(v), subset=["Variação (%)"]),
+                        hide_index=True
+                    )
+
+            with col_dir:
+                st.subheader("🔄 Ordem de Compra / Venda")
+                opcoes_ativos = {f"{r['ticker']} — {r['nome']}": r for _, r in acoes_sim.iterrows()} if not acoes_sim.empty else {}
+                if opcoes_ativos:
+                    activo_sel_label = st.selectbox("Seleccionar activo", list(opcoes_ativos.keys()))
+                    activo_sel = opcoes_ativos[activo_sel_label]
+                    preco_unitario = float(activo_sel["preco"])
+                    ticker_sel = activo_sel["ticker"]
+
+                    st.metric("Preço unitário", kz(preco_unitario))
+
+                    tipo_ordem = st.radio("Tipo de ordem", ["🟢 Comprar", "🔴 Vender"], horizontal=True)
+                    qtd = st.number_input("Quantidade (acções)", min_value=1, value=1, step=1)
+                    custo_total = qtd * preco_unitario
+
+                    st.metric("Custo total", kz(custo_total))
+
+                    if tipo_ordem == "🟢 Comprar":
+                        pode = st.session_state["sim_saldo_caixa"] >= custo_total
+                        if st.button("✅ Executar Compra", disabled=not pode):
+                            st.session_state["sim_saldo_caixa"] -= custo_total
+                            cart = st.session_state["sim_carteira"]
+                            if ticker_sel in cart:
+                                total_qtd = cart[ticker_sel]["qtd"] + qtd
+                                total_custo = cart[ticker_sel]["qtd"] * cart[ticker_sel]["preco_medio"] + custo_total
+                                cart[ticker_sel] = {"qtd": total_qtd, "preco_medio": total_custo / total_qtd, "nome": activo_sel["nome"]}
+                            else:
+                                cart[ticker_sel] = {"qtd": qtd, "preco_medio": preco_unitario, "nome": activo_sel["nome"]}
+                            st.session_state["sim_historico"].append({"op": "COMPRA", "ticker": ticker_sel, "qtd": qtd, "preco": preco_unitario, "total": custo_total})
+                            st.success(f"✅ Compra executada: {qtd} × {ticker_sel} a {kz(preco_unitario)}")
+                            st.rerun()
+                        if not pode:
+                            st.warning(f"Saldo insuficiente. Necessitas de {kz(custo_total)} mas tens {kz(st.session_state['sim_saldo_caixa'])}.")
+                    else:
+                        cart = st.session_state["sim_carteira"]
+                        qtd_disponivel = cart.get(ticker_sel, {}).get("qtd", 0)
+                        st.caption(f"Tens {qtd_disponivel} acções de {ticker_sel} em carteira.")
+                        pode_vender = qtd_disponivel >= qtd
+                        if st.button("✅ Executar Venda", disabled=not pode_vender):
+                            receita = qtd * preco_unitario
+                            st.session_state["sim_saldo_caixa"] += receita
+                            cart[ticker_sel]["qtd"] -= qtd
+                            if cart[ticker_sel]["qtd"] == 0:
+                                del cart[ticker_sel]
+                            st.session_state["sim_historico"].append({"op": "VENDA", "ticker": ticker_sel, "qtd": qtd, "preco": preco_unitario, "total": receita})
+                            st.success(f"✅ Venda executada: {qtd} × {ticker_sel} a {kz(preco_unitario)}")
+                            st.rerun()
+                        if not pode_vender:
+                            st.warning(f"Não tens acções suficientes para vender ({qtd_disponivel} disponíveis).")
+
+        st.divider()
+        st.subheader("📜 Histórico de Ordens")
+        if st.session_state["sim_historico"]:
+            df_hist_sim = pd.DataFrame(reversed(st.session_state["sim_historico"]))
+            df_hist_sim["total"] = df_hist_sim["total"].apply(kz)
+            df_hist_sim["preco"] = df_hist_sim["preco"].apply(kz)
+            st.dataframe(df_hist_sim.rename(columns={"op":"Operação","ticker":"Ticker","qtd":"Qtd","preco":"Preço Unit.","total":"Total"}), hide_index=True)
+        else:
+            st.info("Ainda não executaste nenhuma ordem. Começa a negociar no painel acima!")
+
+        if st.button("🔄 Reiniciar carteira virtual (voltar a 3 000 000 Kz)"):
+            st.session_state["sim_carteira"] = {}
+            st.session_state["sim_saldo_caixa"] = 3_000_000.0
+            st.session_state["sim_historico"] = []
+            st.rerun()
+
+    # ── ABA 2: CARTEIRA VIRTUAL ──────────────────────────────────────
+    with aba_carteira:
+        st.subheader("💼 Composição da Minha Carteira Virtual")
+        cart = st.session_state["sim_carteira"]
+        saldo_caixa = st.session_state["sim_saldo_caixa"]
+
+        if not cart:
+            st.info("A tua carteira virtual está vazia. Vai ao Home Broker e compra as tuas primeiras acções!")
+        else:
+            linhas_cart = []
+            valor_total_carteira = saldo_caixa
+            for ticker_c, dados_c in cart.items():
+                preco_actual = float(df_activos_sim[df_activos_sim["ticker"] == ticker_c]["preco"].values[0]) if ticker_c in df_activos_sim["ticker"].values else dados_c["preco_medio"]
+                valor_actual = dados_c["qtd"] * preco_actual
+                valor_custo  = dados_c["qtd"] * dados_c["preco_medio"]
+                pl           = valor_actual - valor_custo
+                pl_pct       = (pl / valor_custo * 100) if valor_custo else 0
+                valor_total_carteira += valor_actual
+                linhas_cart.append({
+                    "Ticker": ticker_c, "Nome": dados_c["nome"],
+                    "Qtd": dados_c["qtd"],
+                    "Preço Médio": kz(dados_c["preco_medio"]),
+                    "Preço Actual": kz(preco_actual),
+                    "Valor Actual": kz(valor_actual),
+                    "P&L": kz(pl),
+                    "P&L (%)": f"{pl_pct:+.2f}%"
+                })
+
+            df_cart = pd.DataFrame(linhas_cart)
+            st.dataframe(df_cart, hide_index=True)
+
+            col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+            col_r1.metric("Saldo em Caixa", kz(saldo_caixa))
+            col_r2.metric("Valor em Acções", kz(valor_total_carteira - saldo_caixa))
+            col_r3.metric("Patrimônio Total Virtual", kz(valor_total_carteira))
+            variacao_total = valor_total_carteira - 3_000_000
+            col_r4.metric("Ganho/Perda Total", kz(variacao_total), delta=f"{variacao_total/3_000_000*100:+.2f}%")
+
+            nota_indicador("O <b>P&L</b> (Profit & Loss) mostra o ganho ou perda não realizado em cada posição — a diferença entre o preço que pagaste e o preço actual de mercado.")
+
+        st.divider()
+        render_html("""
+        <div style="background:#F6EFF2; border-radius:10px; padding:14px 18px; font-size:0.85rem; color:#4A3038;">
+            <b>⚠️ Nota importante:</b> Esta é uma carteira <b>completamente virtual</b>. Os preços usados são os que o administrador do Clube actualiza manualmente na plataforma —
+            não são cotações em tempo real da BODIVA. O objectivo é <b>aprender a raciocinar como investidor</b> e praticar a construção de carteiras, sem qualquer risco financeiro real.
+        </div>
+        """)
+
+    # ── ABA 3: JUROS COMPOSTOS ────────────────────────────────────────
+    with aba_compostos:
+        st.subheader("📈 Simulador de Juros Compostos")
+        col1, col2 = st.columns(2)
+        valor_inicial  = col1.number_input("Valor inicial (Kz)", min_value=0.0, value=100000.0, step=10000.0)
+        contrib_mensal = col2.number_input("Contribuição mensal (Kz)", min_value=0.0, value=20000.0, step=5000.0)
+        col3, col4, col5 = st.columns(3)
+        taxa_anual   = col3.slider("Taxa de retorno anual esperada (%)", 0.0, 40.0, 12.0, 0.5)
+        anos         = col4.slider("Prazo (anos)", 1, 30, 10)
+        inflacao_sim = col5.slider("Inflação anual assumida (%)", 0.0, 40.0, 13.5, 0.5)
+
+        taxa_mensal     = (1 + taxa_anual   / 100) ** (1 / 12) - 1
+        inflacao_mensal = (1 + inflacao_sim / 100) ** (1 / 12) - 1
+        saldo           = valor_inicial
+        total_investido = valor_inicial
+        pontos = []
+        for mes in range(1, anos * 12 + 1):
+            saldo           = saldo * (1 + taxa_mensal) + contrib_mensal
+            total_investido += contrib_mensal
+            if mes % 12 == 0:
+                saldo_real = saldo / ((1 + inflacao_mensal) ** mes)
+                pontos.append({"Ano": mes // 12, "Saldo Nominal": saldo, "Total Investido": total_investido, "Saldo Real (poder de compra)": saldo_real})
+
+        df_sim = pd.DataFrame(pontos).set_index("Ano")
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("Saldo Final (nominal)", kz(saldo))
+        col_b.metric("Total Investido", kz(total_investido))
+        col_c.metric("Juros Compostos Ganhos", kz(saldo - total_investido))
+        st.bar_chart(df_sim[["Saldo Nominal", "Total Investido"]])
+        saldo_real_final = df_sim["Saldo Real (poder de compra)"].iloc[-1]
+        st.caption(f"Saldo final em poder de compra de hoje (descontada a inflação de {inflacao_sim:.1f}%/ano): {kz(saldo_real_final)}")
+        nota_indicador(f"Com inflação de {inflacao_sim:.1f}%/ano, o teu saldo de {kz(saldo)} nominal equivale apenas a {kz(saldo_real_final)} em poder de compra actual. A inflação angolana corrói significativamente os retornos nominais.")
+        st.caption("Simulação educativa com juros compostos mensais constantes. Não constitui aconselhamento de investimento.")
+        texto_sim = f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo)} — Clube de Investimento APPO"
+        botoes_partilha(texto_sim)
 
 # =========================================================
 # PÁGINA: REGRA 50/30/20
