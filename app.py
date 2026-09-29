@@ -1517,6 +1517,8 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     tx  = t()
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.set_left_margin(25)
+    pdf.set_right_margin(15)
     pdf.add_page()
     pdf.set_fill_color(124, 31, 62)
     pdf.set_text_color(255, 255, 255)
@@ -1549,52 +1551,101 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     pdf.set_text_color(0, 0, 0)
     pdf.ln(1)
     _pdf_linha(pdf, "PATRIMONIO TOTAL DO CLUBE", kz(cap_real), bold=True)
-    # Carteira do Clube: apenas activos com preco > 0 (os que o Clube acompanha com valor)
+    # Carteira Real do Clube — dados registados nas avaliações com qtd e preco aquisição
     _pdf_secao(pdf, "CARTEIRA DE INVESTIMENTOS DO CLUBE")
-    df_cart_pdf = df_activos[df_activos["preco"] > 0].copy()
-    if df_cart_pdf.empty:
-        pdf.set_font("Helvetica", "I", 10)
-        pdf.cell(0, 7, "Sem activos com cotacao registada.", ln=True)
+    # Cruzar activos cotados com avaliações para obter qtd e preco aquisição
+    df_aval_pdf = obter_avaliacoes()
+    CARTEIRA_REAL = {
+        "UNTLAAAA": {"nome": "UNITEL", "qtd": 38, "preco_aq": 29996.0},
+        "SBAOAAAA": {"nome": "Standard Bank Angola", "qtd": 16, "preco_aq": 50000.0},
+        "BAIAAAAA": {"nome": "BAI", "qtd": 4, "preco_aq": 90507.87},
+        "BFAAAAAA": {"nome": "BFA", "qtd": 4, "preco_aq": 96541.73},
+    }
+    df_cotacoes_pdf = df_activos.copy()
+    linhas_carteira = []
+    valor_total_carteira = 0.0
+    mais_valias_total = 0.0
+    for ticker_r, dados_r in CARTEIRA_REAL.items():
+        row_cot = df_cotacoes_pdf[df_cotacoes_pdf["ticker"] == ticker_r]
+        preco_act = float(row_cot["preco"].values[0]) if not row_cot.empty else dados_r["preco_aq"]
+        var_dia   = float(row_cot["variacao"].values[0]) if not row_cot.empty else 0.0
+        qtd       = dados_r["qtd"]
+        preco_aq  = dados_r["preco_aq"]
+        val_aq    = qtd * preco_aq
+        val_act   = qtd * preco_act
+        mais_valia= val_act - val_aq
+        mais_valia_pct = (mais_valia / val_aq * 100) if val_aq else 0
+        valor_total_carteira += val_act
+        mais_valias_total    += mais_valia
+        linhas_carteira.append({
+            "ticker": ticker_r, "nome": dados_r["nome"], "qtd": qtd,
+            "preco_aq": preco_aq, "preco_act": preco_act,
+            "val_aq": val_aq, "val_act": val_act,
+            "mais_valia": mais_valia, "mais_valia_pct": mais_valia_pct,
+            "var_dia": var_dia,
+        })
+
+    if not linhas_carteira:
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.cell(0, 7, "Sem posicoes registadas na carteira.", ln=True)
     else:
-        pdf.set_font("Helvetica", "B", 9)
+        # Cabeçalho tabela
+        pdf.set_font("Helvetica", "B", 8)
         pdf.set_fill_color(236, 222, 227)
-        pdf.cell(20, 7, "Ticker",         border="B", fill=True, ln=False)
-        pdf.cell(62, 7, "Nome",           border="B", fill=True, ln=False)
-        pdf.cell(22, 7, "Tipo",           border="B", fill=True, ln=False)
-        pdf.cell(28, 7, "Cotacao (Kz)",   border="B", fill=True, align="R", ln=False)
-        pdf.cell(28, 7, "Var. Diaria",    border="B", fill=True, align="R", ln=False)
-        pdf.cell(0,  7, "Tendencia",      border="B", fill=True, align="C", ln=True)
-        pdf.set_font("Helvetica", "", 9)
-        for i, (_, linha) in enumerate(df_cart_pdf.iterrows()):
+        W = [14, 38, 10, 24, 24, 24, 24, 22, 0]
+        headers = ["Ticker","Nome","Qtd","P. Aquis. (Kz)","P. Actual (Kz)","V. Aquis. (Kz)","V. Actual (Kz)","Mais-Valia","Var. %"]
+        for h, w in zip(headers[:-1], W[:-1]):
+            pdf.cell(w, 7, h, border="B", fill=True, ln=False, align="C")
+        pdf.cell(0, 7, headers[-1], border="B", fill=True, ln=True, align="C")
+
+        pdf.set_font("Helvetica", "", 8)
+        for i, l in enumerate(linhas_carteira):
             fill = i % 2 == 0
             if fill:
                 pdf.set_fill_color(250, 248, 246)
             else:
                 pdf.set_fill_color(255, 255, 255)
-            var = float(linha.get("variacao", 0) or 0)
-            if var > 0:
-                tendencia = "+"
-                pdf.set_text_color(22, 163, 74)
-            elif var < 0:
-                tendencia = "-"
-                pdf.set_text_color(220, 38, 38)
-            else:
-                tendencia = "="
-                pdf.set_text_color(107, 114, 128)
-            pdf.cell(20, 6, str(linha.get("ticker",""))[:10],  border="B", fill=fill, ln=False)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(62, 6, str(linha["nome"])[:34],           border="B", fill=fill, ln=False)
-            pdf.cell(22, 6, str(linha["tipo"]),                border="B", fill=fill, ln=False)
-            pdf.cell(28, 6, kz(linha["preco"]),                border="B", fill=fill, align="R", ln=False)
-            if var > 0:
-                pdf.set_text_color(22, 163, 74)
-            elif var < 0:
-                pdf.set_text_color(220, 38, 38)
-            else:
-                pdf.set_text_color(107, 114, 128)
-            pdf.cell(28, 6, pct_bruto(var),  border="B", fill=fill, align="R", ln=False)
-            pdf.cell(0,  6, f" {tendencia}",  border="B", fill=fill, align="C", ln=True)
-            pdf.set_text_color(0, 0, 0)
+            mv = l["mais_valia"]
+            cor_mv = (22,163,74) if mv >= 0 else (220,38,38)
+
+            def _c(txt, w, align="C", color=None, bold=False):
+                if color:
+                    pdf.set_text_color(*color)
+                if bold:
+                    pdf.set_font("Helvetica","B",8)
+                pdf.cell(w, 6, str(txt), border="B", fill=fill, align=align, ln=False)
+                if color or bold:
+                    pdf.set_text_color(0,0,0)
+                    pdf.set_font("Helvetica","",8)
+
+            _c(l["ticker"][:8],       W[0])
+            _c(l["nome"][:20],        W[1], "L")
+            _c(str(l["qtd"]),         W[2])
+            _c(kz(l["preco_aq"]),     W[3], "R")
+            _c(kz(l["preco_act"]),    W[4], "R")
+            _c(kz(l["val_aq"]),       W[5], "R")
+            _c(kz(l["val_act"]),      W[6], "R")
+            _c(kz(mv),                W[7], "R", cor_mv, True)
+            vp = l["mais_valia_pct"]
+            cor_vp = (22,163,74) if vp >= 0 else (220,38,38)
+            pdf.set_text_color(*cor_vp)
+            pdf.set_font("Helvetica","B",8)
+            pdf.cell(0, 6, f"{vp:+.2f}%", border="B", fill=fill, align="R", ln=True)
+            pdf.set_text_color(0,0,0)
+            pdf.set_font("Helvetica","",8)
+
+        # Totais
+        pdf.ln(1)
+        pdf.set_font("Helvetica","B",9)
+        pdf.set_fill_color(236, 222, 227)
+        mv_total_pct = (mais_valias_total / (valor_total_carteira - mais_valias_total) * 100) if (valor_total_carteira - mais_valias_total) else 0
+        pdf.cell(134, 7, "TOTAL DA CARTEIRA", border="B", fill=True, ln=False, align="R")
+        pdf.cell(24,  7, kz(valor_total_carteira), border="B", fill=True, align="R", ln=False)
+        cor_tot = (22,163,74) if mais_valias_total >= 0 else (220,38,38)
+        pdf.set_text_color(*cor_tot)
+        pdf.cell(22,  7, kz(mais_valias_total), border="B", fill=True, align="R", ln=False)
+        pdf.cell(0,   7, f"{mv_total_pct:+.2f}%", border="B", fill=True, align="R", ln=True)
+        pdf.set_text_color(0,0,0)
     _pdf_secao(pdf, "MOVIMENTOS RECENTES")
     if df_movimentos.empty:
         pdf.set_font("Helvetica", "I", 10)
