@@ -1521,11 +1521,14 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     pdf.set_fill_color(124, 31, 62)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 18)
-    pdf.cell(0, 14, "  CLUBE DE INVESTIMENTO APPO", ln=True, fill=True)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.cell(0, 7, f"  Relatorio Patrimonial  |  Gerado em: {agora()}", ln=True, fill=True)
+    pdf.cell(0, 12, "  CLUBE DE INVESTIMENTO APPO", ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(0, 5, "  Casa nº 5 - Zona C, Av. Ministro Vieira Machado, Benguela, Angola", ln=True, fill=True)
+    pdf.cell(0, 5, "  NIF: 001669404BA035  |  Tel.: 940 762 278 / 937 696 088  |  clube.investimento.appo@gmail.com", ln=True, fill=True)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.cell(0, 5, f"  Relatorio Patrimonial  |  Gerado em: {agora()}", ln=True, fill=True)
     pdf.set_text_color(0, 0, 0)
-    pdf.ln(4)
+    pdf.ln(3)
     _pdf_secao(pdf, "RESUMO PATRIMONIAL")
     cap_sub  = resumo["capital_subscrito"]
     cap_real = resumo["capital_realizado"]
@@ -1533,7 +1536,7 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     invest   = resumo["investimentos"]
     reservas = resumo["reservas"]
     _pdf_linha(pdf, "Capital Subscrito (total comprometido pelos socios)", kz(cap_sub))
-    _pdf_linha(pdf, "Capital Realizado (ja entregue)", kz(cap_real))
+    _pdf_linha(pdf, "Capital Realizado", kz(cap_real))
     _pdf_linha(pdf, "Capital por Realizar", kz(cap_por))
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(120, 120, 120)
@@ -1545,25 +1548,53 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     pdf.cell(0, 6, kz(reservas), align="R", ln=True)
     pdf.set_text_color(0, 0, 0)
     pdf.ln(1)
-    _pdf_linha(pdf, "PATRIMONIO TOTAL DO CLUBE (= Capital Realizado)", kz(cap_real), bold=True)
-    _pdf_secao(pdf, "ACTIVOS EM CARTEIRA")
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.set_fill_color(236, 222, 227)
-    pdf.cell(22, 7, "Ticker", border="B", fill=True, ln=False)
-    pdf.cell(80, 7, "Nome", border="B", fill=True, ln=False)
-    pdf.cell(28, 7, "Tipo", border="B", fill=True, ln=False)
-    pdf.cell(0,  7, "Cotacao (Kz)", border="B", fill=True, align="R", ln=True)
-    pdf.set_font("Helvetica", "", 9)
-    for i, (_, linha) in enumerate(df_activos.iterrows()):
-        fill = i % 2 == 0
-        if fill:
-            pdf.set_fill_color(250, 248, 246)
-        else:
-            pdf.set_fill_color(255, 255, 255)
-        pdf.cell(22, 6, str(linha.get("ticker",""))[:12], border="B", fill=fill, ln=False)
-        pdf.cell(80, 6, str(linha["nome"])[:42], border="B", fill=fill, ln=False)
-        pdf.cell(28, 6, str(linha["tipo"]), border="B", fill=fill, ln=False)
-        pdf.cell(0,  6, kz(linha["preco"]), border="B", fill=fill, align="R", ln=True)
+    _pdf_linha(pdf, "PATRIMONIO TOTAL DO CLUBE", kz(cap_real), bold=True)
+    # Carteira do Clube: apenas activos com preco > 0 (os que o Clube acompanha com valor)
+    _pdf_secao(pdf, "CARTEIRA DE INVESTIMENTOS DO CLUBE")
+    df_cart_pdf = df_activos[df_activos["preco"] > 0].copy()
+    if df_cart_pdf.empty:
+        pdf.set_font("Helvetica", "I", 10)
+        pdf.cell(0, 7, "Sem activos com cotacao registada.", ln=True)
+    else:
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(236, 222, 227)
+        pdf.cell(20, 7, "Ticker",         border="B", fill=True, ln=False)
+        pdf.cell(62, 7, "Nome",           border="B", fill=True, ln=False)
+        pdf.cell(22, 7, "Tipo",           border="B", fill=True, ln=False)
+        pdf.cell(28, 7, "Cotacao (Kz)",   border="B", fill=True, align="R", ln=False)
+        pdf.cell(28, 7, "Var. Diaria",    border="B", fill=True, align="R", ln=False)
+        pdf.cell(0,  7, "Tendencia",      border="B", fill=True, align="C", ln=True)
+        pdf.set_font("Helvetica", "", 9)
+        for i, (_, linha) in enumerate(df_cart_pdf.iterrows()):
+            fill = i % 2 == 0
+            if fill:
+                pdf.set_fill_color(250, 248, 246)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+            var = float(linha.get("variacao", 0) or 0)
+            if var > 0:
+                tendencia = "+"
+                pdf.set_text_color(22, 163, 74)
+            elif var < 0:
+                tendencia = "-"
+                pdf.set_text_color(220, 38, 38)
+            else:
+                tendencia = "="
+                pdf.set_text_color(107, 114, 128)
+            pdf.cell(20, 6, str(linha.get("ticker",""))[:10],  border="B", fill=fill, ln=False)
+            pdf.set_text_color(0, 0, 0)
+            pdf.cell(62, 6, str(linha["nome"])[:34],           border="B", fill=fill, ln=False)
+            pdf.cell(22, 6, str(linha["tipo"]),                border="B", fill=fill, ln=False)
+            pdf.cell(28, 6, kz(linha["preco"]),                border="B", fill=fill, align="R", ln=False)
+            if var > 0:
+                pdf.set_text_color(22, 163, 74)
+            elif var < 0:
+                pdf.set_text_color(220, 38, 38)
+            else:
+                pdf.set_text_color(107, 114, 128)
+            pdf.cell(28, 6, pct_bruto(var),  border="B", fill=fill, align="R", ln=False)
+            pdf.cell(0,  6, f" {tendencia}",  border="B", fill=fill, align="C", ln=True)
+            pdf.set_text_color(0, 0, 0)
     _pdf_secao(pdf, "MOVIMENTOS RECENTES")
     if df_movimentos.empty:
         pdf.set_font("Helvetica", "I", 10)
