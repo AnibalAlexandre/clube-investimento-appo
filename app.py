@@ -1146,7 +1146,10 @@ def pct(valor) -> str:
 
 def pct_bruto(valor) -> str:
     try:
-        return f"{float(valor):+.2f}%"
+        v = float(valor)
+        if v == 0:
+            return "0.00%"
+        return f"{v:+.2f}%"
     except (TypeError, ValueError):
         return "0.00%"
 
@@ -1493,48 +1496,101 @@ def extrair_texto_pdf(ficheiro) -> str:
     return "\n\n".join(pagina.extract_text() or "" for pagina in leitor.pages).strip()
 
 
+def _pdf_linha(pdf, label, valor, bold=False):
+    pdf.set_font("Helvetica", "B" if bold else "", 10)
+    pdf.set_fill_color(246, 239, 242)
+    pdf.cell(105, 7, label, border="B", fill=bold, ln=False)
+    pdf.cell(0, 7, valor, border="B", align="R", fill=bold, ln=True)
+
+
+def _pdf_secao(pdf, titulo):
+    pdf.ln(4)
+    pdf.set_fill_color(124, 31, 62)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 8, f"  {titulo}", ln=True, fill=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(1)
+
+
 def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     tx  = t()
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=18)
     pdf.add_page()
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, tx["pdf_titulo"], ln=True)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(0, 6, f"{tx['pdf_gerado']} {agora()}", ln=True)
+    pdf.set_fill_color(124, 31, 62)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.cell(0, 14, "  CLUBE DE INVESTIMENTO APPO", ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 7, f"  Relatorio Patrimonial  |  Gerado em: {agora()}", ln=True, fill=True)
+    pdf.set_text_color(0, 0, 0)
     pdf.ln(4)
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 8, tx["pdf_resumo"], ln=True)
-    pdf.set_font("Helvetica", "", 11)
-    capital_subscrito    = resumo["capital_subscrito"]
-    capital_realizado    = resumo["capital_realizado"]
-    capital_por_realizar = capital_subscrito - capital_realizado
-    investimentos        = resumo["investimentos"]
-    reservas             = resumo["reservas"]
-    # Patrimonio Total = Capital Realizado (investimentos e reservas sao subdivisoes, nao valores adicionais)
-    patrimonio_total     = capital_realizado
-
-    pdf.cell(0, 7, f"Capital Subscrito: {kz(capital_subscrito)}", ln=True)
-    pdf.cell(0, 7, f"Capital Realizado (ja entregue): {kz(capital_realizado)}", ln=True)
-    pdf.cell(0, 7, f"Capital por Realizar: {kz(capital_por_realizar)}", ln=True)
-    pdf.cell(0, 7, f"  - dos quais, Investimentos: {kz(investimentos)}", ln=True)
-    pdf.cell(0, 7, f"  - dos quais, Reservas: {kz(reservas)}", ln=True)
-    pdf.cell(0, 7, f"Patrimonio Total do Clube (= Capital Realizado): {kz(patrimonio_total)}", ln=True)
-    pdf.ln(4)
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 8, tx["pdf_activos"], ln=True)
-    pdf.set_font("Helvetica", "", 10)
-    for _, linha in df_activos.iterrows():
-        pdf.cell(0, 6, f"- {linha['nome']} ({linha['tipo']}): {kz(linha['preco'])}", ln=True)
-    pdf.ln(4)
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 8, tx["pdf_movimentos"], ln=True)
-    pdf.set_font("Helvetica", "", 10)
+    _pdf_secao(pdf, "RESUMO PATRIMONIAL")
+    cap_sub  = resumo["capital_subscrito"]
+    cap_real = resumo["capital_realizado"]
+    cap_por  = cap_sub - cap_real
+    invest   = resumo["investimentos"]
+    reservas = resumo["reservas"]
+    _pdf_linha(pdf, "Capital Subscrito (total comprometido pelos socios)", kz(cap_sub))
+    _pdf_linha(pdf, "Capital Realizado (ja entregue)", kz(cap_real))
+    _pdf_linha(pdf, "Capital por Realizar", kz(cap_por))
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(15, 6, "", ln=False)
+    pdf.cell(90, 6, "dos quais, aplicado em Investimentos:", ln=False)
+    pdf.cell(0, 6, kz(invest), align="R", ln=True)
+    pdf.cell(15, 6, "", ln=False)
+    pdf.cell(90, 6, "dos quais, em Reservas de Liquidez:", ln=False)
+    pdf.cell(0, 6, kz(reservas), align="R", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(1)
+    _pdf_linha(pdf, "PATRIMONIO TOTAL DO CLUBE (= Capital Realizado)", kz(cap_real), bold=True)
+    _pdf_secao(pdf, "ACTIVOS EM CARTEIRA")
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_fill_color(236, 222, 227)
+    pdf.cell(22, 7, "Ticker", border="B", fill=True, ln=False)
+    pdf.cell(80, 7, "Nome", border="B", fill=True, ln=False)
+    pdf.cell(28, 7, "Tipo", border="B", fill=True, ln=False)
+    pdf.cell(0,  7, "Cotacao (Kz)", border="B", fill=True, align="R", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    for i, (_, linha) in enumerate(df_activos.iterrows()):
+        fill = i % 2 == 0
+        if fill:
+            pdf.set_fill_color(250, 248, 246)
+        else:
+            pdf.set_fill_color(255, 255, 255)
+        pdf.cell(22, 6, str(linha.get("ticker",""))[:12], border="B", fill=fill, ln=False)
+        pdf.cell(80, 6, str(linha["nome"])[:42], border="B", fill=fill, ln=False)
+        pdf.cell(28, 6, str(linha["tipo"]), border="B", fill=fill, ln=False)
+        pdf.cell(0,  6, kz(linha["preco"]), border="B", fill=fill, align="R", ln=True)
+    _pdf_secao(pdf, "MOVIMENTOS RECENTES")
     if df_movimentos.empty:
-        pdf.cell(0, 6, tx["pdf_sem_mov"], ln=True)
+        pdf.set_font("Helvetica", "I", 10)
+        pdf.cell(0, 7, tx["pdf_sem_mov"], ln=True)
     else:
-        for _, linha in df_movimentos.head(30).iterrows():
-            pdf.cell(0, 6, f"- {linha['data_movimento']} | {linha['tipo']} | {kz(linha['montante'])} | {linha['descricao'] or ''}", ln=True)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(236, 222, 227)
+        pdf.cell(28, 7, "Data",     border="B", fill=True, ln=False)
+        pdf.cell(50, 7, "Tipo",     border="B", fill=True, ln=False)
+        pdf.cell(70, 7, "Descricao",border="B", fill=True, ln=False)
+        pdf.cell(0,  7, "Montante", border="B", fill=True, align="R", ln=True)
+        pdf.set_font("Helvetica", "", 9)
+        for i, (_, linha) in enumerate(df_movimentos.head(30).iterrows()):
+            fill = i % 2 == 0
+            if fill:
+                pdf.set_fill_color(250, 248, 246)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+            pdf.cell(28, 6, str(linha["data_movimento"]),           border="B", fill=fill, ln=False)
+            pdf.cell(50, 6, str(linha["tipo"])[:26],                border="B", fill=fill, ln=False)
+            pdf.cell(70, 6, str(linha.get("descricao","") or "")[:38], border="B", fill=fill, ln=False)
+            pdf.cell(0,  6, kz(linha["montante"]),                  border="B", fill=fill, align="R", ln=True)
+    pdf.ln(8)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 5, "Clube de Investimento APPO  |  clube.investimento.appo@gmail.com  |  Benguela, Angola", align="C", ln=True)
+    pdf.cell(0, 5, "Documento gerado automaticamente pela plataforma APPO. Uso interno e reservado.", align="C", ln=True)
     return bytes(pdf.output())
 
 
@@ -1771,7 +1827,7 @@ elif pagina == "📈 Cotações & Activos":
             st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
             st.caption(f"{tx['cot_ultima_actualizacao']} {df_filtrado['actualizado_em'].max()}")
             st.download_button(tx["cot_descarregar_csv"],
-                               data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False).encode("utf-8"),
+                               data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
                                file_name="cotacoes_appo.csv", mime="text/csv")
             st.divider()
             st.subheader(tx["cot_comparacao"])
@@ -1819,7 +1875,7 @@ elif pagina == "📊 Histórico & Relatórios":
         cols_h = tx["hist_cols"]
         st.dataframe(df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "criado_em"]].rename(columns=cols_h), hide_index=True)
         st.download_button(tx["hist_descarregar_mov"],
-                           data=df_movimentos.to_csv(index=False).encode("utf-8"),
+                           data=df_movimentos.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
                            file_name="movimentos_appo.csv", mime="text/csv")
 
     st.divider()
@@ -1940,7 +1996,7 @@ elif pagina == "📐 Avaliação de Activos":
                 """)
 
             st.download_button(tx["aval_descarregar_comp"],
-                               data=df_comp.to_csv(index=False).encode("utf-8"),
+                               data=df_comp.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
                                file_name="comparacao_sectorial_appo.csv", mime="text/csv")
 
 # =========================================================
