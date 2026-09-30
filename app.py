@@ -1573,7 +1573,8 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         qtd       = dados_r["qtd"]
         val_aq    = dados_r["val_aq"]
         preco_aq  = val_aq / qtd if qtd else 0
-        val_act   = qtd * preco_act if preco_act else val_aq
+        # Se cotação actual não disponível, usar valor de aquisição (sem mais-valia)
+        val_act   = round(qtd * preco_act, 2) if preco_act and preco_act > 0 else val_aq
         mais_valia= val_act - val_aq
         mais_valia_pct = (mais_valia / val_aq * 100) if val_aq else 0
         valor_total_carteira += val_act
@@ -1593,9 +1594,10 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         # Cabeçalho tabela
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_fill_color(236, 222, 227)
-        # Landscape útil ~237mm (297 - 30 margem dir - 20 margem esq - 10 buffer)
-        W = [22, 52, 12, 32, 32, 38, 38, 32, 0]
-        headers = ["Ticker","Nome","Qtd","P. Aquis. (Kz)","P. Actual (Kz)","V. Aquis. (Kz)","V. Actual (Kz)","Mais-Valia","Var. %"]
+        # Landscape A4 útil = 297 - 20(esq) - 30(dir) = 247mm
+        # [20+48+10+28+28+32+32+30+19] = 247 exacto
+        W = [20, 48, 10, 28, 28, 32, 32, 30, 19]
+        headers = ["Ticker","Nome","Qtd","P. Aquis.(Kz)","P. Actual(Kz)","V. Aquis.(Kz)","V. Actual(Kz)","Mais-Valia","Var.%"]
         for h, w in zip(headers[:-1], W[:-1]):
             pdf.cell(w, 7, h, border="B", fill=True, ln=False, align="C")
         pdf.cell(0, 7, headers[-1], border="B", fill=True, ln=True, align="C")
@@ -1642,13 +1644,14 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         pdf.set_fill_color(236, 222, 227)
         mv_total_pct = (mais_valias_total / (valor_total_carteira - mais_valias_total) * 100) if (valor_total_carteira - mais_valias_total) else 0
         # W = [22,52,12,32,32,38,38,32,0] — soma fixas = 260, ultima=0
-        soma_fixas = 22+52+12+32+32+38  # = 188
-        pdf.cell(soma_fixas, 7, "TOTAL DA CARTEIRA", border="B", fill=True, ln=False, align="R")
-        pdf.cell(38, 7, kz(valor_total_carteira), border="B", fill=True, align="R", ln=False)
+        # soma até V.Actual = 20+48+10+28+28+32+32 = 198
+        soma_ate_vact = 20+48+10+28+28+32
+        pdf.cell(soma_ate_vact, 7, "TOTAL DA CARTEIRA", border="B", fill=True, ln=False, align="R")
+        pdf.cell(32, 7, kz(valor_total_carteira), border="B", fill=True, align="R", ln=False)
         cor_tot = (22,163,74) if mais_valias_total >= 0 else (220,38,38)
         pdf.set_text_color(*cor_tot)
-        pdf.cell(32,  7, kz(mais_valias_total), border="B", fill=True, align="R", ln=False)
-        pdf.cell(0,   7, f"{mv_total_pct:+.2f}%", border="B", fill=True, align="R", ln=True)
+        pdf.cell(30, 7, kz(mais_valias_total), border="B", fill=True, align="R", ln=False)
+        pdf.cell(19, 7, f"{mv_total_pct:+.2f}%", border="B", fill=True, align="R", ln=True)
         pdf.set_text_color(0,0,0)
     _pdf_secao(pdf, "MOVIMENTOS RECENTES")
     if df_movimentos.empty:
