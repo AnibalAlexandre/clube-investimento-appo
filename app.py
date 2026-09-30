@@ -134,7 +134,7 @@ TRADUCOES = {
         "aval_pe": "P/E", "aval_pbv": "P/BV", "aval_dy": "Dividend Yield",
         "aval_nota1": "<b>P/E</b> = anos de lucro que pagas pelo preço. <b>P/BV</b> = preço face ao valor contabilístico. <b>Dividend Yield</b> = retorno anual em dividendos.",
         "aval_vj": "Valor Justo (DDM)", "aval_upside": "Upside / Downside", "aval_ke": "Custo de Capital (Ke)",
-        "aval_nota2": "<b>Valor Justo (DDM)</b> é uma estimativa. <b>Upside/Downside</b> compara com o mercado. <b>Ke</b> é o retorno mínimo exigido pelo risco do sector.",
+        "aval_nota2": "<b>Valor Justo (DDM)</b> é uma estimativa. <b>Upside/Downside</b> compara com o mercado. <b>Ke</b> = retorno mínimo exigido pelo risco do sector.",
         "aval_subvalorizado": "O modelo DDM sugere uma acção potencialmente subvalorizada face ao mercado.",
         "aval_sobrevalorizado": "O modelo DDM sugere uma acção potencialmente sobrevalorizada face ao mercado.",
         "aval_justo": "O modelo DDM sugere que o preço de mercado está próximo do valor estimado.",
@@ -659,7 +659,7 @@ TRADUCOES = {
         "cot_filtrar_tipo": "Filtrar por tipo de activo",
         "cot_filtrar_todos": "Todos",
         "cot_ultima_actualizacao": "Última actualización:",
-        "cot_descarregar_csv": "⬇️ Descargar tabla en CSV",
+        "cot_descarregar_csv": "⬇️️ Descargar tabla en CSV",
         "cot_comparacao": "Comparación de precios",
         "cot_preco_kz": "Precio (Kz)",
         "cot_tabela_cols": {"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Precio", "variacao": "Variación", "mercado": "Mercado"},
@@ -1322,6 +1322,7 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS movimentos (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, descricao TEXT, montante NUMERIC NOT NULL, data_movimento DATE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS activos (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, tipo TEXT NOT NULL, preco NUMERIC NOT NULL, variacao NUMERIC NOT NULL DEFAULT 0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS ticker TEXT NOT NULL DEFAULT ''")
+    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_anterior NUMERIC NOT NULL DEFAULT 0")
     executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS socios (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT, contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS premissas_macro (id INTEGER PRIMARY KEY CHECK (id = 1), inflacao NUMERIC NOT NULL DEFAULT 0.135, taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18, premio_risco NUMERIC NOT NULL DEFAULT 0.055, beta_banca NUMERIC NOT NULL DEFAULT 1.0, beta_telecom NUMERIC NOT NULL DEFAULT 0.9, beta_outros NUMERIC NOT NULL DEFAULT 1.0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
@@ -1348,7 +1349,7 @@ def inicializar_bd():
 
     if consultar_um("SELECT COUNT(*) FROM activos")[0] == 0:
         for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
-            executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco, var, ticker))
+            executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker, preco_anterior) VALUES (%s, %s, %s, %s, %s, %s)", (nome, tipo, preco, var, ticker, preco))
     else:
         for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
             executar("UPDATE activos SET ticker = %s WHERE nome = %s AND (ticker IS NULL OR ticker = '')", (ticker, nome))
@@ -1439,16 +1440,28 @@ def obter_historico_indice() -> pd.DataFrame:
     return consultar_df("SELECT indice_variacao, registado_em FROM historico_indice_mercado ORDER BY registado_em")
 
 def substituir_activos(df: pd.DataFrame):
+    # Guarda os preços atuais por ticker antes de apagar, para calcular a variação automática
+    precos_actuais = {}
+    for _, linha in obter_activos().iterrows():
+        precos_actuais[linha["ticker"]] = float(linha["preco"])
+
     executar("DELETE FROM activos")
     for _, linha in df.iterrows():
         nome = str(linha.get("nome", "")).strip()
         if not nome:
             continue
-        tipo     = str(linha.get("tipo", "Ação")).strip() or "Ação"
-        preco    = float(linha.get("preco", 0) or 0)
-        variacao = float(linha.get("variacao", 0) or 0)
-        ticker   = str(linha.get("ticker", "") or "").strip().upper()
-        executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco, variacao, ticker))
+        tipo   = str(linha.get("tipo", "Ação")).strip() or "Ação"
+        preco  = float(linha.get("preco", 0) or 0)
+        ticker = str(linha.get("ticker", "") or "").strip().upper()
+        
+        # Calcula a variação de forma automática face ao preço anterior guardado
+        preco_anterior = precos_actuais.get(ticker, preco)
+        variacao = ((preco - preco_anterior) / preco_anterior * 100) if preco_anterior else 0.0
+
+        executar(
+            "INSERT INTO activos (nome, tipo, preco, variacao, ticker, preco_anterior) VALUES (%s, %s, %s, %s, %s, %s)",
+            (nome, tipo, preco, variacao, ticker, preco_anterior),
+        )
     registar_historico_indice(calcular_indice_mercado(obter_activos()))
 
 def obter_favoritos(conta_id: int) -> set:
@@ -1643,8 +1656,6 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         pdf.set_font("Helvetica","B",9)
         pdf.set_fill_color(236, 222, 227)
         mv_total_pct = (mais_valias_total / (valor_total_carteira - mais_valias_total) * 100) if (valor_total_carteira - mais_valias_total) else 0
-        # W = [22,52,12,32,32,38,38,32,0] — soma fixas = 260, ultima=0
-        # soma até V.Actual = 20+48+10+28+28+32+32 = 198
         soma_ate_vact = 20+48+10+28+28+32
         pdf.cell(soma_ate_vact, 7, "TOTAL DA CARTEIRA", border="B", fill=True, ln=False, align="R")
         pdf.cell(32, 7, kz(valor_total_carteira), border="B", fill=True, align="R", ln=False)
@@ -2059,7 +2070,6 @@ elif pagina == "📐 Avaliação de Activos":
             df_comp = pd.DataFrame(linhas_comp)
             st.dataframe(df_comp, hide_index=True)
 
-            # Interpretação automática da tabela comparativa
             with st.expander("💡 Como interpretar esta tabela?"):
                 st.markdown("""
 **P/E (Price-to-Earnings):** Quantos anos de lucro estás a pagar pelo preço actual.
@@ -2068,7 +2078,7 @@ elif pagina == "📐 Avaliação de Activos":
 - P/E > 15x → caro, exige crescimento elevado para justificar
 
 **P/BV (Price-to-Book Value):** Preço face ao valor contabilístico dos activos.
-- P/BV < 1x → estás a comprar activos abaixo do valor de balanço (atenção: pode indicar problema estrutural)
+- P/BV < 1x → estás a comprar activos abaixo do valor de balanço
 - P/BV 1–2x → razoável para banca angolana
 - P/BV > 2x → só justificado por ROE elevado e consistente
 
@@ -2080,8 +2090,6 @@ elif pagina == "📐 Avaliação de Activos":
 - Com inflação angolana ~13,5%, um DY < 13,5% significa retorno real negativo em dividendos
 
 **Upside DDM:** Diferença entre o valor justo estimado pelo modelo DDM e o preço de mercado.
-- Positivo → modelo sugere subvalorização; Negativo → sobrevalorização
-- ⚠️ O DDM é sensível às premissas de crescimento (g) e custo de capital (Ke) — usar sempre como uma referência, não como verdade absoluta.
                 """)
 
             st.download_button(tx["aval_descarregar_comp"],
@@ -2148,7 +2156,6 @@ elif pagina == "🧪 Simulador de Investimento":
          "Opera a bolsa angolana sem risco real · Dotação inicial: 3 000 000 Kz",
          "🎮 BODIVA Virtual · Dinheiro fictício")
 
-    # ── inicializar estado ──────────────────────────────────────────
     if "sim_carteira" not in st.session_state:
         st.session_state["sim_carteira"] = {}
         st.session_state["sim_saldo_caixa"] = 3_000_000.0
@@ -2162,11 +2169,7 @@ elif pagina == "🧪 Simulador de Investimento":
     aba_broker, aba_carteira, aba_compostos = st.tabs(
         ["📊 Home Broker APPO", "💼 Minha Carteira Virtual", "📈 Simulador de Juros Compostos"])
 
-    # ══════════════════════════════════════════════════════════════
-    # ABA 1 — HOME BROKER
-    # ══════════════════════════════════════════════════════════════
     with aba_broker:
-        # ── Barra de saldo ─────────────────────────────────────────
         saldo_caixa   = st.session_state["sim_saldo_caixa"]
         cart          = st.session_state["sim_carteira"]
         valor_acoes   = sum(
@@ -2204,16 +2207,12 @@ elif pagina == "🧪 Simulador de Investimento":
                     {kz(var_total)} ({var_total/3_000_000*100:+.2f}%)
                 </div>
             </div>
-            <div style="margin-left:auto;font-size:0.72rem;color:rgba(255,255,255,0.6);">
-                💡 Dinheiro virtual · sem risco real
-            </div>
         </div>
         """)
 
         if acoes_sim.empty:
             st.info("Ainda não existem acções cotadas para negociar.")
         else:
-            # ── cabeçalho da tabela ────────────────────────────────
             render_html("""
             <div style="display:grid;
                         grid-template-columns:2fr 1fr 1fr 1fr 90px 90px 90px;
@@ -2231,7 +2230,6 @@ elif pagina == "🧪 Simulador de Investimento":
             </div>
             """)
 
-            # ── linhas de activos ──────────────────────────────────
             for i, (_, row) in enumerate(acoes_sim.iterrows()):
                 tk    = row["ticker"]
                 nome  = row["nome"]
@@ -2242,12 +2240,10 @@ elif pagina == "🧪 Simulador de Investimento":
                 seta     = "▲" if var > 0 else ("▼" if var < 0 else "—")
                 bg       = "#FAFAFA" if i % 2 == 0 else "#FFFFFF"
 
-                # chave de quantidade para este activo
                 qtd_key = f"sim_qtd_{tk}"
                 if qtd_key not in st.session_state:
                     st.session_state[qtd_key] = 1
 
-                # linha visual
                 render_html(f"""
                 <div style="display:grid;
                             grid-template-columns:2fr 1fr 1fr 1fr 90px 90px 90px;
@@ -2263,7 +2259,6 @@ elif pagina == "🧪 Simulador de Investimento":
                 </div>
                 """)
 
-                # controlos na mesma linha via colunas Streamlit
                 _, c_preco, c_var, c_cart, c_qtd, c_comprar, c_vender = st.columns(
                     [2, 1, 1, 1, 0.9, 0.9, 0.9])
 
@@ -2274,10 +2269,7 @@ elif pagina == "🧪 Simulador de Investimento":
 
                 custo = qtd_op * preco
 
-                # botão COMPRAR
-                if c_comprar.button("＋ Comprar", key=f"comprar_{tk}",
-                                     use_container_width=True,
-                                     type="primary"):
+                if c_comprar.button("＋ Comprar", key=f"comprar_{tk}", use_container_width=True, type="primary"):
                     if saldo_caixa >= custo:
                         st.session_state["sim_saldo_caixa"] -= custo
                         if tk in cart:
@@ -2292,13 +2284,10 @@ elif pagina == "🧪 Simulador de Investimento":
                             "Total": kz(custo)})
                         st.rerun()
                     else:
-                        st.warning(f"Saldo insuficiente para comprar {qtd_op} × {tk} ({kz(custo)} necessários).")
+                        st.warning(f"Saldo insuficiente para comprar {qtd_op} × {tk}.")
 
-                # botão VENDER
                 desact_venda = qtd_cart < qtd_op
-                if c_vender.button("－ Vender", key=f"vender_{tk}",
-                                    use_container_width=True,
-                                    disabled=desact_venda):
+                if c_vender.button("－ Vender", key=f"vender_{tk}", use_container_width=True, disabled=desact_venda):
                     receita = qtd_op * preco
                     st.session_state["sim_saldo_caixa"] += receita
                     cart[tk]["qtd"] -= qtd_op
@@ -2309,15 +2298,6 @@ elif pagina == "🧪 Simulador de Investimento":
                         "Qtd": qtd_op, "Preço Unit.": kz(preco),
                         "Total": kz(receita)})
                     st.rerun()
-
-            # ── rodapé tabela ───────────────────────────────────────
-            render_html("""
-            <div style="background:#F6EFF2; border-radius:0 0 8px 8px;
-                        padding:8px 12px; font-size:0.75rem; color:#7C1F3E;">
-                ⚠️ Preços fictícios actualizados manualmente pelo administrador.
-                Não são cotações em tempo real da BODIVA.
-            </div>
-            """)
 
         st.divider()
         st.subheader("📜 Histórico de Ordens")
@@ -2335,21 +2315,18 @@ elif pagina == "🧪 Simulador de Investimento":
                     del st.session_state[k]
             st.rerun()
 
-    # ══════════════════════════════════════════════════════════════
-    # ABA 2 — CARTEIRA VIRTUAL
-    # ══════════════════════════════════════════════════════════════
     with aba_carteira:
         st.subheader("💼 Composição da Minha Carteira Virtual")
         cart        = st.session_state["sim_carteira"]
         saldo_caixa = st.session_state["sim_saldo_caixa"]
 
         if not cart:
-            st.info("A tua carteira virtual está vazia. Vai ao Home Broker e compra as tuas primeiras acções!")
+            st.info("A tua carteira virtual está vazia.")
         else:
             linhas_cart = []
             valor_total_carteira = saldo_caixa
             for tk_c, dados_c in cart.items():
-                preco_act = float(df_activos_sim[df_activos_sim["ticker"] == tk_c]["preco"].values[0])                             if tk_c in df_activos_sim["ticker"].values else dados_c["preco_medio"]
+                preco_act = float(df_activos_sim[df_activos_sim["ticker"] == tk_c]["preco"].values[0]) if tk_c in df_activos_sim["ticker"].values else dados_c["preco_medio"]
                 val_act  = dados_c["qtd"] * preco_act
                 val_custo= dados_c["qtd"] * dados_c["preco_medio"]
                 pl       = val_act - val_custo
@@ -2365,21 +2342,14 @@ elif pagina == "🧪 Simulador de Investimento":
                     "P&L":           kz(pl),
                     "P&L (%)":       f"{pl_pct:+.2f}%",
                 })
-
             st.dataframe(pd.DataFrame(linhas_cart), hide_index=True)
-
             col_r1, col_r2, col_r3, col_r4 = st.columns(4)
             col_r1.metric("Saldo em Caixa",        kz(saldo_caixa))
             col_r2.metric("Valor em Acções",        kz(valor_total_carteira - saldo_caixa))
             col_r3.metric("Patrimônio Total",       kz(valor_total_carteira))
             var_t = valor_total_carteira - 3_000_000
-            col_r4.metric("Ganho/Perda Total",      kz(var_t),
-                           delta=f"{var_t/3_000_000*100:+.2f}%")
-            nota_indicador("<b>P&L</b> = diferença entre o preço que pagaste e o preço actual de mercado (ganho/perda não realizado).")
+            col_r4.metric("Ganho/Perda Total",      kz(var_t), delta=f"{var_t/3_000_000*100:+.2f}%")
 
-    # ══════════════════════════════════════════════════════════════
-    # ABA 3 — JUROS COMPOSTOS
-    # ══════════════════════════════════════════════════════════════
     with aba_compostos:
         st.subheader("📈 Simulador de Juros Compostos")
         col1, col2 = st.columns(2)
@@ -2412,11 +2382,6 @@ elif pagina == "🧪 Simulador de Investimento":
         col_b.metric("Total Investido",       kz(total_inv))
         col_c.metric("Juros Compostos",       kz(saldo_c - total_inv))
         st.bar_chart(df_sim[["Saldo Nominal", "Total Investido"]])
-        saldo_real_f = df_sim["Saldo Real"].iloc[-1]
-        st.caption(f"Saldo final em poder de compra de hoje (inflação {inflacao_sim:.1f}%/ano): {kz(saldo_real_f)}")
-        nota_indicador(f"Com inflação de {inflacao_sim:.1f}%/ano, o teu saldo nominal de {kz(saldo_c)} equivale apenas a {kz(saldo_real_f)} em poder de compra actual.")
-        st.caption("Simulação educativa. Não constitui aconselhamento de investimento.")
-        botoes_partilha(f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo_c)} — Clube de Investimento APPO")
 
 # =========================================================
 # PÁGINA: REGRA 50/30/20
@@ -2472,7 +2437,7 @@ elif pagina == "📚 Biblioteca Educativa":
             with st.expander(f"{ICONES_CATEGORIA.get(artigo['categoria'], '📄')} {artigo['titulo']}", key=f"artigo_exp_{artigo['id']}"):
                 banner_categoria(artigo["categoria"])
                 st.caption(f"{tx['bib_publicado']} {artigo['criado_em']}")
-                st.markdown(artigo["conteudo"])   # conteúdo mantém-se em PT conforme acordado
+                st.markdown(artigo["conteudo"])
 
 # =========================================================
 # PÁGINA: ADESÃO DE SÓCIOS
@@ -2505,7 +2470,7 @@ elif pagina == "ℹ️ Sobre Nós & Estatutos":
     st.subheader(tx["sobre_quem_somos"])
     st.markdown(tx["sobre_quem_texto"])
     st.subheader(tx["sobre_principios"])
-    st.markdown(TEXTO_PRINCIPIOS)   # mantém-se em PT
+    st.markdown(TEXTO_PRINCIPIOS)
     st.subheader(tx["sobre_estatutos"])
     st.markdown(tx["sobre_estatutos_texto"])
     st.caption(tx["sobre_nota"])
@@ -2539,15 +2504,14 @@ elif pagina == "🔐 Painel do Administrador":
 
     with aba_activos:
         st.subheader("Editar Cotações & Activos")
-        st.caption("Cada vez que guardas, o Índice APPO é recalculado e um novo ponto é registado no histórico.")
+        st.caption("Cada vez que guardas, a variação percentual é calculada automaticamente, o Índice APPO é recalculado e é registado um novo ponto no histórico.")
         df_activos_admin = obter_activos()
         df_editado = st.data_editor(
-            df_activos_admin[["ticker", "nome", "tipo", "preco", "variacao"]], num_rows="dynamic", key="editor_activos",
+            df_activos_admin[["ticker", "nome", "tipo", "preco"]], num_rows="dynamic", key="editor_activos",
             column_config={
                 "ticker": st.column_config.TextColumn("Ticker", max_chars=12),
                 "nome": "Nome do activo", "tipo": "Tipo",
-                "preco":    st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
-                "variacao": st.column_config.NumberColumn("Variação (%)", step=0.01, format="%.2f"),
+                "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
             })
         if st.button("Guardar alterações às cotações"):
             substituir_activos(df_editado)
