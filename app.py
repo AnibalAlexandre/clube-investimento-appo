@@ -111,7 +111,7 @@ TRADUCOES = {
             ("Investimentos",      "Carteira de acções e instrumentos financeiros cotados na BODIVA","AOA"),
             ("Reservas",           "Fundo de estabilização e liquidez para novas oportunidades",    "AOA"),
         ],
-        "cont_patrimonio_metric": "Património Total do Clube (Realizado + Investimentos + Reservas)",
+        "cont_patrimonio_metric": "Património Total do Clube",
         "cont_ultima_actualizacao": "Última actualização:",
         # ── histórico ────────────────────────────────────
         "hist_hero_sub": "Evolução do património do Clube ao longo do tempo, e exportação de relatórios",
@@ -305,7 +305,7 @@ TRADUCOES = {
             ("Investments",         "Portfolio of shares and financial instruments listed on BODIVA","AOA"),
             ("Reserves",            "Stabilisation and liquidity fund for new opportunities",      "AOA"),
         ],
-        "cont_patrimonio_metric": "Club Total Net Assets (Paid-up + Investments + Reserves)",
+        "cont_patrimonio_metric": "Club Total Net Assets",
         "cont_ultima_actualizacao": "Last updated:",
         "hist_hero_sub": "Club asset evolution over time and report exports",
         "hist_poucos_pontos": "Not enough data points yet. This chart will fill in over time.",
@@ -488,7 +488,7 @@ TRADUCOES = {
             ("Investissements",    "Portefeuille d'actions et instruments financiers cotés BODIVA", "AOA"),
             ("Réserves",           "Fonds de stabilisation et de liquidité pour nouvelles opportunités","AOA"),
         ],
-        "cont_patrimonio_metric": "Actif Net Total du Club (Libéré + Investissements + Réserves)",
+        "cont_patrimonio_metric": "Actif Net Total du Club",
         "cont_ultima_actualizacao": "Dernière mise à jour :",
         "hist_hero_sub": "Évolution du patrimoine du Club dans le temps et exports de rapports",
         "hist_poucos_pontos": "Pas encore assez de points de données. Ce graphique se précisera avec le temps.",
@@ -671,7 +671,7 @@ TRADUCOES = {
             ("Inversiones",           "Cartera de acciones e instrumentos financieros en BODIVA",   "AOA"),
             ("Reservas",              "Fondo de estabilización y liquidez para nuevas oportunidades","AOA"),
         ],
-        "cont_patrimonio_metric": "Patrimonio Neto Total del Club (Desembolsado + Inversiones + Reservas)",
+        "cont_patrimonio_metric": "Patrimonio Neto Total del Club",
         "cont_ultima_actualizacao": "Última actualización:",
         "hist_hero_sub": "Evolución del patrimonio del Club a lo largo del tiempo y exportación de informes",
         "hist_poucos_pontos": "Aún hay pocos puntos de datos. Este gráfico irá tomando forma con el tiempo.",
@@ -854,7 +854,7 @@ TRADUCOES = {
             ("投资",     "BODIVA上市的股票与金融工具组合","AOA"),
             ("储备",     "稳定基金及新机会流动性基金", "AOA"),
         ],
-        "cont_patrimonio_metric": "俱乐部总净资产（实缴 + 投资 + 储备）",
+        "cont_patrimonio_metric": "俱乐部总净资产",
         "cont_ultima_actualizacao": "最后更新：",
         "hist_hero_sub": "俱乐部资产随时间的变化及报告导出",
         "hist_poucos_pontos": "数据点尚少，图表将随时间逐步完善。",
@@ -1516,10 +1516,9 @@ def _pdf_secao(pdf, titulo):
 def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     tx  = t()
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=18)
-    pdf.set_left_margin(25)
-    pdf.set_right_margin(15)
-    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page("L")  # Landscape
+    pdf.set_margins(left=20, top=30, right=30)  # esq 2cm, sup 3cm, dir 3cm
     pdf.set_fill_color(124, 31, 62)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 18)
@@ -1555,11 +1554,13 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     _pdf_secao(pdf, "CARTEIRA DE INVESTIMENTOS DO CLUBE")
     # Cruzar activos cotados com avaliações para obter qtd e preco aquisição
     df_aval_pdf = obter_avaliacoes()
+    # Dados reais da carteira do Clube — confirmados pelo BFA Capital Markets (29/09/2026)
+    # Preço aquisição = Valor aquisição / Quantidade
     CARTEIRA_REAL = {
-        "UNTLAAAA": {"nome": "UNITEL", "qtd": 38, "preco_aq": 29996.0},
-        "SBAOAAAA": {"nome": "Standard Bank Angola", "qtd": 16, "preco_aq": 50000.0},
-        "BAIAAAAA": {"nome": "BAI", "qtd": 4, "preco_aq": 90507.87},
-        "BFAAAAAA": {"nome": "BFA", "qtd": 4, "preco_aq": 96541.73},
+        "UNTLAAAA": {"nome": "UNITEL ACCAO",   "qtd": 38, "val_aq": 1311562.53},
+        "SBAOAAAA": {"nome": "STANDARD ACCAO", "qtd": 16, "val_aq":  806794.40},
+        "BAIAAAAA": {"nome": "BAI ACCAO",       "qtd":  4, "val_aq":  362031.48},
+        "BFAAAAAA": {"nome": "BFA ACCAO",       "qtd":  4, "val_aq":  386166.92},
     }
     df_cotacoes_pdf = df_activos.copy()
     linhas_carteira = []
@@ -1567,12 +1568,12 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     mais_valias_total = 0.0
     for ticker_r, dados_r in CARTEIRA_REAL.items():
         row_cot = df_cotacoes_pdf[df_cotacoes_pdf["ticker"] == ticker_r]
-        preco_act = float(row_cot["preco"].values[0]) if not row_cot.empty else dados_r["preco_aq"]
+        preco_act = float(row_cot["preco"].values[0]) if not row_cot.empty else 0.0
         var_dia   = float(row_cot["variacao"].values[0]) if not row_cot.empty else 0.0
         qtd       = dados_r["qtd"]
-        preco_aq  = dados_r["preco_aq"]
-        val_aq    = qtd * preco_aq
-        val_act   = qtd * preco_act
+        val_aq    = dados_r["val_aq"]
+        preco_aq  = val_aq / qtd if qtd else 0
+        val_act   = qtd * preco_act if preco_act else val_aq
         mais_valia= val_act - val_aq
         mais_valia_pct = (mais_valia / val_aq * 100) if val_aq else 0
         valor_total_carteira += val_act
@@ -1592,7 +1593,8 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         # Cabeçalho tabela
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_fill_color(236, 222, 227)
-        W = [14, 38, 10, 24, 24, 24, 24, 22, 0]
+        # Landscape útil ~237mm (297 - 30 margem dir - 20 margem esq - 10 buffer)
+        W = [22, 52, 12, 32, 32, 38, 38, 32, 0]
         headers = ["Ticker","Nome","Qtd","P. Aquis. (Kz)","P. Actual (Kz)","V. Aquis. (Kz)","V. Actual (Kz)","Mais-Valia","Var. %"]
         for h, w in zip(headers[:-1], W[:-1]):
             pdf.cell(w, 7, h, border="B", fill=True, ln=False, align="C")
@@ -1639,11 +1641,13 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         pdf.set_font("Helvetica","B",9)
         pdf.set_fill_color(236, 222, 227)
         mv_total_pct = (mais_valias_total / (valor_total_carteira - mais_valias_total) * 100) if (valor_total_carteira - mais_valias_total) else 0
-        pdf.cell(134, 7, "TOTAL DA CARTEIRA", border="B", fill=True, ln=False, align="R")
-        pdf.cell(24,  7, kz(valor_total_carteira), border="B", fill=True, align="R", ln=False)
+        # W = [22,52,12,32,32,38,38,32,0] — soma fixas = 260, ultima=0
+        soma_fixas = 22+52+12+32+32+38  # = 188
+        pdf.cell(soma_fixas, 7, "TOTAL DA CARTEIRA", border="B", fill=True, ln=False, align="R")
+        pdf.cell(38, 7, kz(valor_total_carteira), border="B", fill=True, align="R", ln=False)
         cor_tot = (22,163,74) if mais_valias_total >= 0 else (220,38,38)
         pdf.set_text_color(*cor_tot)
-        pdf.cell(22,  7, kz(mais_valias_total), border="B", fill=True, align="R", ln=False)
+        pdf.cell(32,  7, kz(mais_valias_total), border="B", fill=True, align="R", ln=False)
         pdf.cell(0,   7, f"{mv_total_pct:+.2f}%", border="B", fill=True, align="R", ln=True)
         pdf.set_text_color(0,0,0)
     _pdf_secao(pdf, "MOVIMENTOS RECENTES")
@@ -1823,7 +1827,7 @@ if pagina == "🏠 Início & Análises":
     hero("Clube de Investimento APPO", tx["inicio_hero_sub"])
 
     resumo = obter_resumo_patrimonial()
-    total_patrimonio = resumo["capital_realizado"] + resumo["investimentos"] + resumo["reservas"]
+    total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são parte do realizado
 
     col1, col2 = st.columns(2)
     col1.metric(tx["inicio_capital_subscrito"], kz(resumo["capital_subscrito"]))
@@ -1929,7 +1933,7 @@ elif pagina == "💰 Contabilidade & Finanças":
     df_resumo = pd.DataFrame([{cols_df[0]: r[0], cols_df[1]: r[1], cols_df[2]: m, cols_df[3]: r[2]}
                                for r, m in zip(rows_df, montantes)])
     st.dataframe(df_resumo, hide_index=True)
-    total_patrimonio = resumo["capital_realizado"] + resumo["investimentos"] + resumo["reservas"]
+    total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são subdivisões do realizado
     st.metric(tx["cont_patrimonio_metric"], kz(total_patrimonio))
     st.caption(f"{tx['cont_ultima_actualizacao']} {resumo['actualizado_em']}")
 
