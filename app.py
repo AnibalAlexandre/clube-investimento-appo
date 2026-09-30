@@ -1322,6 +1322,7 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS movimentos (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, descricao TEXT, montante NUMERIC NOT NULL, data_movimento DATE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS activos (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, tipo TEXT NOT NULL, preco NUMERIC NOT NULL, variacao NUMERIC NOT NULL DEFAULT 0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS ticker TEXT NOT NULL DEFAULT ''")
+    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_anterior NUMERIC NOT NULL DEFAULT 0")
     executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS socios (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT, contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS premissas_macro (id INTEGER PRIMARY KEY CHECK (id = 1), inflacao NUMERIC NOT NULL DEFAULT 0.135, taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18, premio_risco NUMERIC NOT NULL DEFAULT 0.055, beta_banca NUMERIC NOT NULL DEFAULT 1.0, beta_telecom NUMERIC NOT NULL DEFAULT 0.9, beta_outros NUMERIC NOT NULL DEFAULT 1.0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
@@ -1439,16 +1440,25 @@ def obter_historico_indice() -> pd.DataFrame:
     return consultar_df("SELECT indice_variacao, registado_em FROM historico_indice_mercado ORDER BY registado_em")
 
 def substituir_activos(df: pd.DataFrame):
+    # Guardar preços anteriores antes de apagar
+    df_anterior = obter_activos()
+    precos_anteriores = {str(r["ticker"]).strip().upper(): float(r["preco"]) for _, r in df_anterior.iterrows()}
     executar("DELETE FROM activos")
     for _, linha in df.iterrows():
         nome = str(linha.get("nome", "")).strip()
         if not nome:
             continue
-        tipo     = str(linha.get("tipo", "Ação")).strip() or "Ação"
-        preco    = float(linha.get("preco", 0) or 0)
-        variacao = float(linha.get("variacao", 0) or 0)
-        ticker   = str(linha.get("ticker", "") or "").strip().upper()
-        executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco, variacao, ticker))
+        tipo         = str(linha.get("tipo", "Ação")).strip() or "Ação"
+        preco        = float(linha.get("preco", 0) or 0)
+        ticker       = str(linha.get("ticker", "") or "").strip().upper()
+        preco_ant    = precos_anteriores.get(ticker, preco)
+        # Calcular variação automaticamente face ao preço anterior
+        if preco_ant and preco_ant != 0:
+            variacao = round((preco - preco_ant) / preco_ant * 100, 2)
+        else:
+            variacao = float(linha.get("variacao", 0) or 0)
+        executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker, preco_anterior) VALUES (%s, %s, %s, %s, %s, %s)",
+                 (nome, tipo, preco, variacao, ticker, preco_ant))
     registar_historico_indice(calcular_indice_mercado(obter_activos()))
 
 def obter_favoritos(conta_id: int) -> set:
@@ -1554,8 +1564,7 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     _pdf_secao(pdf, "CARTEIRA DE INVESTIMENTOS DO CLUBE")
     # Cruzar activos cotados com avaliações para obter qtd e preco aquisição
     df_aval_pdf = obter_avaliacoes()
-    # Dados reais da carteira do Clube — confirmados pelo BFA Capital Markets (29/09/2026)
-    # Preço aquisição = Valor aquisição / Quantidade
+    # Carteira real do Clube — BFA Capital Markets (30/09/2026)
     CARTEIRA_REAL = {
         "UNTLAAAA": {"nome": "UNITEL ACCAO",   "qtd": 38, "val_aq": 1311562.53},
         "SBAOAAAA": {"nome": "STANDARD ACCAO", "qtd": 16, "val_aq":  806794.40},
@@ -1566,8 +1575,10 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     linhas_carteira = []
     valor_total_carteira = 0.0
     mais_valias_total = 0.0
+    # Limpar tickers da BD (podem vir como "UNTLAAAA" ou campo nome pode ter variações)
+    df_cotacoes_pdf["ticker_clean"] = df_cotacoes_pdf["ticker"].str.strip().str.upper()
     for ticker_r, dados_r in CARTEIRA_REAL.items():
-        row_cot = df_cotacoes_pdf[df_cotacoes_pdf["ticker"] == ticker_r]
+        row_cot = df_cotacoes_pdf[df_cotacoes_pdf["ticker_clean"] == ticker_r.strip().upper()]
         preco_act = float(row_cot["preco"].values[0]) if not row_cot.empty else 0.0
         var_dia   = float(row_cot["variacao"].values[0]) if not row_cot.empty else 0.0
         qtd       = dados_r["qtd"]
@@ -2172,7 +2183,7 @@ elif pagina == "🧪 Simulador de Investimento":
         valor_acoes   = sum(
             dados["qtd"] * float(df_activos_sim[df_activos_sim["ticker"] == tk]["preco"].values[0])
             for tk, dados in cart.items()
-            if tk in df_activos_sim["ticker"].values
+            if tk in df_activos_sim["ticker"].str.strip().str.upper().values
         )
         patrimonio    = saldo_caixa + valor_acoes
         var_total     = patrimonio - 3_000_000
@@ -2541,14 +2552,19 @@ elif pagina == "🔐 Painel do Administrador":
         st.subheader("Editar Cotações & Activos")
         st.caption("Cada vez que guardas, o Índice APPO é recalculado e um novo ponto é registado no histórico.")
         df_activos_admin = obter_activos()
+        # Mostrar variação actual (read-only) para referência
+        df_admin_display = df_activos_admin[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
+        df_admin_display = df_admin_display.rename(columns={"variacao": "Var.% (auto)"})
+        df_admin_display["Var.% (auto)"] = df_admin_display["Var.% (auto)"].apply(pct_bruto)
+        st.caption("A variação % é calculada automaticamente ao guardar. Edita apenas o preço.")
         df_editado = st.data_editor(
-            df_activos_admin[["ticker", "nome", "tipo", "preco", "variacao"]], num_rows="dynamic", key="editor_activos",
+            df_activos_admin[["ticker", "nome", "tipo", "preco"]], num_rows="dynamic", key="editor_activos",
             column_config={
                 "ticker": st.column_config.TextColumn("Ticker", max_chars=12),
                 "nome": "Nome do activo", "tipo": "Tipo",
-                "preco":    st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
-                "variacao": st.column_config.NumberColumn("Variação (%)", step=0.01, format="%.2f"),
+                "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
             })
+        st.dataframe(df_admin_display[["ticker", "Var.% (auto)"]], hide_index=True)
         if st.button("Guardar alterações às cotações"):
             substituir_activos(df_editado)
             st.success("Cotações e Índice APPO actualizados com sucesso.")
