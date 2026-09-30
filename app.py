@@ -33,6 +33,7 @@ def render_html(html: str):
 # =========================================================
 # IMAGENS
 # =========================================================
+# Painel de cotações tipo Bloomberg — azul néon, gráficos de velas, dados vibrantes (Pexels CC0)
 IMG_SKYLINE = "https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&cs=tinysrgb&w=1600"
 IMG_GRAFICO = "https://images.pexels.com/photos/6802042/pexels-photo-6802042.jpeg?auto=compress&cs=tinysrgb&w=1600"
 IMG_REUNIAO = "https://images.pexels.com/photos/7567443/pexels-photo-7567443.jpeg?auto=compress&cs=tinysrgb&w=1600"
@@ -43,12 +44,15 @@ IMAGENS_CATEGORIA = {"Institucional": IMG_REUNIAO, "Educação": IMG_LIVROS, "An
 # TRADUÇÕES COMPLETAS
 # =========================================================
 TRADUCOES = {
+    # ─────────────────────────────────────────────────────
     "Português": {
+        # ── sistema / login ──────────────────────────────
         "tagline": "Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios",
         "login_titulo": "Acesso reservado a sócios",
         "email": "E-mail", "password": "Palavra-passe", "entrar": "Entrar",
         "erro_login": "E-mail ou palavra-passe incorrectos. Contacta um administrador do Clube.",
         "sessao": "Sessão", "terminar_sessao": "Terminar sessão",
+        # ── navegação ────────────────────────────────────
         "nav_map": {
             "🏠 Início & Análises":         "🏠 Início & Análises",
             "📈 Cotações & Activos":         "📈 Cotações & Activos",
@@ -60,9 +64,10 @@ TRADUCOES = {
             "🧮 Regra 50/30/20":            "🧮 Regra 50/30/20",
             "📚 Biblioteca Educativa":       "📚 Biblioteca Educativa",
             "🧾 Adesão de Sócios":          "🧾 Adesão de Sócios",
-            "ℹ️️ Sobre Nós & Estatutos":     "ℹ️ Sobre Nós & Estatutos",
+            "ℹ️ Sobre Nós & Estatutos":     "ℹ️ Sobre Nós & Estatutos",
             "🔐 Painel do Administrador":   "🔐 Painel do Administrador",
         },
+        # ── página início ────────────────────────────────
         "inicio_hero_sub": "Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios",
         "inicio_capital_subscrito": "Capital Subscrito",
         "inicio_capital_realizado": "Capital Realizado",
@@ -76,6 +81,7 @@ TRADUCOES = {
         "inicio_distribuicao_cats": ["Capital Realizado", "Investimentos", "Reservas"],
         "inicio_cotacoes_destaque": "📌 Cotações em destaque",
         "inicio_capa_texto": "Disciplina, transparência e visão de longo prazo",
+        # ── cotações ────────────────────────────────────
         "cot_hero_sub": "Instrumentos financeiros cotados na BODIVA acompanhados pelo Clube",
         "cot_indice_titulo": "📊 Índice APPO — cotação média do mercado",
         "cot_indice_metric": "Variação média de hoje",
@@ -96,6 +102,7 @@ TRADUCOES = {
         "cot_comparacao": "Comparação de preços",
         "cot_preco_kz": "Preço (Kz)",
         "cot_tabela_cols": {"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Preço", "variacao": "Variação", "mercado": "Mercado"},
+        # ── contabilidade ────────────────────────────────
         "cont_hero_sub": "Resumo Contabilístico e Patrimonial do Clube",
         "cont_df_cols": ["Categoria", "Descrição", "Montante", "Moeda"],
         "cont_df_rows": [
@@ -106,6 +113,7 @@ TRADUCOES = {
         ],
         "cont_patrimonio_metric": "Património Total do Clube",
         "cont_ultima_actualizacao": "Última actualização:",
+        # ── histórico ────────────────────────────────────
         "hist_hero_sub": "Evolução do património do Clube ao longo do tempo, e exportação de relatórios",
         "hist_poucos_pontos": "Ainda há poucos pontos de histórico. Este gráfico vai ganhando forma com o tempo.",
         "hist_caption": "Cada ponto representa uma actualização do resumo patrimonial. Eixo vertical em Kwanzas (Kz).",
@@ -117,12 +125,16 @@ TRADUCOES = {
         "hist_exportar": "Exportar relatório",
         "hist_gerar_pdf": "Gerar relatório em PDF",
         "hist_descarregar_pdf": "Descarregar relatório em PDF",
+        # ── avaliação ────────────────────────────────────
         "aval_hero_sub": "Múltiplos e valor justo (DDM) das empresas cotadas, com dados reais do Clube",
-        "aval_empresa": "Empresa", "aval_sector": "Sector", "aval_cap_mercado": "Capitalização de mercado:", "aval_preco": "Preço Actual",
+        "aval_empresa": "Empresa",
+        "aval_sector": "Sector",
+        "aval_cap_mercado": "Capitalização de mercado:",
+        "aval_preco": "Preço Actual",
         "aval_pe": "P/E", "aval_pbv": "P/BV", "aval_dy": "Dividend Yield",
         "aval_nota1": "<b>P/E</b> = anos de lucro que pagas pelo preço. <b>P/BV</b> = preço face ao valor contabilístico. <b>Dividend Yield</b> = retorno anual em dividendos.",
         "aval_vj": "Valor Justo (DDM)", "aval_upside": "Upside / Downside", "aval_ke": "Custo de Capital (Ke)",
-        "aval_nota2": "<b>Valor Justo (DDM)</b> é uma estimativa. <b>Upside/Downside</b> compara com o mercado. <b>Ke</b> = retorno mínimo exigido pelo risco do sector.",
+        "aval_nota2": "<b>Valor Justo (DDM)</b> é uma estimativa. <b>Upside/Downside</b> compara com o mercado. <b>Ke</b> é o retorno mínimo exigido pelo risco do sector.",
         "aval_subvalorizado": "O modelo DDM sugere uma acção potencialmente subvalorizada face ao mercado.",
         "aval_sobrevalorizado": "O modelo DDM sugere uma acção potencialmente sobrevalorizada face ao mercado.",
         "aval_justo": "O modelo DDM sugere que o preço de mercado está próximo do valor estimado.",
@@ -136,39 +148,68 @@ TRADUCOES = {
         "aval_comp_cols": {"Empresa": "Empresa", "Sector": "Sector", "P/E": "P/E", "P/BV": "P/BV", "ROE": "ROE", "DY Nominal": "DY Nominal", "Upside DDM": "Upside DDM"},
         "aval_descarregar_comp": "⬇️ Descarregar comparação sectorial em CSV",
         "aval_sem_dados": "Ainda não existem avaliações registadas.",
+        # ── conversor ────────────────────────────────────
         "conv_hero_sub": "Taxas de câmbio automáticas, actualizadas diariamente, com o Kwanza incluído",
-        "conv_de": "De", "conv_para": "Para", "conv_valor": "Valor", "conv_equivale": "equivale a",
-        "conv_taxa": "Taxa:", "conv_actualizado": "Actualizado:",
+        "conv_de": "De", "conv_para": "Para", "conv_valor": "Valor",
+        "conv_equivale": "equivale a",
+        "conv_taxa": "Taxa:",
+        "conv_actualizado": "Actualizado:",
         "conv_erro": "Esta moeda não está disponível na fonte de dados neste momento.",
         "conv_aviso": "Não foi possível obter as taxas de câmbio neste momento. Tenta novamente dentro de instantes.",
-        "conv_tabela_titulo": "Tabela rápida (a partir de 1 Kz)", "conv_tabela_col": "1 Kz equivale a", "conv_tabela_indisponivel": "Tabela indisponível de momento.",
+        "conv_tabela_titulo": "Tabela rápida (a partir de 1 Kz)",
+        "conv_tabela_col": "1 Kz equivale a",
+        "conv_tabela_indisponivel": "Tabela indisponível de momento.",
         "conv_historico_titulo": "📈 Tendência do Kwanza (histórico próprio, acumulado automaticamente)",
-        "conv_historico_select": "Ver tendência de", "conv_historico_label": "1 AOA em",
+        "conv_historico_select": "Ver tendência de",
+        "conv_historico_label": "1 AOA em",
         "conv_historico_info": "Ainda há poucos dias de histórico acumulado. Volta aqui em dias diferentes para veres a tendência a formar-se sozinha.",
         "conv_historico_caption": "Este histórico é construído automaticamente pela própria app — sem ninguém precisar de inserir nada — sempre que alguém abre esta página num novo dia.",
+        # ── simulador ────────────────────────────────────
         "sim_hero_sub": "Projecta o crescimento do teu investimento ao longo do tempo, com juros compostos",
-        "sim_valor_inicial": "Valor inicial (Kz)", "sim_contrib_mensal": "Contribuição mensal (Kz)", "sim_taxa": "Taxa de retorno anual esperada (%)",
-        "sim_anos": "Prazo (anos)", "sim_inflacao": "Inflação anual assumida (%)", "sim_saldo_nominal": "Saldo Final (nominal)",
-        "sim_total_investido": "Total Investido", "sim_juros": "Juros Compostos Ganhos",
+        "sim_valor_inicial": "Valor inicial (Kz)",
+        "sim_contrib_mensal": "Contribuição mensal (Kz)",
+        "sim_taxa": "Taxa de retorno anual esperada (%)",
+        "sim_anos": "Prazo (anos)",
+        "sim_inflacao": "Inflação anual assumida (%)",
+        "sim_saldo_nominal": "Saldo Final (nominal)",
+        "sim_total_investido": "Total Investido",
+        "sim_juros": "Juros Compostos Ganhos",
         "sim_chart_cols": {"Saldo Nominal": "Saldo Nominal", "Total Investido": "Total Investido"},
-        "sim_caption1": "Saldo final em poder de compra de hoje (descontada a inflação assumida de", "sim_caption2": "%/ano):",
+        "sim_caption1": "Saldo final em poder de compra de hoje (descontada a inflação assumida de",
+        "sim_caption2": "%/ano):",
         "sim_disclaimer": "Simulação educativa com juros compostos mensais constantes — os retornos reais dos mercados variam e não são garantidos. Não constitui aconselhamento de investimento.",
         "sim_partilha": "Simulei {vi} + {cm}/mês durante {a} anos a {t}%/ano = {sf} — Clube de Investimento APPO",
+        # ── regra 50/30/20 ───────────────────────────────
         "r50_hero_sub": "Princípio nº 8: 50% Consumo · 30% Investimento · 20% Entesouramento",
-        "r50_rendimento": "Rendimento mensal total (Kz)", "r50_alocacao": "Alocação recomendada",
+        "r50_rendimento": "Rendimento mensal total (Kz)",
+        "r50_alocacao": "Alocação recomendada",
         "r50_consumo": "Consumo (50%)", "r50_investimento": "Investimento (30%)", "r50_entesouramento": "Entesouramento (20%)",
         "r50_comparar_titulo": "Compara com os teus gastos reais (opcional)",
-        "r50_real_consumo": "Gasto real — Consumo (Kz)", "r50_real_investimento": "Gasto real — Investimento (Kz)", "r50_real_entesouramento": "Entesouramento real (Kz)",
-        "r50_comparar_btn": "Comparar", "r50_resultado": "#### Resultado da comparação",
+        "r50_real_consumo": "Gasto real — Consumo (Kz)",
+        "r50_real_investimento": "Gasto real — Investimento (Kz)",
+        "r50_real_entesouramento": "Entesouramento real (Kz)",
+        "r50_comparar_btn": "Comparar",
+        "r50_resultado": "#### Resultado da comparação",
         "r50_aviso": "O teu entesouramento real está abaixo dos 20% recomendados pelo princípio do Clube.",
         "r50_sucesso": "Estás a cumprir, ou a superar, a meta de 20% de entesouramento.",
+        # ── biblioteca ───────────────────────────────────
         "bib_hero_sub": "Princípios do Clube e artigos sobre o mercado de capitais angolano",
-        "bib_sem_artigos": "Ainda não existem artigos publicados.", "bib_filtrar": "Filtrar por categoria", "bib_todas": "Todas", "bib_publicado": "Publicado em",
+        "bib_sem_artigos": "Ainda não existem artigos publicados.",
+        "bib_filtrar": "Filtrar por categoria",
+        "bib_todas": "Todas",
+        "bib_publicado": "Publicado em",
+        # ── adesão ───────────────────────────────────────
         "ades_hero_sub": "Preenche o formulário para solicitar a tua adesão ao Clube de Investimento APPO",
-        "ades_nome": "Nome completo *", "ades_email": "E-mail", "ades_telefone": "Telefone / WhatsApp", "ades_bi": "Número do Bilhete de Identidade",
-        "ades_contribuicao": "Contribuição inicial pretendida (Kz)", "ades_aceite": "Declaro que li e aceite os Estatutos do Clube de Investimento APPO *",
-        "ades_btn": "Submeter pedido de adesão", "ades_erro": "Preenche o nome completo e aceita os Estatutos para submeter o pedido.",
+        "ades_nome": "Nome completo *",
+        "ades_email": "E-mail",
+        "ades_telefone": "Telefone / WhatsApp",
+        "ades_bi": "Número do Bilhete de Identidade",
+        "ades_contribuicao": "Contribuição inicial pretendida (Kz)",
+        "ades_aceite": "Declaro que li e aceite os Estatutos do Clube de Investimento APPO *",
+        "ades_btn": "Submeter pedido de adesão",
+        "ades_erro": "Preenche o nome completo e aceita os Estatutos para submeter o pedido.",
         "ades_sucesso": "Pedido de adesão submetido com sucesso! Um administrador do Clube irá entrar em contacto.",
+        # ── sobre nós ────────────────────────────────────
         "sobre_hero_sub": "A missão, os princípios e o enquadramento estatutário do Clube",
         "sobre_quem_somos": "Quem somos",
         "sobre_quem_texto": "O **Clube de Investimento APPO** é uma associação de investidores angolanos que junta capital de forma colectiva para investir no mercado de capitais nacional, através da Bolsa de Dívida e Valores de Angola (BODIVA).",
@@ -182,16 +223,27 @@ TRADUCOES = {
 - **Distribuição de resultados:** proporcional à quota de capital de cada sócio.
 """,
         "sobre_nota": "Nota interna: modelo de referência, a substituir pelos Estatutos formalmente aprovados e registados do Clube.",
+        # ── partilha ─────────────────────────────────────
         "partilha_wa": "💬 WhatsApp", "partilha_tw": "𝕏 X / Twitter", "partilha_fb": "📘 Facebook",
         "conv_partilha": "{v} {de} = {r} {para} — Clube de Investimento APPO",
+        # ── pdf ──────────────────────────────────────────
         "pdf_titulo": "Clube de Investimento APPO",
         "pdf_gerado": "Relatorio gerado em",
         "pdf_resumo": "Resumo Patrimonial",
-        "pdf_subscrito": "Capital Subscrito:", "pdf_realizado": "Capital Realizado:", "pdf_investimentos": "Investimentos:", "pdf_reservas": "Reservas:", "pdf_total": "Total:",
-        "pdf_activos": "Activos em Carteira", "pdf_movimentos": "Movimentos Recentes", "pdf_sem_mov": "Sem movimentos registados.",
+        "pdf_subscrito": "Capital Subscrito:",
+        "pdf_realizado": "Capital Realizado:",
+        "pdf_investimentos": "Investimentos:",
+        "pdf_reservas": "Reservas:",
+        "pdf_total": "Total:",
+        "pdf_activos": "Activos em Carteira",
+        "pdf_movimentos": "Movimentos Recentes",
+        "pdf_sem_mov": "Sem movimentos registados.",
         "pdf_nome_ficheiro": "relatorio_appo_{data}.pdf",
+        # ── barómetro (hero) ─────────────────────────────
         "bodiva_badge": "🇦🇴 BODIVA · Kwanzas (Kz)",
     },
+
+    # ─────────────────────────────────────────────────────
     "English": {
         "tagline": "Official BODIVA Quotes, Accounting and Membership Portal",
         "login_titulo": "Members-only access",
@@ -213,22 +265,37 @@ TRADUCOES = {
             "🔐 Painel do Administrador":   "🔐 Admin Panel",
         },
         "inicio_hero_sub": "Official BODIVA Quotes, Accounting and Membership Portal",
-        "inicio_capital_subscrito": "Subscribed Capital", "inicio_capital_realizado": "Paid-up Capital", "inicio_pct_subscrito": "% of subscribed",
-        "inicio_investimentos": "Investments", "inicio_reservas": "Reserves", "inicio_patrimonio_total": "Total Net Assets",
+        "inicio_capital_subscrito": "Subscribed Capital",
+        "inicio_capital_realizado": "Paid-up Capital",
+        "inicio_pct_subscrito": "% of subscribed",
+        "inicio_investimentos": "Investments",
+        "inicio_reservas": "Reserves",
+        "inicio_patrimonio_total": "Total Net Assets",
         "inicio_indice_label": "📊 APPO Index (average of listed shares)",
         "inicio_indice_caption": "How a portfolio invested equally across all Club-tracked shares would have performed.",
-        "inicio_distribuicao": "Asset Distribution", "inicio_distribuicao_cats": ["Paid-up Capital", "Investments", "Reserves"],
-        "inicio_cotacoes_destaque": "📌 Featured Quotes", "inicio_capa_texto": "Discipline, transparency and long-term vision",
+        "inicio_distribuicao": "Asset Distribution",
+        "inicio_distribuicao_cats": ["Paid-up Capital", "Investments", "Reserves"],
+        "inicio_cotacoes_destaque": "📌 Featured Quotes",
+        "inicio_capa_texto": "Discipline, transparency and long-term vision",
         "cot_hero_sub": "Financial instruments listed on BODIVA tracked by the Club",
-        "cot_indice_titulo": "📊 APPO Index — average market quote", "cot_indice_metric": "Average change today",
+        "cot_indice_titulo": "📊 APPO Index — average market quote",
+        "cot_indice_metric": "Average change today",
         "cot_indice_caption": "If you had invested equally across all Club-tracked listed shares, your portfolio would have changed by this average.",
-        "cot_indice_hist_label": "APPO Index — daily (%)", "cot_indice_hist_info": "The daily APPO Index history builds up each day the administrator updates quotes.",
+        "cot_indice_hist_label": "APPO Index — daily (%)",
+        "cot_indice_hist_info": "The daily APPO Index history builds up each day the administrator updates quotes.",
         "cot_tendencia_semanal": "##### APPO Index — Weekly Trend",
-        "cot_tendencia_sem_caption1": "Not enough weeks of history yet to show the weekly trend.", "cot_tendencia_sem_caption2": "Not enough history for the weekly view yet.",
-        "cot_tab_favoritos": "⭐ Favourites", "cot_tab_todos": "📋 All Assets", "cot_fav_escolher": "Choose your favourite assets",
+        "cot_tendencia_sem_caption1": "Not enough weeks of history yet to show the weekly trend.",
+        "cot_tendencia_sem_caption2": "Not enough history for the weekly view yet.",
+        "cot_tab_favoritos": "⭐ Favourites",
+        "cot_tab_todos": "📋 All Assets",
+        "cot_fav_escolher": "Choose your favourite assets",
         "cot_fav_info": "You haven't marked any asset as a favourite yet. Use the box above.",
-        "cot_filtrar_tipo": "Filter by asset type", "cot_filtrar_todos": "All", "cot_ultima_actualizacao": "Last updated:",
-        "cot_descarregar_csv": "⬇️ Download table as CSV", "cot_comparacao": "Price comparison", "cot_preco_kz": "Price (Kz)",
+        "cot_filtrar_tipo": "Filter by asset type",
+        "cot_filtrar_todos": "All",
+        "cot_ultima_actualizacao": "Last updated:",
+        "cot_descarregar_csv": "⬇️ Download table as CSV",
+        "cot_comparacao": "Price comparison",
+        "cot_preco_kz": "Price (Kz)",
         "cot_tabela_cols": {"ticker": "Ticker", "nome": "Asset", "tipo": "Type", "preco": "Price", "variacao": "Change", "mercado": "Market"},
         "cont_hero_sub": "Accounting and Balance Sheet Summary of the Club",
         "cont_df_cols": ["Category", "Description", "Amount", "Currency"],
@@ -238,56 +305,96 @@ TRADUCOES = {
             ("Investments",         "Portfolio of shares and financial instruments listed on BODIVA","AOA"),
             ("Reserves",            "Stabilisation and liquidity fund for new opportunities",      "AOA"),
         ],
-        "cont_patrimonio_metric": "Club Total Net Assets", "cont_ultima_actualizacao": "Last updated:",
+        "cont_patrimonio_metric": "Club Total Net Assets",
+        "cont_ultima_actualizacao": "Last updated:",
         "hist_hero_sub": "Club asset evolution over time and report exports",
         "hist_poucos_pontos": "Not enough data points yet. This chart will fill in over time.",
         "hist_caption": "Each point represents a balance-sheet update. Vertical axis in Kwanzas (Kz).",
-        "hist_patrimonio_label": "Total Net Assets (Kz)", "hist_movimentos": "Recorded Transactions", "hist_sem_movimentos": "No transactions recorded yet.",
+        "hist_patrimonio_label": "Total Net Assets (Kz)",
+        "hist_movimentos": "Recorded Transactions",
+        "hist_sem_movimentos": "No transactions recorded yet.",
         "hist_cols": {"tipo": "Type", "descricao": "Description", "montante_fmt": "Amount", "data_movimento": "Date", "criado_em": "Recorded at"},
-        "hist_descarregar_mov": "⬇️ Download transactions as CSV", "hist_exportar": "Export report", "hist_gerar_pdf": "Generate PDF report", "hist_descarregar_pdf": "Download PDF report",
+        "hist_descarregar_mov": "⬇️ Download transactions as CSV",
+        "hist_exportar": "Export report",
+        "hist_gerar_pdf": "Generate PDF report",
+        "hist_descarregar_pdf": "Download PDF report",
         "aval_hero_sub": "Multiples and fair value (DDM) of listed companies, using real Club data",
-        "aval_empresa": "Company", "aval_sector": "Sector", "aval_cap_mercado": "Market capitalisation:", "aval_preco": "Current Price",
+        "aval_empresa": "Company",
+        "aval_sector": "Sector",
+        "aval_cap_mercado": "Market capitalisation:",
+        "aval_preco": "Current Price",
         "aval_pe": "P/E", "aval_pbv": "P/BV", "aval_dy": "Dividend Yield",
         "aval_nota1": "<b>P/E</b> = years of earnings you pay for the price. <b>P/BV</b> = price vs book value. <b>Dividend Yield</b> = annual dividend return.",
         "aval_vj": "Fair Value (DDM)", "aval_upside": "Upside / Downside", "aval_ke": "Cost of Equity (Ke)",
         "aval_nota2": "<b>Fair Value (DDM)</b> is an estimate. <b>Upside/Downside</b> compares to the market. <b>Ke</b> is the minimum return required for the sector's risk.",
-        "aval_subvalorizado": "The DDM model suggests a potentially undervalued share.", "aval_sobrevalorizado": "The DDM model suggests a potentially overvalued share.", "aval_justo": "The DDM model suggests the market price is close to the estimated value.",
+        "aval_subvalorizado": "The DDM model suggests a potentially undervalued share.",
+        "aval_sobrevalorizado": "The DDM model suggests a potentially overvalued share.",
+        "aval_justo": "The DDM model suggests the market price is close to the estimated value.",
         "aval_ddm_caption": "DDM/Gordon Growth: Fair Value = D1 ÷ (Ke − g). Use as a cross-check, never in isolation.",
         "aval_premium_titulo": "⭐ In-depth Analysis (Premium)",
         "aval_premium_lock": "<div class='appo-premium-lock'><strong>This section is exclusive to Premium members.</strong><br/>Sector comparison, sensitivity, ROE and real Dividend Yield.<br/><br/>Contact an administrator to activate Premium.</div>",
         "aval_roe": "ROE", "aval_payout": "Payout", "aval_dy_real": "Real Dividend Yield",
         "aval_nota3": "<b>ROE</b> = return on equity. <b>Payout</b> = share of profit distributed. <b>Real DY</b> = yield net of inflation.",
-        "aval_sensibilidade": "##### Sensitivity Table — Fair Value (Kz per share)", "aval_comparacao": "##### Sector Comparison (all companies)",
+        "aval_sensibilidade": "##### Sensitivity Table — Fair Value (Kz per share)",
+        "aval_comparacao": "##### Sector Comparison (all companies)",
         "aval_comp_cols": {"Empresa": "Company", "Sector": "Sector", "P/E": "P/E", "P/BV": "P/BV", "ROE": "ROE", "DY Nominal": "Nominal DY", "Upside DDM": "DDM Upside"},
-        "aval_descarregar_comp": "⬇️ Download sector comparison as CSV", "aval_sem_dados": "No valuations recorded yet.",
+        "aval_descarregar_comp": "⬇️ Download sector comparison as CSV",
+        "aval_sem_dados": "No valuations recorded yet.",
         "conv_hero_sub": "Automatic exchange rates, updated daily, with the Kwanza included",
-        "conv_de": "From", "conv_para": "To", "conv_valor": "Amount", "conv_equivale": "is equivalent to", "conv_taxa": "Rate:", "conv_actualizado": "Updated:",
-        "conv_erro": "This currency is not available in the data source at the moment.", "conv_aviso": "Could not fetch exchange rates at this moment. Please try again shortly.",
-        "conv_tabela_titulo": "Quick table (from 1 Kz)", "conv_tabela_col": "1 Kz equals", "conv_tabela_indisponivel": "Table unavailable at the moment.",
-        "conv_historico_titulo": "📈 Kwanza Trend (own history, accumulated automatically)", "conv_historico_select": "Show trend for", "conv_historico_label": "1 AOA in",
+        "conv_de": "From", "conv_para": "To", "conv_valor": "Amount",
+        "conv_equivale": "is equivalent to",
+        "conv_taxa": "Rate:",
+        "conv_actualizado": "Updated:",
+        "conv_erro": "This currency is not available in the data source at the moment.",
+        "conv_aviso": "Could not fetch exchange rates at this moment. Please try again shortly.",
+        "conv_tabela_titulo": "Quick table (from 1 Kz)",
+        "conv_tabela_col": "1 Kz equals",
+        "conv_tabela_indisponivel": "Table unavailable at the moment.",
+        "conv_historico_titulo": "📈 Kwanza Trend (own history, accumulated automatically)",
+        "conv_historico_select": "Show trend for",
+        "conv_historico_label": "1 AOA in",
         "conv_historico_info": "Not enough days of history yet. Come back on different days to watch the trend build itself.",
         "conv_historico_caption": "This history is built automatically by the app — without anyone entering anything — each time someone opens this page on a new day.",
         "sim_hero_sub": "Project the growth of your investment over time using compound interest",
-        "sim_valor_inicial": "Initial amount (Kz)", "sim_contrib_mensal": "Monthly contribution (Kz)", "sim_taxa": "Expected annual return rate (%)",
-        "sim_anos": "Time horizon (years)", "sim_inflacao": "Assumed annual inflation (%)", "sim_saldo_nominal": "Final Balance (nominal)",
-        "sim_total_investido": "Total Invested", "sim_juros": "Compound Interest Earned",
+        "sim_valor_inicial": "Initial amount (Kz)",
+        "sim_contrib_mensal": "Monthly contribution (Kz)",
+        "sim_taxa": "Expected annual return rate (%)",
+        "sim_anos": "Time horizon (years)",
+        "sim_inflacao": "Assumed annual inflation (%)",
+        "sim_saldo_nominal": "Final Balance (nominal)",
+        "sim_total_investido": "Total Invested",
+        "sim_juros": "Compound Interest Earned",
         "sim_chart_cols": {"Saldo Nominal": "Nominal Balance", "Total Investido": "Total Invested"},
-        "sim_caption1": "Final balance in today's purchasing power (discounting assumed inflation of", "sim_caption2": "%/year):",
+        "sim_caption1": "Final balance in today's purchasing power (discounting assumed inflation of",
+        "sim_caption2": "%/year):",
         "sim_disclaimer": "Educational simulation with constant monthly compound interest — real market returns vary and are not guaranteed. This is not investment advice.",
         "sim_partilha": "I simulated {vi} + {cm}/month for {a} years at {t}%/year = {sf} — APPO Investment Club",
         "r50_hero_sub": "Principle #8: 50% Spending · 30% Investing · 20% Saving",
-        "r50_rendimento": "Total monthly income (Kz)", "r50_alocacao": "Recommended allocation",
+        "r50_rendimento": "Total monthly income (Kz)",
+        "r50_alocacao": "Recommended allocation",
         "r50_consumo": "Spending (50%)", "r50_investimento": "Investing (30%)", "r50_entesouramento": "Saving (20%)",
         "r50_comparar_titulo": "Compare with your actual spending (optional)",
-        "r50_real_consumo": "Actual spending — Consumption (Kz)", "r50_real_investimento": "Actual spending — Investment (Kz)", "r50_real_entesouramento": "Actual saving (Kz)",
-        "r50_comparar_btn": "Compare", "r50_resultado": "#### Comparison result",
-        "r50_aviso": "Your actual saving is below the 20% recommended by the Club's principle.", "r50_sucesso": "You are meeting, or exceeding, the 20% saving target.",
+        "r50_real_consumo": "Actual spending — Consumption (Kz)",
+        "r50_real_investimento": "Actual spending — Investment (Kz)",
+        "r50_real_entesouramento": "Actual saving (Kz)",
+        "r50_comparar_btn": "Compare",
+        "r50_resultado": "#### Comparison result",
+        "r50_aviso": "Your actual saving is below the 20% recommended by the Club's principle.",
+        "r50_sucesso": "You are meeting, or exceeding, the 20% saving target.",
         "bib_hero_sub": "Club principles and articles on the Angolan capital market",
-        "bib_sem_artigos": "No articles published yet.", "bib_filtrar": "Filter by category", "bib_todas": "All", "bib_publicado": "Published on",
+        "bib_sem_artigos": "No articles published yet.",
+        "bib_filtrar": "Filter by category",
+        "bib_todas": "All",
+        "bib_publicado": "Published on",
         "ades_hero_sub": "Fill in the form to apply for membership of the APPO Investment Club",
-        "ades_nome": "Full name *", "ades_email": "E-mail", "ades_telefone": "Phone / WhatsApp", "ades_bi": "Identity Card number",
-        "ades_contribuicao": "Intended initial contribution (Kz)", "ades_aceite": "I declare that I have read and accepted the Bylaws of the APPO Investment Club *",
-        "ades_btn": "Submit membership application", "ades_erro": "Please fill in the full name and accept the Bylaws to submit the application.",
+        "ades_nome": "Full name *",
+        "ades_email": "E-mail",
+        "ades_telefone": "Phone / WhatsApp",
+        "ades_bi": "Identity Card number",
+        "ades_contribuicao": "Intended initial contribution (Kz)",
+        "ades_aceite": "I declare that I have read and accepted the Bylaws of the APPO Investment Club *",
+        "ades_btn": "Submit membership application",
+        "ades_erro": "Please fill in the full name and accept the Bylaws to submit the application.",
         "ades_sucesso": "Membership application submitted successfully! A Club administrator will be in touch.",
         "sobre_hero_sub": "The mission, principles and statutory framework of the Club",
         "sobre_quem_somos": "Who we are",
@@ -307,10 +414,565 @@ TRADUCOES = {
         "pdf_titulo": "APPO Investment Club",
         "pdf_gerado": "Report generated on",
         "pdf_resumo": "Balance Sheet Summary",
-        "pdf_subscrito": "Subscribed Capital:", "pdf_realizado": "Paid-up Capital:", "pdf_investimentos": "Investments:", "pdf_reservas": "Reserves:", "pdf_total": "Total:",
-        "pdf_activos": "Portfolio Assets", "pdf_movimentos": "Recent Transactions", "pdf_sem_mov": "No transactions recorded.",
+        "pdf_subscrito": "Subscribed Capital:",
+        "pdf_realizado": "Paid-up Capital:",
+        "pdf_investimentos": "Investments:",
+        "pdf_reservas": "Reserves:",
+        "pdf_total": "Total:",
+        "pdf_activos": "Portfolio Assets",
+        "pdf_movimentos": "Recent Transactions",
+        "pdf_sem_mov": "No transactions recorded.",
         "pdf_nome_ficheiro": "appo_report_{data}.pdf",
         "bodiva_badge": "🇦🇴 BODIVA · Kwanzas (Kz)",
+    },
+
+    # ─────────────────────────────────────────────────────
+    "Français": {
+        "tagline": "Portail Officiel des Cotations BODIVA, Comptabilité et Adhésion",
+        "login_titulo": "Accès réservé aux membres",
+        "email": "E-mail", "password": "Mot de passe", "entrar": "Se connecter",
+        "erro_login": "E-mail ou mot de passe incorrect. Contactez un administrateur du Club.",
+        "sessao": "Session", "terminar_sessao": "Se déconnecter",
+        "nav_map": {
+            "🏠 Início & Análises":         "🏠 Accueil & Analyses",
+            "📈 Cotações & Activos":         "📈 Cotations & Actifs",
+            "💰 Contabilidade & Finanças":  "💰 Comptabilité & Finances",
+            "📊 Histórico & Relatórios":    "📊 Historique & Rapports",
+            "📐 Avaliação de Activos":       "📐 Évaluation des Actifs",
+            "💱 Conversor de Moeda":         "💱 Convertisseur de Devises",
+            "🧪 Simulador de Investimento": "🧪 Simulateur d'Investissement",
+            "🧮 Regra 50/30/20":            "🧮 Règle 50/30/20",
+            "📚 Biblioteca Educativa":       "📚 Bibliothèque Éducative",
+            "🧾 Adesão de Sócios":          "🧾 Adhésion des Membres",
+            "ℹ️ Sobre Nós & Estatutos":     "ℹ️ À propos & Statuts",
+            "🔐 Painel do Administrador":   "🔐 Panneau d'Administration",
+        },
+        "inicio_hero_sub": "Portail Officiel des Cotations BODIVA, Comptabilité et Adhésion",
+        "inicio_capital_subscrito": "Capital Souscrit",
+        "inicio_capital_realizado": "Capital Libéré",
+        "inicio_pct_subscrito": "% du souscrit",
+        "inicio_investimentos": "Investissements",
+        "inicio_reservas": "Réserves",
+        "inicio_patrimonio_total": "Actif Net Total",
+        "inicio_indice_label": "📊 Indice APPO (moyenne des actions cotées)",
+        "inicio_indice_caption": "Comment un portefeuille investi à parts égales dans toutes les actions suivies par le Club aurait évolué.",
+        "inicio_distribuicao": "Répartition du Patrimoine",
+        "inicio_distribuicao_cats": ["Capital Libéré", "Investissements", "Réserves"],
+        "inicio_cotacoes_destaque": "📌 Cotations en vedette",
+        "inicio_capa_texto": "Discipline, transparence et vision à long terme",
+        "cot_hero_sub": "Instruments financiers cotés à la BODIVA suivis par le Club",
+        "cot_indice_titulo": "📊 Indice APPO — cotation moyenne du marché",
+        "cot_indice_metric": "Variation moyenne aujourd'hui",
+        "cot_indice_caption": "Si vous aviez investi à parts égales dans toutes les actions cotées suivies par le Club, votre portefeuille aurait varié en moyenne de cette valeur.",
+        "cot_indice_hist_label": "Indice APPO — journalier (%)",
+        "cot_indice_hist_info": "L'historique journalier de l'Indice APPO se constitue chaque jour où l'administrateur met à jour les cotations.",
+        "cot_tendencia_semanal": "##### Tendance hebdomadaire de l'Indice APPO",
+        "cot_tendencia_sem_caption1": "Pas encore assez de semaines d'historique pour afficher la tendance hebdomadaire.",
+        "cot_tendencia_sem_caption2": "Pas encore assez d'historique pour la vue hebdomadaire.",
+        "cot_tab_favoritos": "⭐ Favoris",
+        "cot_tab_todos": "📋 Tous les Actifs",
+        "cot_fav_escolher": "Choisir vos actifs favoris",
+        "cot_fav_info": "Vous n'avez pas encore marqué d'actif comme favori. Utilisez la liste ci-dessus.",
+        "cot_filtrar_tipo": "Filtrer par type d'actif",
+        "cot_filtrar_todos": "Tous",
+        "cot_ultima_actualizacao": "Dernière mise à jour :",
+        "cot_descarregar_csv": "⬇️ Télécharger le tableau en CSV",
+        "cot_comparacao": "Comparaison des prix",
+        "cot_preco_kz": "Prix (Kz)",
+        "cot_tabela_cols": {"ticker": "Ticker", "nome": "Actif", "tipo": "Type", "preco": "Prix", "variacao": "Variation", "mercado": "Marché"},
+        "cont_hero_sub": "Résumé Comptable et Patrimonial du Club",
+        "cont_df_cols": ["Catégorie", "Description", "Montant", "Devise"],
+        "cont_df_rows": [
+            ("Capital Souscrit",   "Total du capital engagé par les membres",                      "AOA"),
+            ("Capital Libéré",     "Partie du capital souscrit déjà effectivement versée",         "AOA"),
+            ("Investissements",    "Portefeuille d'actions et instruments financiers cotés BODIVA", "AOA"),
+            ("Réserves",           "Fonds de stabilisation et de liquidité pour nouvelles opportunités","AOA"),
+        ],
+        "cont_patrimonio_metric": "Actif Net Total du Club",
+        "cont_ultima_actualizacao": "Dernière mise à jour :",
+        "hist_hero_sub": "Évolution du patrimoine du Club dans le temps et exports de rapports",
+        "hist_poucos_pontos": "Pas encore assez de points de données. Ce graphique se précisera avec le temps.",
+        "hist_caption": "Chaque point représente une mise à jour du bilan. Axe vertical en Kwanzas (Kz).",
+        "hist_patrimonio_label": "Actif Net Total (Kz)",
+        "hist_movimentos": "Transactions enregistrées",
+        "hist_sem_movimentos": "Aucune transaction enregistrée pour l'instant.",
+        "hist_cols": {"tipo": "Type", "descricao": "Description", "montante_fmt": "Montant", "data_movimento": "Date", "criado_em": "Enregistré le"},
+        "hist_descarregar_mov": "⬇️ Télécharger les transactions en CSV",
+        "hist_exportar": "Exporter le rapport",
+        "hist_gerar_pdf": "Générer un rapport PDF",
+        "hist_descarregar_pdf": "Télécharger le rapport PDF",
+        "aval_hero_sub": "Multiples et juste valeur (DDM) des sociétés cotées, avec données réelles du Club",
+        "aval_empresa": "Société",
+        "aval_sector": "Secteur",
+        "aval_cap_mercado": "Capitalisation boursière :",
+        "aval_preco": "Prix Actuel",
+        "aval_pe": "P/E", "aval_pbv": "P/VNC", "aval_dy": "Rendement du dividende",
+        "aval_nota1": "<b>P/E</b> = années de bénéfices payés. <b>P/VNC</b> = prix vs valeur comptable. <b>Rendement du dividende</b> = retour annuel en dividendes.",
+        "aval_vj": "Juste Valeur (DDM)", "aval_upside": "Potentiel / Risque", "aval_ke": "Coût des Fonds Propres (Ke)",
+        "aval_nota2": "<b>Juste Valeur (DDM)</b> est une estimation. <b>Potentiel/Risque</b> compare au marché. <b>Ke</b> = rendement minimum exigé selon le risque du secteur.",
+        "aval_subvalorizado": "Le modèle DDM suggère une action potentiellement sous-évaluée.",
+        "aval_sobrevalorizado": "Le modèle DDM suggère une action potentiellement surévaluée.",
+        "aval_justo": "Le modèle DDM suggère que le prix de marché est proche de la valeur estimée.",
+        "aval_ddm_caption": "DDM/Gordon Growth : Juste Valeur = D1 ÷ (Ke − g). À utiliser comme vérification croisée, jamais isolément.",
+        "aval_premium_titulo": "⭐ Analyse Approfondie (Premium)",
+        "aval_premium_lock": "<div class='appo-premium-lock'><strong>Cette section est réservée aux membres Premium.</strong><br/>Comparaison sectorielle, sensibilité, ROE et rendement réel.<br/><br/>Contactez un administrateur pour activer le Premium.</div>",
+        "aval_roe": "ROE", "aval_payout": "Taux de distribution", "aval_dy_real": "Rendement Réel",
+        "aval_nota3": "<b>ROE</b> = rentabilité des fonds propres. <b>Taux de distribution</b> = part du bénéfice distribuée. <b>Rendement Réel</b> = rendement net d'inflation.",
+        "aval_sensibilidade": "##### Tableau de Sensibilité — Juste Valeur (Kz par action)",
+        "aval_comparacao": "##### Comparaison Sectorielle (toutes les sociétés)",
+        "aval_comp_cols": {"Empresa": "Société", "Sector": "Secteur", "P/E": "P/E", "P/BV": "P/VNC", "ROE": "ROE", "DY Nominal": "Rendement Nominal", "Upside DDM": "Potentiel DDM"},
+        "aval_descarregar_comp": "⬇️ Télécharger la comparaison sectorielle en CSV",
+        "aval_sem_dados": "Aucune évaluation enregistrée pour l'instant.",
+        "conv_hero_sub": "Taux de change automatiques, mis à jour quotidiennement, avec le Kwanza inclus",
+        "conv_de": "De", "conv_para": "Vers", "conv_valor": "Montant",
+        "conv_equivale": "équivaut à",
+        "conv_taxa": "Taux :",
+        "conv_actualizado": "Mis à jour :",
+        "conv_erro": "Cette devise n'est pas disponible dans la source de données pour le moment.",
+        "conv_aviso": "Impossible d'obtenir les taux de change pour le moment. Réessayez dans quelques instants.",
+        "conv_tabela_titulo": "Tableau rapide (à partir de 1 Kz)",
+        "conv_tabela_col": "1 Kz équivaut à",
+        "conv_tabela_indisponivel": "Tableau indisponible pour le moment.",
+        "conv_historico_titulo": "📈 Tendance du Kwanza (historique propre, accumulé automatiquement)",
+        "conv_historico_select": "Afficher la tendance pour",
+        "conv_historico_label": "1 AOA en",
+        "conv_historico_info": "Pas encore assez de jours d'historique. Revenez à différentes dates pour voir la tendance se former.",
+        "conv_historico_caption": "Cet historique est constitué automatiquement par l'application — sans aucune saisie manuelle — chaque fois que quelqu'un ouvre cette page un nouveau jour.",
+        "sim_hero_sub": "Projetez la croissance de votre investissement dans le temps avec les intérêts composés",
+        "sim_valor_inicial": "Montant initial (Kz)",
+        "sim_contrib_mensal": "Contribution mensuelle (Kz)",
+        "sim_taxa": "Taux de rendement annuel attendu (%)",
+        "sim_anos": "Horizon (années)",
+        "sim_inflacao": "Inflation annuelle supposée (%)",
+        "sim_saldo_nominal": "Solde Final (nominal)",
+        "sim_total_investido": "Total Investi",
+        "sim_juros": "Intérêts Composés Gagnés",
+        "sim_chart_cols": {"Saldo Nominal": "Solde Nominal", "Total Investido": "Total Investi"},
+        "sim_caption1": "Solde final en pouvoir d'achat d'aujourd'hui (inflation supposée de",
+        "sim_caption2": "%/an) :",
+        "sim_disclaimer": "Simulation éducative avec intérêts composés mensuels constants — les rendements réels varient et ne sont pas garantis. Ne constitue pas un conseil en investissement.",
+        "sim_partilha": "J'ai simulé {vi} + {cm}/mois pendant {a} ans à {t}%/an = {sf} — Club d'Investissement APPO",
+        "r50_hero_sub": "Principe n°8 : 50% Dépenses · 30% Investissement · 20% Épargne",
+        "r50_rendimento": "Revenu mensuel total (Kz)",
+        "r50_alocacao": "Allocation recommandée",
+        "r50_consumo": "Dépenses (50%)", "r50_investimento": "Investissement (30%)", "r50_entesouramento": "Épargne (20%)",
+        "r50_comparar_titulo": "Comparez avec vos dépenses réelles (optionnel)",
+        "r50_real_consumo": "Dépenses réelles — Consommation (Kz)",
+        "r50_real_investimento": "Dépenses réelles — Investissement (Kz)",
+        "r50_real_entesouramento": "Épargne réelle (Kz)",
+        "r50_comparar_btn": "Comparer",
+        "r50_resultado": "#### Résultat de la comparaison",
+        "r50_aviso": "Votre épargne réelle est inférieure aux 20% recommandés par le principe du Club.",
+        "r50_sucesso": "Vous respectez, ou dépassez, l'objectif d'épargne de 20%.",
+        "bib_hero_sub": "Principes du Club et articles sur le marché des capitaux angolais",
+        "bib_sem_artigos": "Aucun article publié pour l'instant.",
+        "bib_filtrar": "Filtrer par catégorie",
+        "bib_todas": "Toutes",
+        "bib_publicado": "Publié le",
+        "ades_hero_sub": "Remplissez le formulaire pour demander votre adhésion au Club d'Investissement APPO",
+        "ades_nome": "Nom complet *",
+        "ades_email": "E-mail",
+        "ades_telefone": "Téléphone / WhatsApp",
+        "ades_bi": "Numéro de carte d'identité",
+        "ades_contribuicao": "Contribution initiale souhaitée (Kz)",
+        "ades_aceite": "Je déclare avoir lu et accepté les Statuts du Club d'Investissement APPO *",
+        "ades_btn": "Soumettre la demande d'adhésion",
+        "ades_erro": "Veuillez saisir votre nom complet et accepter les Statuts pour soumettre la demande.",
+        "ades_sucesso": "Demande d'adhésion soumise avec succès ! Un administrateur du Club vous contactera.",
+        "sobre_hero_sub": "La mission, les principes et le cadre statutaire du Club",
+        "sobre_quem_somos": "Qui sommes-nous",
+        "sobre_quem_texto": "Le **Club d'Investissement APPO** est une association d'investisseurs angolais qui met en commun des capitaux pour investir sur le marché des capitaux national via la Bourse angolaise (BODIVA).",
+        "sobre_principios": "Principes et Philosophie d'Investissement",
+        "sobre_estatutos": "Statuts — points clés",
+        "sobre_estatutos_texto": """
+- **Nature :** association d'investisseurs, régie par des Statuts formellement enregistrés.
+- **Organes :** Assemblée des Membres, Commission de Gestion et Conseil de Surveillance.
+- **Admission :** soumise à l'approbation de la Commission de Gestion.
+- **Délibérations :** les décisions d'investissement importantes requièrent une délibération collective.
+- **Répartition des résultats :** proportionnelle à la quote-part de capital de chaque membre.
+""",
+        "sobre_nota": "Note interne : modèle de référence, à remplacer par les Statuts formellement approuvés et enregistrés du Club.",
+        "partilha_wa": "💬 WhatsApp", "partilha_tw": "𝕏 X / Twitter", "partilha_fb": "📘 Facebook",
+        "conv_partilha": "{v} {de} = {r} {para} — Club d'Investissement APPO",
+        "pdf_titulo": "Club d'Investissement APPO",
+        "pdf_gerado": "Rapport généré le",
+        "pdf_resumo": "Résumé du Bilan",
+        "pdf_subscrito": "Capital Souscrit :",
+        "pdf_realizado": "Capital Libéré :",
+        "pdf_investimentos": "Investissements :",
+        "pdf_reservas": "Réserves :",
+        "pdf_total": "Total :",
+        "pdf_activos": "Actifs en Portefeuille",
+        "pdf_movimentos": "Transactions Récentes",
+        "pdf_sem_mov": "Aucune transaction enregistrée.",
+        "pdf_nome_ficheiro": "rapport_appo_{data}.pdf",
+        "bodiva_badge": "🇦🇴 BODIVA · Kwanzas (Kz)",
+    },
+
+    # ─────────────────────────────────────────────────────
+    "Español": {
+        "tagline": "Portal Oficial de Cotizaciones BODIVA, Contabilidad y Adhesión",
+        "login_titulo": "Acceso reservado a socios",
+        "email": "Correo electrónico", "password": "Contraseña", "entrar": "Entrar",
+        "erro_login": "Correo o contraseña incorrectos. Contacta a un administrador del Club.",
+        "sessao": "Sesión", "terminar_sessao": "Cerrar sesión",
+        "nav_map": {
+            "🏠 Início & Análises":         "🏠 Inicio y Análisis",
+            "📈 Cotações & Activos":         "📈 Cotizaciones y Activos",
+            "💰 Contabilidade & Finanças":  "💰 Contabilidad y Finanzas",
+            "📊 Histórico & Relatórios":    "📊 Historial e Informes",
+            "📐 Avaliação de Activos":       "📐 Valoración de Activos",
+            "💱 Conversor de Moeda":         "💱 Conversor de Moneda",
+            "🧪 Simulador de Investimento": "🧪 Simulador de Inversión",
+            "🧮 Regra 50/30/20":            "🧮 Regla 50/30/20",
+            "📚 Biblioteca Educativa":       "📚 Biblioteca Educativa",
+            "🧾 Adesão de Sócios":          "🧾 Adhesión de Socios",
+            "ℹ️ Sobre Nós & Estatutos":     "ℹ️ Sobre Nosotros y Estatutos",
+            "🔐 Painel do Administrador":   "🔐 Panel de Administrador",
+        },
+        "inicio_hero_sub": "Portal Oficial de Cotizaciones BODIVA, Contabilidad y Adhesión",
+        "inicio_capital_subscrito": "Capital Suscrito",
+        "inicio_capital_realizado": "Capital Desembolsado",
+        "inicio_pct_subscrito": "% del suscrito",
+        "inicio_investimentos": "Inversiones",
+        "inicio_reservas": "Reservas",
+        "inicio_patrimonio_total": "Patrimonio Neto Total",
+        "inicio_indice_label": "📊 Índice APPO (media de acciones cotizadas)",
+        "inicio_indice_caption": "Cómo habría evolucionado una cartera invertida a partes iguales en todas las acciones seguidas por el Club.",
+        "inicio_distribuicao": "Distribución del Patrimonio",
+        "inicio_distribuicao_cats": ["Capital Desembolsado", "Inversiones", "Reservas"],
+        "inicio_cotacoes_destaque": "📌 Cotizaciones destacadas",
+        "inicio_capa_texto": "Disciplina, transparencia y visión a largo plazo",
+        "cot_hero_sub": "Instrumentos financieros cotizados en BODIVA seguidos por el Club",
+        "cot_indice_titulo": "📊 Índice APPO — cotización media del mercado",
+        "cot_indice_metric": "Variación media hoy",
+        "cot_indice_caption": "Si hubieras invertido a partes iguales en todas las acciones cotizadas del Club, tu cartera habría variado, en promedio, este valor.",
+        "cot_indice_hist_label": "Índice APPO — diario (%)",
+        "cot_indice_hist_info": "El historial diario del Índice APPO se va formando cada día que el administrador actualiza las cotizaciones.",
+        "cot_tendencia_semanal": "##### Tendencia semanal del Índice APPO",
+        "cot_tendencia_sem_caption1": "Aún no hay suficientes semanas de historial para mostrar la tendencia semanal.",
+        "cot_tendencia_sem_caption2": "Aún no hay historial suficiente para la vista semanal.",
+        "cot_tab_favoritos": "⭐ Favoritos",
+        "cot_tab_todos": "📋 Todos los Activos",
+        "cot_fav_escolher": "Elige tus activos favoritos",
+        "cot_fav_info": "Aún no has marcado ningún activo como favorito. Usa la lista de arriba.",
+        "cot_filtrar_tipo": "Filtrar por tipo de activo",
+        "cot_filtrar_todos": "Todos",
+        "cot_ultima_actualizacao": "Última actualización:",
+        "cot_descarregar_csv": "⬇️ Descargar tabla en CSV",
+        "cot_comparacao": "Comparación de precios",
+        "cot_preco_kz": "Precio (Kz)",
+        "cot_tabela_cols": {"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Precio", "variacao": "Variación", "mercado": "Mercado"},
+        "cont_hero_sub": "Resumen Contable y Patrimonial del Club",
+        "cont_df_cols": ["Categoría", "Descripción", "Importe", "Divisa"],
+        "cont_df_rows": [
+            ("Capital Suscrito",      "Total de capital comprometido por los socios",               "AOA"),
+            ("Capital Desembolsado",  "Parte del capital suscrito ya efectivamente pagada",         "AOA"),
+            ("Inversiones",           "Cartera de acciones e instrumentos financieros en BODIVA",   "AOA"),
+            ("Reservas",              "Fondo de estabilización y liquidez para nuevas oportunidades","AOA"),
+        ],
+        "cont_patrimonio_metric": "Patrimonio Neto Total del Club",
+        "cont_ultima_actualizacao": "Última actualización:",
+        "hist_hero_sub": "Evolución del patrimonio del Club a lo largo del tiempo y exportación de informes",
+        "hist_poucos_pontos": "Aún hay pocos puntos de datos. Este gráfico irá tomando forma con el tiempo.",
+        "hist_caption": "Cada punto representa una actualización del balance. Eje vertical en Kwanzas (Kz).",
+        "hist_patrimonio_label": "Patrimonio Neto Total (Kz)",
+        "hist_movimentos": "Transacciones registradas",
+        "hist_sem_movimentos": "Aún no hay transacciones registradas.",
+        "hist_cols": {"tipo": "Tipo", "descricao": "Descripción", "montante_fmt": "Importe", "data_movimento": "Fecha", "criado_em": "Registrado el"},
+        "hist_descarregar_mov": "⬇️ Descargar transacciones en CSV",
+        "hist_exportar": "Exportar informe",
+        "hist_gerar_pdf": "Generar informe PDF",
+        "hist_descarregar_pdf": "Descargar informe PDF",
+        "aval_hero_sub": "Múltiplos y valor razonable (DDM) de las empresas cotizadas, con datos reales del Club",
+        "aval_empresa": "Empresa",
+        "aval_sector": "Sector",
+        "aval_cap_mercado": "Capitalización de mercado:",
+        "aval_preco": "Precio Actual",
+        "aval_pe": "P/E", "aval_pbv": "P/VC", "aval_dy": "Rentabilidad por dividendo",
+        "aval_nota1": "<b>P/E</b> = años de beneficio que pagas. <b>P/VC</b> = precio vs valor contable. <b>Rentabilidad por dividendo</b> = retorno anual en dividendos.",
+        "aval_vj": "Valor Razonable (DDM)", "aval_upside": "Potencial / Riesgo", "aval_ke": "Coste del Capital (Ke)",
+        "aval_nota2": "<b>Valor Razonable (DDM)</b> es una estimación. <b>Potencial/Riesgo</b> compara con el mercado. <b>Ke</b> = retorno mínimo exigido por el riesgo del sector.",
+        "aval_subvalorizado": "El modelo DDM sugiere una acción potencialmente infravalorada.",
+        "aval_sobrevalorizado": "El modelo DDM sugiere una acción potencialmente sobrevalorada.",
+        "aval_justo": "El modelo DDM sugiere que el precio de mercado está próximo al valor estimado.",
+        "aval_ddm_caption": "DDM/Gordon Growth: Valor Razonable = D1 ÷ (Ke − g). Usar como verificación cruzada, nunca de forma aislada.",
+        "aval_premium_titulo": "⭐ Análisis Profundo (Premium)",
+        "aval_premium_lock": "<div class='appo-premium-lock'><strong>Esta sección es exclusiva para socios Premium.</strong><br/>Comparación sectorial, sensibilidad, ROE y rentabilidad real.<br/><br/>Habla con un administrador para activar el Premium.</div>",
+        "aval_roe": "ROE", "aval_payout": "Tasa de distribución", "aval_dy_real": "Rentabilidad Real",
+        "aval_nota3": "<b>ROE</b> = rentabilidad sobre fondos propios. <b>Tasa de distribución</b> = fracción del beneficio distribuida. <b>Rentabilidad Real</b> = yield descontado de la inflación.",
+        "aval_sensibilidade": "##### Tabla de Sensibilidad — Valor Razonable (Kz por acción)",
+        "aval_comparacao": "##### Comparación Sectorial (todas las empresas)",
+        "aval_comp_cols": {"Empresa": "Empresa", "Sector": "Sector", "P/E": "P/E", "P/BV": "P/VC", "ROE": "ROE", "DY Nominal": "Rentab. Nominal", "Upside DDM": "Potencial DDM"},
+        "aval_descarregar_comp": "⬇️ Descargar comparación sectorial en CSV",
+        "aval_sem_dados": "Aún no hay valoraciones registradas.",
+        "conv_hero_sub": "Tipos de cambio automáticos, actualizados diariamente, con el Kwanza incluido",
+        "conv_de": "De", "conv_para": "A", "conv_valor": "Importe",
+        "conv_equivale": "equivale a",
+        "conv_taxa": "Tipo:",
+        "conv_actualizado": "Actualizado:",
+        "conv_erro": "Esta divisa no está disponible en la fuente de datos en este momento.",
+        "conv_aviso": "No se pudieron obtener los tipos de cambio en este momento. Inténtalo de nuevo en unos instantes.",
+        "conv_tabela_titulo": "Tabla rápida (a partir de 1 Kz)",
+        "conv_tabela_col": "1 Kz equivale a",
+        "conv_tabela_indisponivel": "Tabla no disponible en este momento.",
+        "conv_historico_titulo": "📈 Tendencia del Kwanza (historial propio, acumulado automáticamente)",
+        "conv_historico_select": "Ver tendencia de",
+        "conv_historico_label": "1 AOA en",
+        "conv_historico_info": "Aún hay pocos días de historial acumulado. Vuelve en días diferentes para ver cómo se va formando la tendencia.",
+        "conv_historico_caption": "Este historial se construye automáticamente por la propia app — sin que nadie tenga que introducir nada — cada vez que alguien abre esta página un nuevo día.",
+        "sim_hero_sub": "Proyecta el crecimiento de tu inversión a lo largo del tiempo con interés compuesto",
+        "sim_valor_inicial": "Importe inicial (Kz)",
+        "sim_contrib_mensal": "Aportación mensual (Kz)",
+        "sim_taxa": "Tasa de rentabilidad anual esperada (%)",
+        "sim_anos": "Plazo (años)",
+        "sim_inflacao": "Inflación anual supuesta (%)",
+        "sim_saldo_nominal": "Saldo Final (nominal)",
+        "sim_total_investido": "Total Invertido",
+        "sim_juros": "Interés Compuesto Ganado",
+        "sim_chart_cols": {"Saldo Nominal": "Saldo Nominal", "Total Investido": "Total Invertido"},
+        "sim_caption1": "Saldo final en poder adquisitivo de hoy (descontando la inflación supuesta de",
+        "sim_caption2": "%/año):",
+        "sim_disclaimer": "Simulación educativa con interés compuesto mensual constante — los rendimientos reales del mercado varían y no están garantizados. No constituye asesoramiento de inversión.",
+        "sim_partilha": "Simulé {vi} + {cm}/mes durante {a} años al {t}%/año = {sf} — Club de Inversión APPO",
+        "r50_hero_sub": "Principio n.º 8: 50% Gastos · 30% Inversión · 20% Ahorro",
+        "r50_rendimento": "Renta mensual total (Kz)",
+        "r50_alocacao": "Asignación recomendada",
+        "r50_consumo": "Gastos (50%)", "r50_investimento": "Inversión (30%)", "r50_entesouramento": "Ahorro (20%)",
+        "r50_comparar_titulo": "Compara con tus gastos reales (opcional)",
+        "r50_real_consumo": "Gasto real — Consumo (Kz)",
+        "r50_real_investimento": "Gasto real — Inversión (Kz)",
+        "r50_real_entesouramento": "Ahorro real (Kz)",
+        "r50_comparar_btn": "Comparar",
+        "r50_resultado": "#### Resultado de la comparación",
+        "r50_aviso": "Tu ahorro real está por debajo del 20% recomendado por el principio del Club.",
+        "r50_sucesso": "Estás cumpliendo, o superando, el objetivo de ahorro del 20%.",
+        "bib_hero_sub": "Principios del Club y artículos sobre el mercado de capitales angoleño",
+        "bib_sem_artigos": "Aún no hay artículos publicados.",
+        "bib_filtrar": "Filtrar por categoría",
+        "bib_todas": "Todas",
+        "bib_publicado": "Publicado el",
+        "ades_hero_sub": "Completa el formulario para solicitar tu adhesión al Club de Inversión APPO",
+        "ades_nome": "Nombre completo *",
+        "ades_email": "Correo electrónico",
+        "ades_telefone": "Teléfono / WhatsApp",
+        "ades_bi": "Número del Documento de Identidad",
+        "ades_contribuicao": "Aportación inicial prevista (Kz)",
+        "ades_aceite": "Declaro que he leído y acepto los Estatutos del Club de Inversión APPO *",
+        "ades_btn": "Enviar solicitud de adhesión",
+        "ades_erro": "Rellena el nombre completo y acepta los Estatutos para enviar la solicitud.",
+        "ades_sucesso": "¡Solicitud de adhesión enviada con éxito! Un administrador del Club se pondrá en contacto contigo.",
+        "sobre_hero_sub": "La misión, los principios y el marco estatutario del Club",
+        "sobre_quem_somos": "Quiénes somos",
+        "sobre_quem_texto": "El **Club de Inversión APPO** es una asociación de inversores angoleños que reúne capital colectivamente para invertir en el mercado de capitales nacional a través de la Bolsa de Angola (BODIVA).",
+        "sobre_principios": "Principios y Filosofía de Inversión",
+        "sobre_estatutos": "Estatutos — puntos clave",
+        "sobre_estatutos_texto": """
+- **Naturaleza:** asociación de inversores, conforme a Estatutos formalmente registrados.
+- **Órganos:** Asamblea de Socios, Comisión de Gestión y Consejo de Supervisión.
+- **Admisión:** sujeta a aprobación de la Comisión de Gestión.
+- **Deliberaciones:** las decisiones de inversión relevantes requieren deliberación colectiva.
+- **Distribución de resultados:** proporcional a la cuota de capital de cada socio.
+""",
+        "sobre_nota": "Nota interna: modelo de referencia, a sustituir por los Estatutos formalmente aprobados y registrados del Club.",
+        "partilha_wa": "💬 WhatsApp", "partilha_tw": "𝕏 X / Twitter", "partilha_fb": "📘 Facebook",
+        "conv_partilha": "{v} {de} = {r} {para} — Club de Inversión APPO",
+        "pdf_titulo": "Club de Inversión APPO",
+        "pdf_gerado": "Informe generado el",
+        "pdf_resumo": "Resumen del Balance",
+        "pdf_subscrito": "Capital Suscrito:",
+        "pdf_realizado": "Capital Desembolsado:",
+        "pdf_investimentos": "Inversiones:",
+        "pdf_reservas": "Reservas:",
+        "pdf_total": "Total:",
+        "pdf_activos": "Activos en Cartera",
+        "pdf_movimentos": "Transacciones Recientes",
+        "pdf_sem_mov": "Sin transacciones registradas.",
+        "pdf_nome_ficheiro": "informe_appo_{data}.pdf",
+        "bodiva_badge": "🇦🇴 BODIVA · Kwanzas (Kz)",
+    },
+
+    # ─────────────────────────────────────────────────────
+    "中文 (Mandarim)": {
+        "tagline": "BODIVA官方行情、会计与会员门户",
+        "login_titulo": "仅限会员访问",
+        "email": "电子邮件", "password": "密码", "entrar": "登录",
+        "erro_login": "邮箱或密码错误。请联系俱乐部管理员。",
+        "sessao": "会话", "terminar_sessao": "退出登录",
+        "nav_map": {
+            "🏠 Início & Análises":         "🏠 首页与分析",
+            "📈 Cotações & Activos":         "📈 行情与资产",
+            "💰 Contabilidade & Finanças":  "💰 会计与财务",
+            "📊 Histórico & Relatórios":    "📊 历史与报告",
+            "📐 Avaliação de Activos":       "📐 资产估值",
+            "💱 Conversor de Moeda":         "💱 货币换算器",
+            "🧪 Simulador de Investimento": "🧪 投资模拟器",
+            "🧮 Regra 50/30/20":            "🧮 50/30/20法则",
+            "📚 Biblioteca Educativa":       "📚 教育图书馆",
+            "🧾 Adesão de Sócios":          "🧾 会员申请",
+            "ℹ️ Sobre Nós & Estatutos":     "ℹ️ 关于我们与章程",
+            "🔐 Painel do Administrador":   "🔐 管理员面板",
+        },
+        "inicio_hero_sub": "BODIVA官方行情、会计与会员门户",
+        "inicio_capital_subscrito": "认缴资本",
+        "inicio_capital_realizado": "实缴资本",
+        "inicio_pct_subscrito": "% 已认缴",
+        "inicio_investimentos": "投资",
+        "inicio_reservas": "储备",
+        "inicio_patrimonio_total": "总净资产",
+        "inicio_indice_label": "📊 APPO指数（上市股票均值）",
+        "inicio_indice_caption": "若将资金平均投资于俱乐部跟踪的所有上市股票，组合的平均表现。",
+        "inicio_distribuicao": "资产分布",
+        "inicio_distribuicao_cats": ["实缴资本", "投资", "储备"],
+        "inicio_cotacoes_destaque": "📌 重点行情",
+        "inicio_capa_texto": "纪律、透明与长期视野",
+        "cot_hero_sub": "俱乐部跟踪的BODIVA上市金融工具",
+        "cot_indice_titulo": "📊 APPO指数 — 市场平均行情",
+        "cot_indice_metric": "今日平均涨跌幅",
+        "cot_indice_caption": "若等权重投资俱乐部跟踪的所有上市股票，组合平均涨跌幅即此值。",
+        "cot_indice_hist_label": "APPO指数 — 日变动（%）",
+        "cot_indice_hist_info": "管理员每次更新行情，日APPO指数历史数据便自动增加一个新点。",
+        "cot_tendencia_semanal": "##### APPO指数周趋势",
+        "cot_tendencia_sem_caption1": "历史数据不足两周，暂无法显示周趋势。",
+        "cot_tendencia_sem_caption2": "历史数据不足，暂无法显示周视图。",
+        "cot_tab_favoritos": "⭐ 自选",
+        "cot_tab_todos": "📋 全部资产",
+        "cot_fav_escolher": "选择您的自选资产",
+        "cot_fav_info": "您尚未将任何资产设为自选。请使用上方列表。",
+        "cot_filtrar_tipo": "按资产类型筛选",
+        "cot_filtrar_todos": "全部",
+        "cot_ultima_actualizacao": "最后更新：",
+        "cot_descarregar_csv": "⬇️ 下载CSV表格",
+        "cot_comparacao": "价格比较",
+        "cot_preco_kz": "价格（Kz）",
+        "cot_tabela_cols": {"ticker": "代码", "nome": "资产", "tipo": "类型", "preco": "价格", "variacao": "涨跌幅", "mercado": "市场"},
+        "cont_hero_sub": "俱乐部会计与资产负债概览",
+        "cont_df_cols": ["类别", "说明", "金额", "货币"],
+        "cont_df_rows": [
+            ("认缴资本", "成员承诺的总资本",           "AOA"),
+            ("实缴资本", "已实际缴纳的认缴资本部分",   "AOA"),
+            ("投资",     "BODIVA上市的股票与金融工具组合","AOA"),
+            ("储备",     "稳定基金及新机会流动性基金", "AOA"),
+        ],
+        "cont_patrimonio_metric": "俱乐部总净资产",
+        "cont_ultima_actualizacao": "最后更新：",
+        "hist_hero_sub": "俱乐部资产随时间的变化及报告导出",
+        "hist_poucos_pontos": "数据点尚少，图表将随时间逐步完善。",
+        "hist_caption": "每个点代表一次资产负债更新。纵轴单位为宽扎（Kz）。",
+        "hist_patrimonio_label": "总净资产（Kz）",
+        "hist_movimentos": "已记录交易",
+        "hist_sem_movimentos": "暂无交易记录。",
+        "hist_cols": {"tipo": "类型", "descricao": "说明", "montante_fmt": "金额", "data_movimento": "日期", "criado_em": "记录时间"},
+        "hist_descarregar_mov": "⬇️ 下载交易CSV",
+        "hist_exportar": "导出报告",
+        "hist_gerar_pdf": "生成PDF报告",
+        "hist_descarregar_pdf": "下载PDF报告",
+        "aval_hero_sub": "上市公司的市盈率倍数与公允价值（DDM），含俱乐部真实数据",
+        "aval_empresa": "公司",
+        "aval_sector": "行业",
+        "aval_cap_mercado": "市值：",
+        "aval_preco": "当前价格",
+        "aval_pe": "市盈率", "aval_pbv": "市净率", "aval_dy": "股息收益率",
+        "aval_nota1": "<b>市盈率</b> = 您为价格支付的盈利年数。<b>市净率</b> = 价格与账面价值之比。<b>股息收益率</b> = 年度股息回报。",
+        "aval_vj": "公允价值（DDM）", "aval_upside": "上行/下行空间", "aval_ke": "权益成本（Ke）",
+        "aval_nota2": "<b>公允价值（DDM）</b>为估算值。<b>上行/下行空间</b>与市场比较。<b>Ke</b> = 该行业风险所要求的最低回报。",
+        "aval_subvalorizado": "DDM模型显示该股票可能被低估。",
+        "aval_sobrevalorizado": "DDM模型显示该股票可能被高估。",
+        "aval_justo": "DDM模型显示市场价格接近估算价值。",
+        "aval_ddm_caption": "DDM/戈登增长模型：公允价值 = D1 ÷ (Ke − g)。仅作交叉验证，切勿单独使用。",
+        "aval_premium_titulo": "⭐ 深度分析（高级会员）",
+        "aval_premium_lock": "<div class='appo-premium-lock'><strong>本部分仅限高级会员使用。</strong><br/>行业比较、敏感性分析、ROE及实际股息收益率。<br/><br/>请联系管理员开通高级权限。</div>",
+        "aval_roe": "净资产收益率", "aval_payout": "分红比率", "aval_dy_real": "实际股息收益率",
+        "aval_nota3": "<b>净资产收益率</b> = 净利润/净资产。<b>分红比率</b> = 已分配利润比例。<b>实际股息收益率</b> = 扣除通胀后的收益率。",
+        "aval_sensibilidade": "##### 敏感性分析表 — 公允价值（每股 Kz）",
+        "aval_comparacao": "##### 行业对比（所有公司）",
+        "aval_comp_cols": {"Empresa": "公司", "Sector": "行业", "P/E": "市盈率", "P/BV": "市净率", "ROE": "净资产收益率", "DY Nominal": "名义股息率", "Upside DDM": "DDM上行空间"},
+        "aval_descarregar_comp": "⬇️ 下载行业对比CSV",
+        "aval_sem_dados": "暂无估值记录。",
+        "conv_hero_sub": "自动汇率，每日更新，含宽扎",
+        "conv_de": "从", "conv_para": "至", "conv_valor": "金额",
+        "conv_equivale": "等于",
+        "conv_taxa": "汇率：",
+        "conv_actualizado": "更新时间：",
+        "conv_erro": "该货币暂时无法从数据源获取。",
+        "conv_aviso": "暂时无法获取汇率，请稍后再试。",
+        "conv_tabela_titulo": "快速换算表（以1宽扎为基准）",
+        "conv_tabela_col": "1 Kz等于",
+        "conv_tabela_indisponivel": "表格暂时不可用。",
+        "conv_historico_titulo": "📈 宽扎走势（自有历史，自动积累）",
+        "conv_historico_select": "显示走势货币",
+        "conv_historico_label": "1 AOA兑",
+        "conv_historico_info": "历史数据天数尚少，请在不同日期访问以观察走势自然形成。",
+        "conv_historico_caption": "此历史数据由应用自动积累——无需任何人工录入——每当有人在新的一天打开本页时自动更新。",
+        "sim_hero_sub": "利用复利预测您的投资随时间的增长",
+        "sim_valor_inicial": "初始金额（Kz）",
+        "sim_contrib_mensal": "每月供款（Kz）",
+        "sim_taxa": "预期年化收益率（%）",
+        "sim_anos": "投资期限（年）",
+        "sim_inflacao": "假设年通胀率（%）",
+        "sim_saldo_nominal": "最终余额（名义）",
+        "sim_total_investido": "总投入",
+        "sim_juros": "所得复利",
+        "sim_chart_cols": {"Saldo Nominal": "名义余额", "Total Investido": "总投入"},
+        "sim_caption1": "以今日购买力计算的最终余额（扣除假设通胀率",
+        "sim_caption2": "%/年）：",
+        "sim_disclaimer": "以固定月复利计算的教育性模拟——实际市场收益会变动且无法保证。本内容不构成投资建议。",
+        "sim_partilha": "我模拟了 {vi} + {cm}/月，{a}年，年化{t}% = {sf} — APPO投资俱乐部",
+        "r50_hero_sub": "第8条原则：50%消费 · 30%投资 · 20%储蓄",
+        "r50_rendimento": "月总收入（Kz）",
+        "r50_alocacao": "推荐分配",
+        "r50_consumo": "消费（50%）", "r50_investimento": "投资（30%）", "r50_entesouramento": "储蓄（20%）",
+        "r50_comparar_titulo": "与您的实际支出对比（可选）",
+        "r50_real_consumo": "实际支出 — 消费（Kz）",
+        "r50_real_investimento": "实际支出 — 投资（Kz）",
+        "r50_real_entesouramento": "实际储蓄（Kz）",
+        "r50_comparar_btn": "对比",
+        "r50_resultado": "#### 对比结果",
+        "r50_aviso": "您的实际储蓄低于俱乐部原则建议的20%。",
+        "r50_sucesso": "您已达到或超过20%储蓄目标。",
+        "bib_hero_sub": "俱乐部原则及安哥拉资本市场文章",
+        "bib_sem_artigos": "暂无已发布文章。",
+        "bib_filtrar": "按类别筛选",
+        "bib_todas": "全部",
+        "bib_publicado": "发布于",
+        "ades_hero_sub": "填写表格申请加入APPO投资俱乐部",
+        "ades_nome": "全名 *",
+        "ades_email": "电子邮件",
+        "ades_telefone": "电话 / WhatsApp",
+        "ades_bi": "身份证号码",
+        "ades_contribuicao": "拟初始供款（Kz）",
+        "ades_aceite": "我声明已阅读并接受APPO投资俱乐部章程 *",
+        "ades_btn": "提交入会申请",
+        "ades_erro": "请填写全名并接受章程后再提交申请。",
+        "ades_sucesso": "入会申请提交成功！俱乐部管理员将与您联系。",
+        "sobre_hero_sub": "俱乐部的使命、原则及章程框架",
+        "sobre_quem_somos": "关于我们",
+        "sobre_quem_texto": "**APPO投资俱乐部**是一个安哥拉投资者协会，通过安哥拉债务与证券交易所（BODIVA）集体汇集资本，共同投资于国家资本市场。",
+        "sobre_principios": "投资原则与理念",
+        "sobre_estatutos": "章程 — 要点",
+        "sobre_estatutos_texto": """
+- **性质：** 依据正式注册章程成立的投资者协会。
+- **管理机构：** 会员大会、管理委员会和监事会。
+- **入会：** 须经管理委员会批准。
+- **决议：** 重要投资决定须经集体审议。
+- **收益分配：** 按各会员资本份额比例分配。
+""",
+        "sobre_nota": "内部说明：参考模板，待俱乐部正式批准注册章程后替换。",
+        "partilha_wa": "💬 WhatsApp", "partilha_tw": "𝕏 X / Twitter", "partilha_fb": "📘 Facebook",
+        "conv_partilha": "{v} {de} = {r} {para} — APPO投资俱乐部",
+        "pdf_titulo": "APPO投资俱乐部",
+        "pdf_gerado": "报告生成于",
+        "pdf_resumo": "资产负债概览",
+        "pdf_subscrito": "认缴资本：",
+        "pdf_realizado": "实缴资本：",
+        "pdf_investimentos": "投资：",
+        "pdf_reservas": "储备：",
+        "pdf_total": "合计：",
+        "pdf_activos": "投资组合资产",
+        "pdf_movimentos": "近期交易",
+        "pdf_sem_mov": "暂无交易记录。",
+        "pdf_nome_ficheiro": "appo_报告_{data}.pdf",
+        "bodiva_badge": "🇦🇴 BODIVA · 宽扎（Kz）",
     },
 }
 
@@ -551,7 +1213,7 @@ def obter_taxas_cambio(base: str) -> dict:
 
 
 # =========================================================
-# CONTEÚDO EDUCATIVO
+# CONTEÚDO EDUCATIVO (fica em PT — conforme acordado)
 # =========================================================
 TEXTO_PRINCIPIOS = """
 ### Missão
@@ -581,15 +1243,11 @@ TEXTO_DIVIDENDOS_GUIA     = "Três datas decidem se recebes um dividendo: Assemb
 TEXTO_DANGOTE             = "A Dangote Refinery abriu capital na NGX em 2026 — mercado fora do âmbito da BODIVA, referência educativa."
 TEXTO_REGRAS_BODIVA       = "Regra BODIVA 2/18: dispersão mínima 5%, lote mínimo 1 acção, variação máxima 25% estática, liquidação D+1."
 
-# Tickers reais atualizados com os preços de fecho oficiais da BODIVA (30/09/2026)
 ACTIVOS_INICIAIS = [
-    ("UNTLAAAA", "Unitel",                     "Ação",  30600.0,  2.01),
-    ("SBAOAAAA", "Standard Bank Angola",        "Ação",  62500.0, 25.00),
-    ("BAIAAAAA", "Banco Angolano de Investimentos (BAI)", "Ação", 94450.0, -2.63),
-    ("BFAAAAAA", "Banco de Fomento Angola (BFA)","Ação",  98500.0, -0.51),
-    ("BCGAAAAA", "Banco Caixa Geral Angola",    "Ação",  20200.0,  1.00),
-    ("BDVAAAAA", "BODIVA",                      "Ação",  98000.0,  3.16),
-    ("ENSAAAAA", "ENSA — Seguros de Angola",    "Ação",  23300.0,  0.00),
+    ("UNTLAAAA", "Unitel",                     "Ação",  38000.0, 0.0),
+    ("SBAAAAAA", "Standard Bank Angola",        "Ação",  45000.0, 0.0),
+    ("BFAAAAAA", "Banco de Fomento Angola (BFA)","Ação", 12500.0, 0.0),
+    ("BDVAAAAA", "BODIVA",                      "Ação",  82400.0, 0.0),
 ]
 
 ARTIGOS_INICIAIS = [
@@ -605,13 +1263,13 @@ ARTIGOS_INICIAIS = [
 ]
 
 AVALIACOES_INICIAIS = [
-    ("BFA",            "Banca",                      98500.0, 15000000,  233140000000, 0, 365250000000, 139885149600, 0.08),
-    ("BAI",            "Banca",                      94450.0, 19450000,  295918000000, 0, 838000000000, 147841239768, 0.08),
-    ("BCGA",           "Banca",                      20200.0, 20000000,   44143653000, 0, 256000000000,  21630389955, 0.06),
-    ("ENSA",           "Seguros",                    23300.0,  2400000,    6360917000, 0,           0,   3880154744, 0.05),
-    ("BDV (BODIVA)",   "Infra-estrutura de Mercado", 98000.0,   600000,    2609155000, 0,  9120000000,  1565495329, 0.10),
-    ("UNITEL",         "Telecomunicações",           30600.0, 50000000,  158368000000, 220800000000, 925000000000, 40000000000, 0.04),
-    ("SBA (Standard Bank)", "Banca",                62500.0, 14000000,  150000000000, 0, 340900000000,           0, 0.08),
+    ("BFA",            "Banca",                      100500.0, 15000000,  233140000000, 0, 365250000000, 139885149600, 0.08),
+    ("BAI",            "Banca",                       93900.0, 19450000,  295918000000, 0, 838000000000, 147841239768, 0.08),
+    ("BCGA",           "Banca",                       19800.0, 20000000,   44143653000, 0, 256000000000,  21630389955, 0.06),
+    ("ENSA",           "Seguros",                     26500.0,  2400000,    6360917000, 0,           0,   3880154744, 0.05),
+    ("BDV (BODIVA)",   "Infra-estrutura de Mercado",  81000.0,   600000,    2609155000, 0,  9120000000,  1565495329, 0.10),
+    ("UNITEL",         "Telecomunicações",            34000.0, 50000000,  158368000000, 220800000000, 925000000000, 40000000000, 0.04),
+    ("SBA (Standard Bank)", "Banca",                 41220.0, 14000000,  150000000000, 0, 340900000000,           0, 0.08),
 ]
 
 # =========================================================
@@ -664,7 +1322,6 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS movimentos (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, descricao TEXT, montante NUMERIC NOT NULL, data_movimento DATE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS activos (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, tipo TEXT NOT NULL, preco NUMERIC NOT NULL, variacao NUMERIC NOT NULL DEFAULT 0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS ticker TEXT NOT NULL DEFAULT ''")
-    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_anterior NUMERIC NOT NULL DEFAULT 0")
     executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS socios (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT, contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS premissas_macro (id INTEGER PRIMARY KEY CHECK (id = 1), inflacao NUMERIC NOT NULL DEFAULT 0.135, taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18, premio_risco NUMERIC NOT NULL DEFAULT 0.055, beta_banca NUMERIC NOT NULL DEFAULT 1.0, beta_telecom NUMERIC NOT NULL DEFAULT 0.9, beta_outros NUMERIC NOT NULL DEFAULT 1.0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
@@ -679,9 +1336,9 @@ def inicializar_bd():
 
     if consultar_um("SELECT COUNT(*) FROM resumo_patrimonial")[0] == 0:
         executar("INSERT INTO resumo_patrimonial (id, capital_social, capital_subscrito, capital_realizado, investimentos, reservas) VALUES (1, %s, %s, %s, %s, %s)",
-                 (10000000.0, 10000000.0, 4866555.0, 2866555.0, 2000000.0))
+                 (10000000.0, 10000000.0, 5000000.0, 1866677.0, 2832885.0))
         executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)",
-                 (4866555.0, 2866555.0, 2000000.0, 4866555.0))
+                 (5000000.0, 1866677.0, 2832885.0, 5000000.0 + 1866677.0 + 2832885.0))
     else:
         linha = consultar_um("SELECT capital_subscrito, capital_realizado, capital_social FROM resumo_patrimonial WHERE id = 1")
         if linha and linha[0] is None:
@@ -691,7 +1348,10 @@ def inicializar_bd():
 
     if consultar_um("SELECT COUNT(*) FROM activos")[0] == 0:
         for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
-            executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker, preco_anterior) VALUES (%s, %s, %s, %s, %s, %s)", (nome, tipo, preco, var, ticker, preco))
+            executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco, var, ticker))
+    else:
+        for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
+            executar("UPDATE activos SET ticker = %s WHERE nome = %s AND (ticker IS NULL OR ticker = '')", (ticker, nome))
 
     for titulo, categoria, conteudo in ARTIGOS_INICIAIS:
         if not consultar_um("SELECT 1 FROM artigos WHERE titulo = %s", (titulo,)):
@@ -786,13 +1446,9 @@ def substituir_activos(df: pd.DataFrame):
             continue
         tipo     = str(linha.get("tipo", "Ação")).strip() or "Ação"
         preco    = float(linha.get("preco", 0) or 0)
-        ticker   = str(linha.get("ticker", "") or "").strip().upper()
         variacao = float(linha.get("variacao", 0) or 0)
-
-        executar(
-            "INSERT INTO activos (nome, tipo, preco, variacao, ticker, preco_anterior) VALUES (%s, %s, %s, %s, %s, %s)",
-            (nome, tipo, preco, variacao, ticker, preco),
-        )
+        ticker   = str(linha.get("ticker", "") or "").strip().upper()
+        executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco, variacao, ticker))
     registar_historico_indice(calcular_indice_mercado(obter_activos()))
 
 def obter_favoritos(conta_id: int) -> set:
@@ -861,8 +1517,8 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     tx  = t()
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=20)
-    pdf.add_page("L")
-    pdf.set_margins(left=20, top=30, right=30)
+    pdf.add_page("L")  # Landscape
+    pdf.set_margins(left=20, top=30, right=30)  # esq 2cm, sup 3cm, dir 3cm
     pdf.set_fill_color(124, 31, 62)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 18)
@@ -894,14 +1550,17 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     pdf.set_text_color(0, 0, 0)
     pdf.ln(1)
     _pdf_linha(pdf, "PATRIMONIO TOTAL DO CLUBE", kz(cap_real), bold=True)
-    
+    # Carteira Real do Clube — dados registados nas avaliações com qtd e preco aquisição
     _pdf_secao(pdf, "CARTEIRA DE INVESTIMENTOS DO CLUBE")
-    # Carteira real do Clube com os dados exatos extraídos da corretora BFA Capital Market
+    # Cruzar activos cotados com avaliações para obter qtd e preco aquisição
+    df_aval_pdf = obter_avaliacoes()
+    # Dados reais da carteira do Clube — confirmados pelo BFA Capital Markets (29/09/2026)
+    # Preço aquisição = Valor aquisição / Quantidade
     CARTEIRA_REAL = {
         "UNTLAAAA": {"nome": "UNITEL ACCAO",   "qtd": 38, "val_aq": 1311562.53},
         "SBAOAAAA": {"nome": "STANDARD ACCAO", "qtd": 16, "val_aq":  806794.40},
         "BAIAAAAA": {"nome": "BAI ACCAO",       "qtd":  4, "val_aq":  362031.48},
-        "BFAAAAAA": {"nome": "BFA ACÇÃO",       "qtd":  4, "val_aq":  386166.92},
+        "BFAAAAAA": {"nome": "BFA ACCAO",       "qtd":  4, "val_aq":  386166.92},
     }
     df_cotacoes_pdf = df_activos.copy()
     linhas_carteira = []
@@ -914,6 +1573,7 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         qtd       = dados_r["qtd"]
         val_aq    = dados_r["val_aq"]
         preco_aq  = val_aq / qtd if qtd else 0
+        # Se cotação actual não disponível, usar valor de aquisição (sem mais-valia)
         val_act   = round(qtd * preco_act, 2) if preco_act and preco_act > 0 else val_aq
         mais_valia= val_act - val_aq
         mais_valia_pct = (mais_valia / val_aq * 100) if val_aq else 0
@@ -931,8 +1591,11 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         pdf.set_font("Helvetica", "I", 9)
         pdf.cell(0, 7, "Sem posicoes registadas na carteira.", ln=True)
     else:
+        # Cabeçalho tabela
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_fill_color(236, 222, 227)
+        # Landscape A4 útil = 297 - 20(esq) - 30(dir) = 247mm
+        # [20+48+10+28+28+32+32+30+19] = 247 exacto
         W = [20, 48, 10, 28, 28, 32, 32, 30, 19]
         headers = ["Ticker","Nome","Qtd","P. Aquis.(Kz)","P. Actual(Kz)","V. Aquis.(Kz)","V. Actual(Kz)","Mais-Valia","Var.%"]
         for h, w in zip(headers[:-1], W[:-1]):
@@ -975,10 +1638,13 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
             pdf.set_text_color(0,0,0)
             pdf.set_font("Helvetica","",8)
 
+        # Totais
         pdf.ln(1)
         pdf.set_font("Helvetica","B",9)
         pdf.set_fill_color(236, 222, 227)
         mv_total_pct = (mais_valias_total / (valor_total_carteira - mais_valias_total) * 100) if (valor_total_carteira - mais_valias_total) else 0
+        # W = [22,52,12,32,32,38,38,32,0] — soma fixas = 260, ultima=0
+        # soma até V.Actual = 20+48+10+28+28+32+32 = 198
         soma_ate_vact = 20+48+10+28+28+32
         pdf.cell(soma_ate_vact, 7, "TOTAL DA CARTEIRA", border="B", fill=True, ln=False, align="R")
         pdf.cell(32, 7, kz(valor_total_carteira), border="B", fill=True, align="R", ln=False)
@@ -987,7 +1653,6 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         pdf.cell(30, 7, kz(mais_valias_total), border="B", fill=True, align="R", ln=False)
         pdf.cell(19, 7, f"{mv_total_pct:+.2f}%", border="B", fill=True, align="R", ln=True)
         pdf.set_text_color(0,0,0)
-        
     _pdf_secao(pdf, "MOVIMENTOS RECENTES")
     if df_movimentos.empty:
         pdf.set_font("Helvetica", "I", 10)
@@ -1165,7 +1830,7 @@ if pagina == "🏠 Início & Análises":
     hero("Clube de Investimento APPO", tx["inicio_hero_sub"])
 
     resumo = obter_resumo_patrimonial()
-    total_patrimonio = resumo["capital_realizado"]
+    total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são parte do realizado
 
     col1, col2 = st.columns(2)
     col1.metric(tx["inicio_capital_subscrito"], kz(resumo["capital_subscrito"]))
@@ -1271,7 +1936,7 @@ elif pagina == "💰 Contabilidade & Finanças":
     df_resumo = pd.DataFrame([{cols_df[0]: r[0], cols_df[1]: r[1], cols_df[2]: m, cols_df[3]: r[2]}
                                for r, m in zip(rows_df, montantes)])
     st.dataframe(df_resumo, hide_index=True)
-    total_patrimonio = resumo["capital_realizado"]
+    total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são subdivisões do realizado
     st.metric(tx["cont_patrimonio_metric"], kz(total_patrimonio))
     st.caption(f"{tx['cont_ultima_actualizacao']} {resumo['actualizado_em']}")
 
@@ -1394,6 +2059,7 @@ elif pagina == "📐 Avaliação de Activos":
             df_comp = pd.DataFrame(linhas_comp)
             st.dataframe(df_comp, hide_index=True)
 
+            # Interpretação automática da tabela comparativa
             with st.expander("💡 Como interpretar esta tabela?"):
                 st.markdown("""
 **P/E (Price-to-Earnings):** Quantos anos de lucro estás a pagar pelo preço actual.
@@ -1402,7 +2068,7 @@ elif pagina == "📐 Avaliação de Activos":
 - P/E > 15x → caro, exige crescimento elevado para justificar
 
 **P/BV (Price-to-Book Value):** Preço face ao valor contabilístico dos activos.
-- P/BV < 1x → estás a comprar activos abaixo do valor de balanço
+- P/BV < 1x → estás a comprar activos abaixo do valor de balanço (atenção: pode indicar problema estrutural)
 - P/BV 1–2x → razoável para banca angolana
 - P/BV > 2x → só justificado por ROE elevado e consistente
 
@@ -1414,6 +2080,8 @@ elif pagina == "📐 Avaliação de Activos":
 - Com inflação angolana ~13,5%, um DY < 13,5% significa retorno real negativo em dividendos
 
 **Upside DDM:** Diferença entre o valor justo estimado pelo modelo DDM e o preço de mercado.
+- Positivo → modelo sugere subvalorização; Negativo → sobrevalorização
+- ⚠️ O DDM é sensível às premissas de crescimento (g) e custo de capital (Ke) — usar sempre como uma referência, não como verdade absoluta.
                 """)
 
             st.download_button(tx["aval_descarregar_comp"],
@@ -1480,6 +2148,7 @@ elif pagina == "🧪 Simulador de Investimento":
          "Opera a bolsa angolana sem risco real · Dotação inicial: 3 000 000 Kz",
          "🎮 BODIVA Virtual · Dinheiro fictício")
 
+    # ── inicializar estado ──────────────────────────────────────────
     if "sim_carteira" not in st.session_state:
         st.session_state["sim_carteira"] = {}
         st.session_state["sim_saldo_caixa"] = 3_000_000.0
@@ -1493,7 +2162,11 @@ elif pagina == "🧪 Simulador de Investimento":
     aba_broker, aba_carteira, aba_compostos = st.tabs(
         ["📊 Home Broker APPO", "💼 Minha Carteira Virtual", "📈 Simulador de Juros Compostos"])
 
+    # ══════════════════════════════════════════════════════════════
+    # ABA 1 — HOME BROKER
+    # ══════════════════════════════════════════════════════════════
     with aba_broker:
+        # ── Barra de saldo ─────────────────────────────────────────
         saldo_caixa   = st.session_state["sim_saldo_caixa"]
         cart          = st.session_state["sim_carteira"]
         valor_acoes   = sum(
@@ -1531,12 +2204,16 @@ elif pagina == "🧪 Simulador de Investimento":
                     {kz(var_total)} ({var_total/3_000_000*100:+.2f}%)
                 </div>
             </div>
+            <div style="margin-left:auto;font-size:0.72rem;color:rgba(255,255,255,0.6);">
+                💡 Dinheiro virtual · sem risco real
+            </div>
         </div>
         """)
 
         if acoes_sim.empty:
             st.info("Ainda não existem acções cotadas para negociar.")
         else:
+            # ── cabeçalho da tabela ────────────────────────────────
             render_html("""
             <div style="display:grid;
                         grid-template-columns:2fr 1fr 1fr 1fr 90px 90px 90px;
@@ -1554,6 +2231,7 @@ elif pagina == "🧪 Simulador de Investimento":
             </div>
             """)
 
+            # ── linhas de activos ──────────────────────────────────
             for i, (_, row) in enumerate(acoes_sim.iterrows()):
                 tk    = row["ticker"]
                 nome  = row["nome"]
@@ -1564,10 +2242,12 @@ elif pagina == "🧪 Simulador de Investimento":
                 seta     = "▲" if var > 0 else ("▼" if var < 0 else "—")
                 bg       = "#FAFAFA" if i % 2 == 0 else "#FFFFFF"
 
+                # chave de quantidade para este activo
                 qtd_key = f"sim_qtd_{tk}"
                 if qtd_key not in st.session_state:
                     st.session_state[qtd_key] = 1
 
+                # linha visual
                 render_html(f"""
                 <div style="display:grid;
                             grid-template-columns:2fr 1fr 1fr 1fr 90px 90px 90px;
@@ -1583,6 +2263,7 @@ elif pagina == "🧪 Simulador de Investimento":
                 </div>
                 """)
 
+                # controlos na mesma linha via colunas Streamlit
                 _, c_preco, c_var, c_cart, c_qtd, c_comprar, c_vender = st.columns(
                     [2, 1, 1, 1, 0.9, 0.9, 0.9])
 
@@ -1593,7 +2274,10 @@ elif pagina == "🧪 Simulador de Investimento":
 
                 custo = qtd_op * preco
 
-                if c_comprar.button("＋ Comprar", key=f"comprar_{tk}", use_container_width=True, type="primary"):
+                # botão COMPRAR
+                if c_comprar.button("＋ Comprar", key=f"comprar_{tk}",
+                                     use_container_width=True,
+                                     type="primary"):
                     if saldo_caixa >= custo:
                         st.session_state["sim_saldo_caixa"] -= custo
                         if tk in cart:
@@ -1608,10 +2292,13 @@ elif pagina == "🧪 Simulador de Investimento":
                             "Total": kz(custo)})
                         st.rerun()
                     else:
-                        st.warning(f"Saldo insuficiente para comprar {qtd_op} × {tk}.")
+                        st.warning(f"Saldo insuficiente para comprar {qtd_op} × {tk} ({kz(custo)} necessários).")
 
+                # botão VENDER
                 desact_venda = qtd_cart < qtd_op
-                if c_vender.button("－ Vender", key=f"vender_{tk}", use_container_width=True, disabled=desact_venda):
+                if c_vender.button("－ Vender", key=f"vender_{tk}",
+                                    use_container_width=True,
+                                    disabled=desact_venda):
                     receita = qtd_op * preco
                     st.session_state["sim_saldo_caixa"] += receita
                     cart[tk]["qtd"] -= qtd_op
@@ -1622,6 +2309,15 @@ elif pagina == "🧪 Simulador de Investimento":
                         "Qtd": qtd_op, "Preço Unit.": kz(preco),
                         "Total": kz(receita)})
                     st.rerun()
+
+            # ── rodapé tabela ───────────────────────────────────────
+            render_html("""
+            <div style="background:#F6EFF2; border-radius:0 0 8px 8px;
+                        padding:8px 12px; font-size:0.75rem; color:#7C1F3E;">
+                ⚠️ Preços fictícios actualizados manualmente pelo administrador.
+                Não são cotações em tempo real da BODIVA.
+            </div>
+            """)
 
         st.divider()
         st.subheader("📜 Histórico de Ordens")
@@ -1639,18 +2335,21 @@ elif pagina == "🧪 Simulador de Investimento":
                     del st.session_state[k]
             st.rerun()
 
+    # ══════════════════════════════════════════════════════════════
+    # ABA 2 — CARTEIRA VIRTUAL
+    # ══════════════════════════════════════════════════════════════
     with aba_carteira:
         st.subheader("💼 Composição da Minha Carteira Virtual")
         cart        = st.session_state["sim_carteira"]
         saldo_caixa = st.session_state["sim_saldo_caixa"]
 
         if not cart:
-            st.info("A tua carteira virtual está vazia.")
+            st.info("A tua carteira virtual está vazia. Vai ao Home Broker e compra as tuas primeiras acções!")
         else:
             linhas_cart = []
             valor_total_carteira = saldo_caixa
             for tk_c, dados_c in cart.items():
-                preco_act = float(df_activos_sim[df_activos_sim["ticker"] == tk_c]["preco"].values[0]) if tk_c in df_activos_sim["ticker"].values else dados_c["preco_medio"]
+                preco_act = float(df_activos_sim[df_activos_sim["ticker"] == tk_c]["preco"].values[0])                             if tk_c in df_activos_sim["ticker"].values else dados_c["preco_medio"]
                 val_act  = dados_c["qtd"] * preco_act
                 val_custo= dados_c["qtd"] * dados_c["preco_medio"]
                 pl       = val_act - val_custo
@@ -1666,14 +2365,21 @@ elif pagina == "🧪 Simulador de Investimento":
                     "P&L":           kz(pl),
                     "P&L (%)":       f"{pl_pct:+.2f}%",
                 })
+
             st.dataframe(pd.DataFrame(linhas_cart), hide_index=True)
+
             col_r1, col_r2, col_r3, col_r4 = st.columns(4)
             col_r1.metric("Saldo em Caixa",        kz(saldo_caixa))
             col_r2.metric("Valor em Acções",        kz(valor_total_carteira - saldo_caixa))
             col_r3.metric("Patrimônio Total",       kz(valor_total_carteira))
             var_t = valor_total_carteira - 3_000_000
-            col_r4.metric("Ganho/Perda Total",      kz(var_t), delta=f"{var_t/3_000_000*100:+.2f}%")
+            col_r4.metric("Ganho/Perda Total",      kz(var_t),
+                           delta=f"{var_t/3_000_000*100:+.2f}%")
+            nota_indicador("<b>P&L</b> = diferença entre o preço que pagaste e o preço actual de mercado (ganho/perda não realizado).")
 
+    # ══════════════════════════════════════════════════════════════
+    # ABA 3 — JUROS COMPOSTOS
+    # ══════════════════════════════════════════════════════════════
     with aba_compostos:
         st.subheader("📈 Simulador de Juros Compostos")
         col1, col2 = st.columns(2)
@@ -1706,6 +2412,11 @@ elif pagina == "🧪 Simulador de Investimento":
         col_b.metric("Total Investido",       kz(total_inv))
         col_c.metric("Juros Compostos",       kz(saldo_c - total_inv))
         st.bar_chart(df_sim[["Saldo Nominal", "Total Investido"]])
+        saldo_real_f = df_sim["Saldo Real"].iloc[-1]
+        st.caption(f"Saldo final em poder de compra de hoje (inflação {inflacao_sim:.1f}%/ano): {kz(saldo_real_f)}")
+        nota_indicador(f"Com inflação de {inflacao_sim:.1f}%/ano, o teu saldo nominal de {kz(saldo_c)} equivale apenas a {kz(saldo_real_f)} em poder de compra actual.")
+        st.caption("Simulação educativa. Não constitui aconselhamento de investimento.")
+        botoes_partilha(f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo_c)} — Clube de Investimento APPO")
 
 # =========================================================
 # PÁGINA: REGRA 50/30/20
@@ -1761,7 +2472,7 @@ elif pagina == "📚 Biblioteca Educativa":
             with st.expander(f"{ICONES_CATEGORIA.get(artigo['categoria'], '📄')} {artigo['titulo']}", key=f"artigo_exp_{artigo['id']}"):
                 banner_categoria(artigo["categoria"])
                 st.caption(f"{tx['bib_publicado']} {artigo['criado_em']}")
-                st.markdown(artigo["conteudo"])
+                st.markdown(artigo["conteudo"])   # conteúdo mantém-se em PT conforme acordado
 
 # =========================================================
 # PÁGINA: ADESÃO DE SÓCIOS
@@ -1794,13 +2505,13 @@ elif pagina == "ℹ️ Sobre Nós & Estatutos":
     st.subheader(tx["sobre_quem_somos"])
     st.markdown(tx["sobre_quem_texto"])
     st.subheader(tx["sobre_principios"])
-    st.markdown(TEXTO_PRINCIPIOS)
+    st.markdown(TEXTO_PRINCIPIOS)   # mantém-se em PT
     st.subheader(tx["sobre_estatutos"])
     st.markdown(tx["sobre_estatutos_texto"])
     st.caption(tx["sobre_nota"])
 
 # =========================================================
-# PÁGINA: PAINEL DO ADMINISTRADOR
+# PÁGINA: PAINEL DO ADMINISTRADOR (mantém-se em PT)
 # =========================================================
 elif pagina == "🔐 Painel do Administrador":
     hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
@@ -1828,7 +2539,7 @@ elif pagina == "🔐 Painel do Administrador":
 
     with aba_activos:
         st.subheader("Editar Cotações & Activos")
-        st.caption("Podes editar directamente os preços e as variações percentuais (%) tal como fecharam na BODIVA.")
+        st.caption("Cada vez que guardas, o Índice APPO é recalculado e um novo ponto é registado no histórico.")
         df_activos_admin = obter_activos()
         df_editado = st.data_editor(
             df_activos_admin[["ticker", "nome", "tipo", "preco", "variacao"]], num_rows="dynamic", key="editor_activos",
