@@ -1926,13 +1926,12 @@ elif pagina == "📈 Cotações & Activos":
             df_filtrado  = df_activos if filtro_tipo == tx["cot_filtrar_todos"] else df_activos[df_activos["tipo"] == filtro_tipo]
             st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
             st.caption(f"{tx['cot_ultima_actualizacao']} {df_filtrado['actualizado_em'].max()}")
-            # Só incluir ticker se tiver dados; renomear colunas para português
-df_csv = df_filtrado[["ticker","nome","tipo","preco","variacao"]].copy()
-df_csv = df_csv[df_csv["ticker"].str.strip() != ""]  # remove linhas sem ticker
-df_csv = df_csv.rename(columns={"ticker":"Ticker","nome":"Activo","tipo":"Tipo","preco":"Preço (Kz)","variacao":"Variação (%)"})
-st.download_button(tx["cot_descarregar_csv"],
-                   data=df_csv.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
-                   file_name="cotacoes_appo.csv", mime="text/csv")
+            df_csv = df_filtrado[["ticker","nome","tipo","preco","variacao"]].copy()
+            df_csv = df_csv[df_csv["ticker"].str.strip() != ""]
+            df_csv = df_csv.rename(columns={"ticker":"Ticker","nome":"Activo","tipo":"Tipo","preco":"Preço (Kz)","variacao":"Variação (%)"})
+            st.download_button(tx["cot_descarregar_csv"],
+                               data=df_csv.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                               file_name="cotacoes_appo.csv", mime="text/csv")
             st.divider()
             st.subheader(tx["cot_comparacao"])
             cols_tb = tx["cot_tabela_cols"]
