@@ -1428,7 +1428,7 @@ def obter_activos() -> pd.DataFrame:
     return consultar_df("SELECT id, ticker, nome, tipo, preco, variacao, actualizado_em FROM activos ORDER BY nome")
 
 def calcular_indice_mercado(df_activos: pd.DataFrame) -> float:
-    acoes = df_activos[df_activos["tipo"] == "Ação"]
+    acoes = df_activos[df_activos["tipo"].str.upper().str.contains("A", na=False)]
     return float(acoes["variacao"].mean()) if not acoes.empty else 0.0
 
 def registar_historico_indice(valor: float):
@@ -1926,9 +1926,13 @@ elif pagina == "📈 Cotações & Activos":
             df_filtrado  = df_activos if filtro_tipo == tx["cot_filtrar_todos"] else df_activos[df_activos["tipo"] == filtro_tipo]
             st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
             st.caption(f"{tx['cot_ultima_actualizacao']} {df_filtrado['actualizado_em'].max()}")
-            st.download_button(tx["cot_descarregar_csv"],
-                               data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
-                               file_name="cotacoes_appo.csv", mime="text/csv")
+            # Só incluir ticker se tiver dados; renomear colunas para português
+df_csv = df_filtrado[["ticker","nome","tipo","preco","variacao"]].copy()
+df_csv = df_csv[df_csv["ticker"].str.strip() != ""]  # remove linhas sem ticker
+df_csv = df_csv.rename(columns={"ticker":"Ticker","nome":"Activo","tipo":"Tipo","preco":"Preço (Kz)","variacao":"Variação (%)"})
+st.download_button(tx["cot_descarregar_csv"],
+                   data=df_csv.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                   file_name="cotacoes_appo.csv", mime="text/csv")
             st.divider()
             st.subheader(tx["cot_comparacao"])
             cols_tb = tx["cot_tabela_cols"]
@@ -2121,8 +2125,19 @@ elif pagina == "💱 Conversor de Moeda":
             st.error(tx["conv_erro"])
         else:
             resultado = valor * taxa
-            st.metric(f"{valor:,.2f} {moeda_de} {tx['conv_equivale']}", f"{resultado:,.2f} {moeda_para}")
-            st.caption(f"{tx['conv_taxa']} 1 {moeda_de} = {taxa:.6f} {moeda_para}. {tx['conv_actualizado']} {dados_cambio['actualizado']}.")
+            col_res1, col_res2 = st.columns([1, 1])
+            col_res1.metric(f"{valor:,.2f} {moeda_de} {tx['conv_equivale']}", f"{resultado:,.2f} {moeda_para}")
+            col_res1.caption(f"{tx['conv_taxa']} 1 {moeda_de} = {taxa:.6f} {moeda_para}. {tx['conv_actualizado']} {dados_cambio['actualizado']}.")
+            # Gráfico automático da taxa de câmbio seleccionada
+            df_hist_auto = obter_historico_cambio()
+            col_moeda_graf = moeda_para.lower() if moeda_de == "AOA" else moeda_de.lower()
+            moedas_disponiveis = ["usd", "eur", "gbp", "zar", "cny", "brl"]
+            if col_moeda_graf in moedas_disponiveis and not df_hist_auto.empty and len(df_hist_auto) >= 2:
+                with col_res2:
+                    st.caption(f"📈 Tendência: 1 AOA → {col_moeda_graf.upper()}")
+                    df_graf = df_hist_auto.set_index("registado_em")[[col_moeda_graf]].rename(
+                        columns={col_moeda_graf: f"1 AOA em {col_moeda_graf.upper()}"})
+                    st.line_chart(df_graf)
             texto_partilha = tx["conv_partilha"].format(v=f"{valor:,.2f}", de=moeda_de, r=f"{resultado:,.2f}", para=moeda_para)
             botoes_partilha(texto_partilha)
     except Exception:
@@ -2168,7 +2183,12 @@ elif pagina == "🧪 Simulador de Investimento":
         st.session_state["sim_qtd_sel"] = {}
 
     df_activos_sim = _df_activos_ticker.copy()
-    acoes_sim = df_activos_sim[df_activos_sim["tipo"] == "Ação"].copy() if not df_activos_sim.empty else pd.DataFrame()
+    # Filtrar acções independentemente de maiúsculas/acentos (Ação vs ACÇÃO)
+    if not df_activos_sim.empty:
+        mask = df_activos_sim["tipo"].str.upper().str.contains("A", na=False)
+        acoes_sim = df_activos_sim[mask].copy()
+    else:
+        acoes_sim = pd.DataFrame()
 
     aba_broker, aba_carteira, aba_compostos = st.tabs(
         ["📊 Home Broker APPO", "💼 Minha Carteira Virtual", "📈 Simulador de Juros Compostos"])
