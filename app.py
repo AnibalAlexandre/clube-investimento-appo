@@ -1428,7 +1428,7 @@ def obter_activos() -> pd.DataFrame:
     return consultar_df("SELECT id, ticker, nome, tipo, preco, variacao, actualizado_em FROM activos ORDER BY nome")
 
 def calcular_indice_mercado(df_activos: pd.DataFrame) -> float:
-    acoes = df_activos[df_activos["tipo"].str.upper().str.contains("A", na=False)]
+    acoes = df_activos[df_activos["tipo"] == "Ação"]
     return float(acoes["variacao"].mean()) if not acoes.empty else 0.0
 
 def registar_historico_indice(valor: float):
@@ -1439,26 +1439,90 @@ def registar_historico_indice(valor: float):
 def obter_historico_indice() -> pd.DataFrame:
     return consultar_df("SELECT indice_variacao, registado_em FROM historico_indice_mercado ORDER BY registado_em")
 
+def _num_seguro(valor, default=0.0):
+    """Converte para float de forma segura; nunca lança excepção, nunca devolve NaN."""
+    try:
+        v = float(valor)
+    except (TypeError, ValueError):
+        return default
+    return default if v != v else v  # v != v só é True quando v é NaN
+
+
 def substituir_activos(df: pd.DataFrame):
-    # Guardar preços anteriores antes de apagar
+    """
+    Substitui a tabela de activos, recalculando a variação % de cada um face
+    ao seu preço anterior (identificado pelo ticker).
+
+    Protecções incluídas (a "percentagem maluca" relatada vinha daqui):
+      - Tickers em branco NUNCA são usados para comparar preços — uma linha nova
+        no data_editor sem ticker preenchido não deve "herdar" por acidente o
+        preço de outra linha em branco.
+      - Tickers duplicados na tabela anterior são detectados e avisados, em vez
+        de o dicionário os sobrepor silenciosamente (o que troca o preço-base
+        de um activo pelo de outro).
+      - Preços não numéricos ou NaN são tratados como 0, nunca propagam para a
+        divisão.
+      - Se o preço anterior OU o novo preço for 0, a variação é 0 (não há base
+        válida para comparar) — já não se tenta dividir por zero.
+      - Variações acima de ±500% geram um aviso visível ao admin (não são
+        escondidas) — na prática, quase sempre sinalizam um erro de dígitos no
+        preço introduzido, e é mais seguro mostrar isso do que suprimi-lo.
+    """
     df_anterior = obter_activos()
-    precos_anteriores = {str(r["ticker"]).strip().upper(): float(r["preco"]) for _, r in df_anterior.iterrows()}
+
+    precos_anteriores: dict[str, float] = {}
+    tickers_duplicados = set()
+    for _, r in df_anterior.iterrows():
+        tk = str(r.get("ticker", "") or "").strip().upper()
+        if not tk:
+            continue  # ticker em branco nunca serve de chave de comparação
+        preco_r = _num_seguro(r.get("preco"), default=None)
+        if preco_r is None:
+            continue
+        if tk in precos_anteriores:
+            tickers_duplicados.add(tk)
+        precos_anteriores[tk] = preco_r
+
+    if tickers_duplicados:
+        st.warning(
+            "⚠️ Tickers duplicados na tabela de activos: "
+            f"{', '.join(sorted(tickers_duplicados))}. "
+            "A variação % destes activos pode estar a comparar o preço errado — "
+            "corrige os tickers para que sejam únicos."
+        )
+
     executar("DELETE FROM activos")
+    avisos_variacao_extrema = []
+
     for _, linha in df.iterrows():
         nome = str(linha.get("nome", "")).strip()
         if not nome:
             continue
-        tipo         = str(linha.get("tipo", "Ação")).strip() or "Ação"
-        preco        = float(linha.get("preco", 0) or 0)
-        ticker       = str(linha.get("ticker", "") or "").strip().upper()
-        preco_ant    = precos_anteriores.get(ticker, preco)
-        # Calcular variação automaticamente face ao preço anterior
-        if preco_ant and preco_ant != 0:
-            variacao = round((preco - preco_ant) / preco_ant * 100, 2)
+        tipo   = str(linha.get("tipo", "Ação")).strip() or "Ação"
+        preco  = _num_seguro(linha.get("preco"), default=0.0)
+        ticker = str(linha.get("ticker", "") or "").strip().upper()
+        preco_ant = precos_anteriores.get(ticker) if ticker else None
+
+        if not preco_ant or not preco:
+            # Sem base válida para comparar (activo novo, ticker em branco,
+            # preço anterior a 0, ou preço novo a 0): variação é 0, não se divide.
+            variacao = 0.0
+            preco_ant_guardar = preco_ant if preco_ant else preco
         else:
-            variacao = float(linha.get("variacao", 0) or 0)
+            variacao = round((preco - preco_ant) / preco_ant * 100, 2)
+            preco_ant_guardar = preco_ant
+            if abs(variacao) > 500:
+                avisos_variacao_extrema.append(f"{ticker or nome}: {variacao:+.2f}%")
+
         executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker, preco_anterior) VALUES (%s, %s, %s, %s, %s, %s)",
-                 (nome, tipo, preco, variacao, ticker, preco_ant))
+                 (nome, tipo, preco, variacao, ticker, preco_ant_guardar))
+
+    if avisos_variacao_extrema:
+        st.warning(
+            "⚠️ Variação invulgarmente elevada — confirma se não houve um erro de "
+            "dígitos ao introduzir o preço: " + "; ".join(avisos_variacao_extrema)
+        )
+
     registar_historico_indice(calcular_indice_mercado(obter_activos()))
 
 def obter_favoritos(conta_id: int) -> set:
@@ -1926,11 +1990,8 @@ elif pagina == "📈 Cotações & Activos":
             df_filtrado  = df_activos if filtro_tipo == tx["cot_filtrar_todos"] else df_activos[df_activos["tipo"] == filtro_tipo]
             st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
             st.caption(f"{tx['cot_ultima_actualizacao']} {df_filtrado['actualizado_em'].max()}")
-            df_csv = df_filtrado[["ticker","nome","tipo","preco","variacao"]].copy()
-            df_csv = df_csv[df_csv["ticker"].str.strip() != ""]
-            df_csv = df_csv.rename(columns={"ticker":"Ticker","nome":"Activo","tipo":"Tipo","preco":"Preço (Kz)","variacao":"Variação (%)"})
             st.download_button(tx["cot_descarregar_csv"],
-                               data=df_csv.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                               data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
                                file_name="cotacoes_appo.csv", mime="text/csv")
             st.divider()
             st.subheader(tx["cot_comparacao"])
@@ -2124,19 +2185,8 @@ elif pagina == "💱 Conversor de Moeda":
             st.error(tx["conv_erro"])
         else:
             resultado = valor * taxa
-            col_res1, col_res2 = st.columns([1, 1])
-            col_res1.metric(f"{valor:,.2f} {moeda_de} {tx['conv_equivale']}", f"{resultado:,.2f} {moeda_para}")
-            col_res1.caption(f"{tx['conv_taxa']} 1 {moeda_de} = {taxa:.6f} {moeda_para}. {tx['conv_actualizado']} {dados_cambio['actualizado']}.")
-            # Gráfico automático da taxa de câmbio seleccionada
-            df_hist_auto = obter_historico_cambio()
-            col_moeda_graf = moeda_para.lower() if moeda_de == "AOA" else moeda_de.lower()
-            moedas_disponiveis = ["usd", "eur", "gbp", "zar", "cny", "brl"]
-            if col_moeda_graf in moedas_disponiveis and not df_hist_auto.empty and len(df_hist_auto) >= 2:
-                with col_res2:
-                    st.caption(f"📈 Tendência: 1 AOA → {col_moeda_graf.upper()}")
-                    df_graf = df_hist_auto.set_index("registado_em")[[col_moeda_graf]].rename(
-                        columns={col_moeda_graf: f"1 AOA em {col_moeda_graf.upper()}"})
-                    st.line_chart(df_graf)
+            st.metric(f"{valor:,.2f} {moeda_de} {tx['conv_equivale']}", f"{resultado:,.2f} {moeda_para}")
+            st.caption(f"{tx['conv_taxa']} 1 {moeda_de} = {taxa:.6f} {moeda_para}. {tx['conv_actualizado']} {dados_cambio['actualizado']}.")
             texto_partilha = tx["conv_partilha"].format(v=f"{valor:,.2f}", de=moeda_de, r=f"{resultado:,.2f}", para=moeda_para)
             botoes_partilha(texto_partilha)
     except Exception:
@@ -2182,12 +2232,7 @@ elif pagina == "🧪 Simulador de Investimento":
         st.session_state["sim_qtd_sel"] = {}
 
     df_activos_sim = _df_activos_ticker.copy()
-    # Filtrar acções independentemente de maiúsculas/acentos (Ação vs ACÇÃO)
-    if not df_activos_sim.empty:
-        mask = df_activos_sim["tipo"].str.upper().str.contains("A", na=False)
-        acoes_sim = df_activos_sim[mask].copy()
-    else:
-        acoes_sim = pd.DataFrame()
+    acoes_sim = df_activos_sim[df_activos_sim["tipo"] == "Ação"].copy() if not df_activos_sim.empty else pd.DataFrame()
 
     aba_broker, aba_carteira, aba_compostos = st.tabs(
         ["📊 Home Broker APPO", "💼 Minha Carteira Virtual", "📈 Simulador de Juros Compostos"])
