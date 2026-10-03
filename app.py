@@ -1320,9 +1320,23 @@ def inicializar_bd():
     executar("ALTER TABLE resumo_patrimonial ADD COLUMN IF NOT EXISTS capital_realizado NUMERIC")
     executar("""CREATE TABLE IF NOT EXISTS historico_patrimonio (id SERIAL PRIMARY KEY, capital_social NUMERIC NOT NULL, investimentos NUMERIC NOT NULL, reservas NUMERIC NOT NULL, total NUMERIC NOT NULL, registado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS movimentos (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, descricao TEXT, montante NUMERIC NOT NULL, data_movimento DATE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    # Carteira REAL do Clube (dinheiro verdadeiro, investido de facto na BFA) —
+    # distinta do Simulador (dinheiro fictício, para treino). Editável pelo
+    # admin no painel; é esta tabela que alimenta o relatório PDF, substituindo
+    # o antigo dicionário fixo CARTEIRA_REAL escrito no código.
+    executar("""CREATE TABLE IF NOT EXISTS carteira_real (
+                    id SERIAL PRIMARY KEY,
+                    ticker TEXT NOT NULL,
+                    nome TEXT NOT NULL,
+                    qtd NUMERIC NOT NULL DEFAULT 0,
+                    valor_aquisicao NUMERIC NOT NULL DEFAULT 0,
+                    actualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+                )""")
     executar("""CREATE TABLE IF NOT EXISTS activos (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, tipo TEXT NOT NULL, preco NUMERIC NOT NULL, variacao NUMERIC NOT NULL DEFAULT 0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS ticker TEXT NOT NULL DEFAULT ''")
-    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_anterior NUMERIC NOT NULL DEFAULT 0")
+    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_anterior NUMERIC NOT NULL DEFAULT 0")  # legado, já não é usado para calcular variação
+    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_abertura_dia NUMERIC")
+    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS data_abertura_dia DATE")
     executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS socios (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT, contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS premissas_macro (id INTEGER PRIMARY KEY CHECK (id = 1), inflacao NUMERIC NOT NULL DEFAULT 0.135, taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18, premio_risco NUMERIC NOT NULL DEFAULT 0.055, beta_banca NUMERIC NOT NULL DEFAULT 1.0, beta_telecom NUMERIC NOT NULL DEFAULT 0.9, beta_outros NUMERIC NOT NULL DEFAULT 1.0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
@@ -1425,7 +1439,37 @@ def obter_movimentos() -> pd.DataFrame:
 
 # ---------------- Activos + Favoritos + Índice ----------------
 def obter_activos() -> pd.DataFrame:
-    return consultar_df("SELECT id, ticker, nome, tipo, preco, variacao, actualizado_em FROM activos ORDER BY nome")
+    return consultar_df(
+        "SELECT id, ticker, nome, tipo, preco, variacao, "
+        "preco_abertura_dia, data_abertura_dia, actualizado_em "
+        "FROM activos ORDER BY nome")
+
+
+def obter_carteira_real() -> pd.DataFrame:
+    """Posições reais do Clube (dinheiro verdadeiro), para o relatório PDF."""
+    return consultar_df(
+        "SELECT id, ticker, nome, qtd, valor_aquisicao, actualizado_em "
+        "FROM carteira_real ORDER BY nome")
+
+
+def substituir_carteira_real(df: pd.DataFrame):
+    """
+    Substitui a carteira real do Clube a partir da tabela editada pelo admin.
+    Cada linha é uma posição: ticker, nome, quantidade de acções detidas, e o
+    valor TOTAL pago na aquisição (não o preço unitário — o relatório divide
+    por qtd para obter o preço médio, tal como fazia o dicionário fixo antigo).
+    """
+    executar("DELETE FROM carteira_real")
+    for _, linha in df.iterrows():
+        nome = str(linha.get("nome", "")).strip()
+        if not nome:
+            continue
+        ticker = str(linha.get("ticker", "") or "").strip().upper()
+        qtd    = _num_seguro(linha.get("qtd"), default=0.0)
+        val_aq = _num_seguro(linha.get("valor_aquisicao"), default=0.0)
+        executar(
+            "INSERT INTO carteira_real (ticker, nome, qtd, valor_aquisicao) VALUES (%s, %s, %s, %s)",
+            (ticker, nome, qtd, val_aq))
 
 def calcular_indice_mercado(df_activos: pd.DataFrame) -> float:
     acoes = df_activos[df_activos["tipo"] == "Ação"]
@@ -1451,37 +1495,50 @@ def _num_seguro(valor, default=0.0):
 def substituir_activos(df: pd.DataFrame):
     """
     Substitui a tabela de activos, recalculando a variação % de cada um face
-    ao seu preço anterior (identificado pelo ticker).
+    ao PREÇO DE ABERTURA DO DIA — a mesma convenção da BFA/BODIVA: a "variação
+    diária" só muda quando o dia civil muda, nunca simplesmente por o admin ter
+    voltado a gravar a tabela (esse era o motivo real do "zera tudo": a versão
+    anterior comparava sempre com a última gravação, não com a abertura do dia).
 
-    Protecções incluídas (a "percentagem maluca" relatada vinha daqui):
-      - Tickers em branco NUNCA são usados para comparar preços — uma linha nova
-        no data_editor sem ticker preenchido não deve "herdar" por acidente o
-        preço de outra linha em branco.
-      - Tickers duplicados na tabela anterior são detectados e avisados, em vez
-        de o dicionário os sobrepor silenciosamente (o que troca o preço-base
-        de um activo pelo de outro).
-      - Preços não numéricos ou NaN são tratados como 0, nunca propagam para a
-        divisão.
-      - Se o preço anterior OU o novo preço for 0, a variação é 0 (não há base
-        válida para comparar) — já não se tenta dividir por zero.
-      - Variações acima de ±500% geram um aviso visível ao admin (não são
-        escondidas) — na prática, quase sempre sinalizam um erro de dígitos no
-        preço introduzido, e é mais seguro mostrar isso do que suprimi-lo.
+    Regra por activo (identificado pelo ticker):
+      - Se é a primeira vez que este ticker aparece, ou se a sua última
+        referência de abertura é de um dia diferente de hoje: hoje começa um
+        novo "dia de referência" — o preço de abertura de hoje passa a ser o
+        último preço conhecido deste activo ANTES desta gravação.
+      - Se já houve uma gravação hoje para este activo, a abertura do dia
+        MANTÉM-SE (não se move a cada gravação) — só a variação face a essa
+        abertura é que se recalcula com o preço novo.
+      - Variação = (preço novo − preço de abertura do dia) ÷ preço de abertura
+        do dia × 100.
+
+    Protecções mantidas:
+      - Tickers em branco ou duplicados nunca são usados como chave de
+        comparação (avisa, não sobrepõe silenciosamente).
+      - Preços não numéricos / NaN tratados como 0, nunca chegam à divisão.
+      - Se não há preço de abertura válido (activo novo) ou o preço novo é 0,
+        a variação é 0 — nunca se divide por zero.
+      - Variações acima de ±500% num só dia geram aviso visível (tipicamente
+        um erro de dígitos no preço introduzido).
     """
     df_anterior = obter_activos()
+    hoje = datetime.now().date()
 
-    precos_anteriores: dict[str, float] = {}
+    referencia: dict[str, dict] = {}
     tickers_duplicados = set()
     for _, r in df_anterior.iterrows():
         tk = str(r.get("ticker", "") or "").strip().upper()
         if not tk:
-            continue  # ticker em branco nunca serve de chave de comparação
+            continue
         preco_r = _num_seguro(r.get("preco"), default=None)
         if preco_r is None:
             continue
-        if tk in precos_anteriores:
+        if tk in referencia:
             tickers_duplicados.add(tk)
-        precos_anteriores[tk] = preco_r
+        referencia[tk] = {
+            "preco": preco_r,
+            "preco_abertura": _num_seguro(r.get("preco_abertura_dia"), default=None),
+            "data_abertura": r.get("data_abertura_dia"),
+        }
 
     if tickers_duplicados:
         st.warning(
@@ -1501,26 +1558,37 @@ def substituir_activos(df: pd.DataFrame):
         tipo   = str(linha.get("tipo", "Ação")).strip() or "Ação"
         preco  = _num_seguro(linha.get("preco"), default=0.0)
         ticker = str(linha.get("ticker", "") or "").strip().upper()
-        preco_ant = precos_anteriores.get(ticker) if ticker else None
+        ref = referencia.get(ticker) if ticker else None
 
-        if not preco_ant or not preco:
-            # Sem base válida para comparar (activo novo, ticker em branco,
-            # preço anterior a 0, ou preço novo a 0): variação é 0, não se divide.
-            variacao = 0.0
-            preco_ant_guardar = preco_ant if preco_ant else preco
+        if ref is None:
+            # activo novo para este ticker: hoje É a abertura dele
+            preco_abertura, data_abertura = preco, hoje
+        elif ref["data_abertura"] is None or ref["data_abertura"] != hoje:
+            # mudou o dia (ou nunca teve referência válida): fixa a abertura
+            # de hoje como o último preço conhecido antes desta gravação
+            preco_abertura = ref["preco"] if ref["preco"] else preco
+            data_abertura  = hoje
         else:
-            variacao = round((preco - preco_ant) / preco_ant * 100, 2)
-            preco_ant_guardar = preco_ant
+            # já houve gravação hoje: mantém a MESMA abertura, não a desloca
+            preco_abertura = ref["preco_abertura"] if ref["preco_abertura"] else preco
+            data_abertura  = ref["data_abertura"]
+
+        if not preco_abertura or not preco:
+            variacao = 0.0
+        else:
+            variacao = round((preco - preco_abertura) / preco_abertura * 100, 2)
             if abs(variacao) > 500:
                 avisos_variacao_extrema.append(f"{ticker or nome}: {variacao:+.2f}%")
 
-        executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker, preco_anterior) VALUES (%s, %s, %s, %s, %s, %s)",
-                 (nome, tipo, preco, variacao, ticker, preco_ant_guardar))
+        executar(
+            "INSERT INTO activos (nome, tipo, preco, variacao, ticker, preco_abertura_dia, data_abertura_dia) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (nome, tipo, preco, variacao, ticker, preco_abertura, data_abertura))
 
     if avisos_variacao_extrema:
         st.warning(
-            "⚠️ Variação invulgarmente elevada — confirma se não houve um erro de "
-            "dígitos ao introduzir o preço: " + "; ".join(avisos_variacao_extrema)
+            "⚠️ Variação invulgarmente elevada num só dia — confirma se não houve "
+            "um erro de dígitos ao introduzir o preço: " + "; ".join(avisos_variacao_extrema)
         )
 
     registar_historico_indice(calcular_indice_mercado(obter_activos()))
@@ -1628,25 +1696,24 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     _pdf_secao(pdf, "CARTEIRA DE INVESTIMENTOS DO CLUBE")
     # Cruzar activos cotados com avaliações para obter qtd e preco aquisição
     df_aval_pdf = obter_avaliacoes()
-    # Carteira real do Clube — BFA Capital Markets (30/09/2026)
-    CARTEIRA_REAL = {
-        "UNTLAAAA": {"nome": "UNITEL ACCAO",   "qtd": 38, "val_aq": 1311562.53},
-        "SBAOAAAA": {"nome": "STANDARD ACCAO", "qtd": 16, "val_aq":  806794.40},
-        "BAIAAAAA": {"nome": "BAI ACCAO",       "qtd":  4, "val_aq":  362031.48},
-        "BFAAAAAA": {"nome": "BFA ACCAO",       "qtd":  4, "val_aq":  386166.92},
-    }
+    # Carteira REAL do Clube — lida ao vivo da tabela carteira_real (editável
+    # pelo admin em "Painel do Administrador › Carteira Real"), já não de um
+    # dicionário fixo no código. Se a tabela estiver vazia, o relatório mostra
+    # isso mesmo, em vez de números antigos congelados.
+    carteira_real_df = obter_carteira_real()
     df_cotacoes_pdf = df_activos.copy()
     linhas_carteira = []
     valor_total_carteira = 0.0
     mais_valias_total = 0.0
     # Limpar tickers da BD (podem vir como "UNTLAAAA" ou campo nome pode ter variações)
     df_cotacoes_pdf["ticker_clean"] = df_cotacoes_pdf["ticker"].str.strip().str.upper()
-    for ticker_r, dados_r in CARTEIRA_REAL.items():
-        row_cot = df_cotacoes_pdf[df_cotacoes_pdf["ticker_clean"] == ticker_r.strip().upper()]
+    for _, pos in carteira_real_df.iterrows():
+        ticker_r = str(pos["ticker"] or "").strip().upper()
+        row_cot = df_cotacoes_pdf[df_cotacoes_pdf["ticker_clean"] == ticker_r]
         preco_act = float(row_cot["preco"].values[0]) if not row_cot.empty else 0.0
         var_dia   = float(row_cot["variacao"].values[0]) if not row_cot.empty else 0.0
-        qtd       = dados_r["qtd"]
-        val_aq    = dados_r["val_aq"]
+        qtd       = float(pos["qtd"])
+        val_aq    = float(pos["valor_aquisicao"])
         preco_aq  = val_aq / qtd if qtd else 0
         # Se cotação actual não disponível, usar valor de aquisição (sem mais-valia)
         val_act   = round(qtd * preco_act, 2) if preco_act and preco_act > 0 else val_aq
@@ -1655,7 +1722,7 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         valor_total_carteira += val_act
         mais_valias_total    += mais_valia
         linhas_carteira.append({
-            "ticker": ticker_r, "nome": dados_r["nome"], "qtd": qtd,
+            "ticker": ticker_r, "nome": str(pos["nome"]), "qtd": qtd,
             "preco_aq": preco_aq, "preco_act": preco_act,
             "val_aq": val_aq, "val_act": val_act,
             "mais_valia": mais_valia, "mais_valia_pct": mais_valia_pct,
@@ -2596,8 +2663,8 @@ elif pagina == "ℹ️ Sobre Nós & Estatutos":
 elif pagina == "🔐 Painel do Administrador":
     hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
 
-    aba_resumo, aba_activos, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca = st.tabs(
-        ["Resumo Patrimonial", "Cotações & Activos", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança"])
+    aba_resumo, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca = st.tabs(
+        ["Resumo Patrimonial", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança"])
 
     with aba_resumo:
         st.subheader("Editar Resumo Patrimonial")
@@ -2637,6 +2704,33 @@ elif pagina == "🔐 Painel do Administrador":
         if st.button("Guardar alterações às cotações"):
             substituir_activos(df_editado)
             st.success("Cotações e Índice APPO actualizados com sucesso.")
+            st.rerun()
+
+    with aba_carteira_real:
+        st.subheader("Editar Carteira Real do Clube")
+        st.caption(
+            "Posições REAIS, com dinheiro verdadeiro, investidas de facto pelo Clube "
+            "(ex.: na BFA Capital Markets). É esta tabela que alimenta o relatório PDF — "
+            "diferente do Simulador de Investimento, que é só treino com dinheiro fictício."
+        )
+        df_carteira_admin = obter_carteira_real()
+        if df_carteira_admin.empty:
+            st.info("Ainda não há nenhuma posição registada na carteira real.")
+        df_editado_carteira = st.data_editor(
+            df_carteira_admin[["ticker", "nome", "qtd", "valor_aquisicao"]] if not df_carteira_admin.empty
+            else pd.DataFrame(columns=["ticker", "nome", "qtd", "valor_aquisicao"]),
+            num_rows="dynamic", key="editor_carteira_real",
+            column_config={
+                "ticker": st.column_config.TextColumn("Ticker", max_chars=12, help="Tem de corresponder exactamente ao ticker em Cotações & Activos."),
+                "nome": "Nome do activo",
+                "qtd": st.column_config.NumberColumn("Quantidade de acções", min_value=0.0, step=1.0),
+                "valor_aquisicao": st.column_config.NumberColumn(
+                    "Valor TOTAL pago na aquisição (Kz)", min_value=0.0, step=100.0, format="%.2f",
+                    help="Não é o preço unitário — é o custo total desta posição. O preço médio é calculado a dividir pela quantidade."),
+            })
+        if st.button("Guardar alterações à Carteira Real"):
+            substituir_carteira_real(df_editado_carteira)
+            st.success("Carteira real actualizada. O relatório PDF passa já a reflectir estes valores.")
             st.rerun()
 
     with aba_aval:
