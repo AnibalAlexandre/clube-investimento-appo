@@ -1627,7 +1627,7 @@ def obter_estado_simulador(email: str):
         executar("INSERT INTO sim_estado (conta_email, saldo_caixa) VALUES (%s, %s)", (email, 3_000_000.0))
         saldo = 3_000_000.0
     else:
-        saldo = float(linha["saldo_caixa"])
+        saldo = float(linha[0])
 
     df_pos = consultar_df(
         "SELECT ticker, nome, qtd, preco_medio FROM sim_posicoes WHERE conta_email = %s", (email,))
