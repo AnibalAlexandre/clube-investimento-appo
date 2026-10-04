@@ -1491,6 +1491,12 @@ def inicializar_bd():
                     total NUMERIC NOT NULL,
                     criado_em TIMESTAMP NOT NULL DEFAULT NOW()
                 )""")
+    # Orçamento pessoal/familiar de cada sócio (Regra 50/30/20) — guardado como JSON
+    executar("""CREATE TABLE IF NOT EXISTS orcamento_pessoal (
+                    conta_email TEXT PRIMARY KEY,
+                    dados TEXT NOT NULL,
+                    actualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+                )""")
     # Carteira REAL do Clube (dinheiro verdadeiro, investido de facto na BFA) —
     # distinta do Simulador (dinheiro fictício, para treino). Editável pelo
     # admin no painel; é esta tabela que alimenta o relatório PDF, substituindo
@@ -1678,6 +1684,54 @@ def reiniciar_simulador_db(email: str):
         executar("DELETE FROM sim_posicoes WHERE conta_email = %s", (email,))
         executar("DELETE FROM sim_historico WHERE conta_email = %s", (email,))
         executar("UPDATE sim_estado SET saldo_caixa = 3000000 WHERE conta_email = %s", (email,))
+
+
+ORC_CATEGORIAS = ["Consumo (50%)", "Investimento (30%)", "Entesouramento (20%)"]
+
+
+def orcamento_modelo_inicial() -> dict:
+    """Modelo de orçamento mensal pré-preenchido (valores a 0, para o sócio preencher)."""
+    return {
+        "receitas": [
+            {"Descrição": "Salário / rendimento principal", "Valor (Kz)": 0.0},
+            {"Descrição": "Outras receitas", "Valor (Kz)": 0.0},
+        ],
+        "despesas": [
+            {"Categoria": ORC_CATEGORIAS[0], "Descrição": d, "Valor (Kz)": 0.0}
+            for d in ["Renda / habitação", "Alimentação", "Transporte", "Energia e água",
+                      "Telecomunicações", "Saúde", "Educação", "Lazer e outros"]
+        ] + [
+            {"Categoria": ORC_CATEGORIAS[1], "Descrição": "Acções / investimentos (BODIVA)", "Valor (Kz)": 0.0},
+            {"Categoria": ORC_CATEGORIAS[2], "Descrição": "Fundo de emergência / poupança", "Valor (Kz)": 0.0},
+        ],
+    }
+
+
+def obter_orcamento(email: str) -> dict:
+    import json as _json
+    modelo = orcamento_modelo_inicial()
+    if not email:
+        return modelo
+    linha = consultar_um("SELECT dados FROM orcamento_pessoal WHERE conta_email = %s", (email,))
+    if not linha:
+        return modelo
+    try:
+        d = _json.loads(linha[0])
+        if isinstance(d.get("receitas"), list) and isinstance(d.get("despesas"), list):
+            return d
+    except (ValueError, TypeError):
+        pass
+    return modelo
+
+
+def guardar_orcamento(email: str, dados: dict):
+    import json as _json
+    if not email:
+        return
+    executar(
+        "INSERT INTO orcamento_pessoal (conta_email, dados) VALUES (%s, %s) "
+        "ON CONFLICT (conta_email) DO UPDATE SET dados = EXCLUDED.dados, actualizado_em = NOW()",
+        (email, _json.dumps(dados, ensure_ascii=False, default=float)))
 
 
 def obter_carteira_real() -> pd.DataFrame:
@@ -2851,35 +2905,136 @@ elif pagina == "🧪 Simulador de Investimento":
 elif pagina == "🧮 Regra 50/30/20":
     tx = t()
     hero("🧮 " + tx["nav_map"]["🧮 Regra 50/30/20"].replace("🧮 ", ""), tx["r50_hero_sub"], "📐 " + tx["r50_rendimento"])
-    rendimento = st.number_input(tx["r50_rendimento"], min_value=0.0, step=5000.0, value=250000.0, format="%.2f")
-    alvo_consumo, alvo_inv, alvo_entes = rendimento * 0.50, rendimento * 0.30, rendimento * 0.20
+    tab_regra, tab_orc = st.tabs(["🧮 Regra 50/30/20", "📒 Meu Orçamento Mensal"])
 
-    st.subheader(tx["r50_alocacao"])
-    col1, col2, col3 = st.columns(3)
-    col1.metric(tx["r50_consumo"],       kz(alvo_consumo))
-    col2.metric(tx["r50_investimento"],  kz(alvo_inv))
-    col3.metric(tx["r50_entesouramento"],kz(alvo_entes))
-    st.bar_chart(pd.DataFrame({"Categoria": [tx["r50_consumo"], tx["r50_investimento"], tx["r50_entesouramento"]],
-                               "Valor recomendado (Kz)": [alvo_consumo, alvo_inv, alvo_entes]}).set_index("Categoria"))
+    with tab_regra:
+        rendimento = st.number_input(tx["r50_rendimento"], min_value=0.0, step=5000.0, value=250000.0, format="%.2f")
+        alvo_consumo, alvo_inv, alvo_entes = rendimento * 0.50, rendimento * 0.30, rendimento * 0.20
 
-    st.divider()
-    st.subheader(tx["r50_comparar_titulo"])
-    with st.form("form_orcamento_real"):
-        col_a, col_b, col_c = st.columns(3)
-        real_consumo      = col_a.number_input(tx["r50_real_consumo"],       min_value=0.0, step=1000.0)
-        real_investimento = col_b.number_input(tx["r50_real_investimento"],  min_value=0.0, step=1000.0)
-        real_entes        = col_c.number_input(tx["r50_real_entesouramento"],min_value=0.0, step=1000.0)
-        comparar = st.form_submit_button(tx["r50_comparar_btn"])
-    if comparar:
-        st.markdown(tx["r50_resultado"])
+        st.subheader(tx["r50_alocacao"])
         col1, col2, col3 = st.columns(3)
-        col1.metric(tx["r50_consumo"],       kz(real_consumo),      delta=kz(real_consumo      - alvo_consumo), delta_color="inverse")
-        col2.metric(tx["r50_investimento"],  kz(real_investimento), delta=kz(real_investimento - alvo_inv),     delta_color="normal")
-        col3.metric(tx["r50_entesouramento"],kz(real_entes),        delta=kz(real_entes        - alvo_entes),   delta_color="normal")
-        if real_entes < alvo_entes:
-            st.warning(tx["r50_aviso"])
+        col1.metric(tx["r50_consumo"],       kz(alvo_consumo))
+        col2.metric(tx["r50_investimento"],  kz(alvo_inv))
+        col3.metric(tx["r50_entesouramento"],kz(alvo_entes))
+        st.bar_chart(pd.DataFrame({"Categoria": [tx["r50_consumo"], tx["r50_investimento"], tx["r50_entesouramento"]],
+                                   "Valor recomendado (Kz)": [alvo_consumo, alvo_inv, alvo_entes]}).set_index("Categoria"))
+
+        st.divider()
+        st.subheader(tx["r50_comparar_titulo"])
+        with st.form("form_orcamento_real"):
+            col_a, col_b, col_c = st.columns(3)
+            real_consumo      = col_a.number_input(tx["r50_real_consumo"],       min_value=0.0, step=1000.0)
+            real_investimento = col_b.number_input(tx["r50_real_investimento"],  min_value=0.0, step=1000.0)
+            real_entes        = col_c.number_input(tx["r50_real_entesouramento"],min_value=0.0, step=1000.0)
+            comparar = st.form_submit_button(tx["r50_comparar_btn"])
+        if comparar:
+            st.markdown(tx["r50_resultado"])
+            col1, col2, col3 = st.columns(3)
+            col1.metric(tx["r50_consumo"],       kz(real_consumo),      delta=kz(real_consumo      - alvo_consumo), delta_color="inverse")
+            col2.metric(tx["r50_investimento"],  kz(real_investimento), delta=kz(real_investimento - alvo_inv),     delta_color="normal")
+            col3.metric(tx["r50_entesouramento"],kz(real_entes),        delta=kz(real_entes        - alvo_entes),   delta_color="normal")
+            if real_entes < alvo_entes:
+                st.warning(tx["r50_aviso"])
+            else:
+                st.success(tx["r50_sucesso"])
+
+    with tab_orc:
+        _email_orc = st.session_state.get("conta_email", "")
+        st.subheader("📒 Orçamento mensal pessoal ou familiar")
+        st.caption("Preencha as receitas e os gastos do mês (em kwanzas inteiros). A app compara automaticamente "
+                   "com a Regra 50/30/20 e mostra quanto está a poupar e a investir. O orçamento fica gravado na sua conta.")
+
+        if st.session_state.get("orc_carregado_para") != _email_orc:
+            _d0 = obter_orcamento(_email_orc)
+            st.session_state["orc_rec_base"]  = pd.DataFrame(_d0["receitas"], columns=["Descrição", "Valor (Kz)"])
+            st.session_state["orc_desp_base"] = pd.DataFrame(_d0["despesas"], columns=["Categoria", "Descrição", "Valor (Kz)"])
+            st.session_state["orc_carregado_para"] = _email_orc
+        _ver = st.session_state.get("orc_versao", 0)
+
+        _cfg_valor = st.column_config.NumberColumn("Valor (Kz)", min_value=0, step=100, format="%d")
+        st.markdown("**1. Receitas do mês**")
+        df_rec = st.data_editor(
+            st.session_state["orc_rec_base"], num_rows="dynamic", key=f"orc_rec_{_ver}", hide_index=True,
+            column_config={"Descrição": st.column_config.TextColumn("Descrição"), "Valor (Kz)": _cfg_valor})
+        st.markdown("**2. Despesas e poupança do mês** — escolha a categoria de cada linha")
+        df_desp = st.data_editor(
+            st.session_state["orc_desp_base"], num_rows="dynamic", key=f"orc_desp_{_ver}", hide_index=True,
+            column_config={
+                "Categoria": st.column_config.SelectboxColumn("Categoria", options=ORC_CATEGORIAS, required=True),
+                "Descrição": st.column_config.TextColumn("Descrição"),
+                "Valor (Kz)": _cfg_valor})
+
+        rec_total = float(sum(_num_seguro(v) for v in df_rec["Valor (Kz)"]))
+        _dd = df_desp.copy()
+        _dd["_v"] = _dd["Valor (Kz)"].apply(_num_seguro)
+        tot_cat = {c: float(_dd.loc[_dd["Categoria"] == c, "_v"].sum()) for c in ORC_CATEGORIAS}
+        sem_cat = int(((_dd["Categoria"].isna()) & (_dd["_v"] > 0)).sum())
+        desp_total = sum(tot_cat.values())
+        saldo_livre = rec_total - desp_total
+        poup_total = tot_cat[ORC_CATEGORIAS[1]] + tot_cat[ORC_CATEGORIAS[2]]
+
+        st.divider()
+        st.markdown("**3. Resultado**")
+        if sem_cat:
+            st.warning(f"{sem_cat} linha(s) com valor mas sem categoria foram ignoradas no cálculo.")
+        if rec_total <= 0:
+            st.info("Introduza as suas receitas para ver a comparação com a Regra 50/30/20.")
         else:
-            st.success(tx["r50_sucesso"])
+            alvos = {ORC_CATEGORIAS[0]: rec_total * 0.50, ORC_CATEGORIAS[1]: rec_total * 0.30, ORC_CATEGORIAS[2]: rec_total * 0.20}
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Receitas", kz(rec_total))
+            k2.metric("Despesas + poupança planeadas", kz(desp_total))
+            k3.metric("Saldo por alocar", kz(saldo_livre))
+            k4.metric("Poupado + investido", f"{poup_total / rec_total * 100:.0f}%", help="Investimento + Entesouramento, em % das receitas (meta: 50%)")
+
+            c1, c2, c3 = st.columns(3)
+            for col, cat, inv in ((c1, ORC_CATEGORIAS[0], "inverse"), (c2, ORC_CATEGORIAS[1], "normal"), (c3, ORC_CATEGORIAS[2], "normal")):
+                col.metric(f"{cat}", kz(tot_cat[cat]), delta=f"{kz(tot_cat[cat] - alvos[cat])} face à meta ({kz(alvos[cat])})", delta_color=inv)
+            st.bar_chart(pd.DataFrame(
+                {"O seu orçamento (Kz)": [tot_cat[c] for c in ORC_CATEGORIAS], "Recomendado 50/30/20 (Kz)": [alvos[c] for c in ORC_CATEGORIAS]},
+                index=ORC_CATEGORIAS))
+
+            if desp_total > rec_total:
+                st.error(f"Os gastos e a poupança planeados superam as receitas em {kz(-saldo_livre)}. Reduza o consumo antes de pensar em investir.")
+            else:
+                if tot_cat[ORC_CATEGORIAS[0]] > alvos[ORC_CATEGORIAS[0]]:
+                    st.warning(f"O consumo ({tot_cat[ORC_CATEGORIAS[0]] / rec_total * 100:.0f}% das receitas) está acima dos 50% recomendados — "
+                               f"tente reduzir cerca de {kz(tot_cat[ORC_CATEGORIAS[0]] - alvos[ORC_CATEGORIAS[0]])}.")
+                if tot_cat[ORC_CATEGORIAS[1]] < alvos[ORC_CATEGORIAS[1]]:
+                    st.info(f"Para chegar aos 30% de investimento faltam {kz(alvos[ORC_CATEGORIAS[1]] - tot_cat[ORC_CATEGORIAS[1]])} por mês.")
+                if tot_cat[ORC_CATEGORIAS[2]] < alvos[ORC_CATEGORIAS[2]]:
+                    st.info(f"Para chegar aos 20% de entesouramento (reserva) faltam {kz(alvos[ORC_CATEGORIAS[2]] - tot_cat[ORC_CATEGORIAS[2]])} por mês.")
+                if (tot_cat[ORC_CATEGORIAS[0]] <= alvos[ORC_CATEGORIAS[0]] and tot_cat[ORC_CATEGORIAS[1]] >= alvos[ORC_CATEGORIAS[1]]
+                        and tot_cat[ORC_CATEGORIAS[2]] >= alvos[ORC_CATEGORIAS[2]]):
+                    st.success("Parabéns — o seu orçamento cumpre a Regra 50/30/20.")
+                if saldo_livre > 0:
+                    st.info(f"Tem {kz(saldo_livre)} ainda por alocar: distribua-os pelas linhas de investimento e entesouramento.")
+            if poup_total > 0:
+                st.caption(f"Ao ritmo actual, poupa e investe {kz(poup_total)} por mês: cerca de {kz(poup_total * 12)} em 12 meses "
+                           "(sem juros). Veja o efeito dos juros compostos no Simulador de Investimento.")
+
+        b1, b2, b3 = st.columns(3)
+        if b1.button("💾 Guardar orçamento", type="primary", key="orc_guardar", use_container_width=True):
+            def _recs(df):
+                return df.astype(object).where(df.notna(), None).to_dict("records")
+            guardar_orcamento(_email_orc, {"receitas": _recs(df_rec), "despesas": _recs(df_desp)})
+            st.session_state["orc_msg"] = "Orçamento guardado na sua conta."
+            st.rerun()
+        if b2.button("↺ Repor modelo inicial", key="orc_repor", use_container_width=True):
+            _m = orcamento_modelo_inicial()
+            st.session_state["orc_rec_base"]  = pd.DataFrame(_m["receitas"], columns=["Descrição", "Valor (Kz)"])
+            st.session_state["orc_desp_base"] = pd.DataFrame(_m["despesas"], columns=["Categoria", "Descrição", "Valor (Kz)"])
+            st.session_state["orc_versao"] = _ver + 1
+            st.rerun()
+        _csv = pd.concat([
+            df_rec.assign(Tipo="Receita", Categoria=""),
+            df_desp.assign(Tipo="Despesa"),
+        ], ignore_index=True)[["Tipo", "Categoria", "Descrição", "Valor (Kz)"]].to_csv(index=False).encode("utf-8-sig")
+        b3.download_button("⬇️ Descarregar (CSV/Excel)", data=_csv, file_name="orcamento_mensal.csv", mime="text/csv", use_container_width=True)
+        _om = st.session_state.pop("orc_msg", None)
+        if _om:
+            st.success(_om)
+
 
 # =========================================================
 # PÁGINA: BIBLIOTECA EDUCATIVA
