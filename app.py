@@ -1320,6 +1320,30 @@ def inicializar_bd():
     executar("ALTER TABLE resumo_patrimonial ADD COLUMN IF NOT EXISTS capital_realizado NUMERIC")
     executar("""CREATE TABLE IF NOT EXISTS historico_patrimonio (id SERIAL PRIMARY KEY, capital_social NUMERIC NOT NULL, investimentos NUMERIC NOT NULL, reservas NUMERIC NOT NULL, total NUMERIC NOT NULL, registado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS movimentos (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, descricao TEXT, montante NUMERIC NOT NULL, data_movimento DATE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    # Simulador de Investimento — persistido por sócio (antes só vivia em
+    # st.session_state, por isso desaparecia ao sair/voltar a entrar).
+    executar("""CREATE TABLE IF NOT EXISTS sim_estado (
+                    conta_email TEXT PRIMARY KEY,
+                    saldo_caixa NUMERIC NOT NULL DEFAULT 3000000
+                )""")
+    executar("""CREATE TABLE IF NOT EXISTS sim_posicoes (
+                    conta_email TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    nome TEXT NOT NULL,
+                    qtd NUMERIC NOT NULL,
+                    preco_medio NUMERIC NOT NULL,
+                    PRIMARY KEY (conta_email, ticker)
+                )""")
+    executar("""CREATE TABLE IF NOT EXISTS sim_historico (
+                    id SERIAL PRIMARY KEY,
+                    conta_email TEXT NOT NULL,
+                    operacao TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    qtd NUMERIC NOT NULL,
+                    preco_unit NUMERIC NOT NULL,
+                    total NUMERIC NOT NULL,
+                    criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+                )""")
     # Carteira REAL do Clube (dinheiro verdadeiro, investido de facto na BFA) —
     # distinta do Simulador (dinheiro fictício, para treino). Editável pelo
     # admin no painel; é esta tabela que alimenta o relatório PDF, substituindo
@@ -1443,6 +1467,70 @@ def obter_activos() -> pd.DataFrame:
         "SELECT id, ticker, nome, tipo, preco, variacao, "
         "preco_abertura_dia, data_abertura_dia, actualizado_em "
         "FROM activos ORDER BY nome")
+
+
+def obter_estado_simulador(email: str):
+    """Carrega (ou cria, se for a 1ª vez) o saldo, carteira e histórico
+    persistidos deste sócio no Simulador de Investimento."""
+    if not email:
+        return 3_000_000.0, {}, []
+
+    linha = consultar_um("SELECT saldo_caixa FROM sim_estado WHERE conta_email = %s", (email,))
+    if linha is None:
+        executar("INSERT INTO sim_estado (conta_email, saldo_caixa) VALUES (%s, %s)", (email, 3_000_000.0))
+        saldo = 3_000_000.0
+    else:
+        saldo = float(linha["saldo_caixa"])
+
+    df_pos = consultar_df(
+        "SELECT ticker, nome, qtd, preco_medio FROM sim_posicoes WHERE conta_email = %s", (email,))
+    carteira = {
+        str(r["ticker"]): {"qtd": float(r["qtd"]), "preco_medio": float(r["preco_medio"]), "nome": str(r["nome"])}
+        for _, r in df_pos.iterrows()
+    }
+
+    df_hist = consultar_df(
+        'SELECT operacao AS "Operação", ticker AS "Ticker", qtd AS "Qtd", '
+        'preco_unit AS "Preço Unit.", total AS "Total" FROM sim_historico '
+        "WHERE conta_email = %s ORDER BY id DESC LIMIT 200", (email,))
+    historico = df_hist.to_dict("records") if not df_hist.empty else []
+
+    return saldo, carteira, historico
+
+
+def guardar_saldo_simulador(email: str, saldo: float):
+    if email:
+        executar("UPDATE sim_estado SET saldo_caixa = %s WHERE conta_email = %s", (saldo, email))
+
+
+def guardar_posicao_simulador(email: str, ticker: str, dados):
+    """dados=None remove a posição (venda total deste activo)."""
+    if not email or not ticker:
+        return
+    if dados is None:
+        executar("DELETE FROM sim_posicoes WHERE conta_email = %s AND ticker = %s", (email, ticker))
+    else:
+        executar("""
+            INSERT INTO sim_posicoes (conta_email, ticker, nome, qtd, preco_medio)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (conta_email, ticker)
+            DO UPDATE SET nome = EXCLUDED.nome, qtd = EXCLUDED.qtd, preco_medio = EXCLUDED.preco_medio
+        """, (email, ticker, dados["nome"], dados["qtd"], dados["preco_medio"]))
+
+
+def registar_operacao_simulador(email: str, operacao: str, ticker: str, qtd: float, preco_unit: float, total: float):
+    if email:
+        executar(
+            "INSERT INTO sim_historico (conta_email, operacao, ticker, qtd, preco_unit, total) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (email, operacao, ticker, qtd, preco_unit, total))
+
+
+def reiniciar_simulador_db(email: str):
+    if email:
+        executar("DELETE FROM sim_posicoes WHERE conta_email = %s", (email,))
+        executar("DELETE FROM sim_historico WHERE conta_email = %s", (email,))
+        executar("UPDATE sim_estado SET saldo_caixa = 3000000 WHERE conta_email = %s", (email,))
 
 
 def obter_carteira_real() -> pd.DataFrame:
@@ -1709,7 +1797,14 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     df_cotacoes_pdf["ticker_clean"] = df_cotacoes_pdf["ticker"].str.strip().str.upper()
     for _, pos in carteira_real_df.iterrows():
         ticker_r = str(pos["ticker"] or "").strip().upper()
-        row_cot = df_cotacoes_pdf[df_cotacoes_pdf["ticker_clean"] == ticker_r]
+        row_cot = df_cotacoes_pdf[df_cotacoes_pdf["ticker_clean"] == ticker_r] if ticker_r else pd.DataFrame()
+        if row_cot.empty:
+            # recurso: se o ticker não bateu certo (ex.: activo entretanto
+            # renomeado em Cotações), tenta encontrar pelo nome antes de
+            # desistir e mostrar 0 — mais seguro do que esconder a posição.
+            nome_r = str(pos["nome"] or "").strip().upper()
+            if nome_r:
+                row_cot = df_cotacoes_pdf[df_cotacoes_pdf["nome"].str.strip().str.upper() == nome_r]
         preco_act = float(row_cot["preco"].values[0]) if not row_cot.empty else 0.0
         var_dia   = float(row_cot["variacao"].values[0]) if not row_cot.empty else 0.0
         qtd       = float(pos["qtd"])
@@ -2290,11 +2385,14 @@ elif pagina == "🧪 Simulador de Investimento":
          "Opera a bolsa angolana sem risco real · Dotação inicial: 3 000 000 Kz",
          "🎮 BODIVA Virtual · Dinheiro fictício")
 
-    # ── inicializar estado ──────────────────────────────────────────
-    if "sim_carteira" not in st.session_state:
-        st.session_state["sim_carteira"] = {}
-        st.session_state["sim_saldo_caixa"] = 3_000_000.0
-        st.session_state["sim_historico"] = []
+    # ── carregar estado persistido deste sócio (uma vez por sessão) ─
+    _email_sim = st.session_state.get("conta_email", "")
+    if st.session_state.get("sim_carregado_para") != _email_sim:
+        _saldo0, _cart0, _hist0 = obter_estado_simulador(_email_sim)
+        st.session_state["sim_carteira"]    = _cart0
+        st.session_state["sim_saldo_caixa"] = _saldo0
+        st.session_state["sim_historico"]   = _hist0
+        st.session_state["sim_carregado_para"] = _email_sim
     if "sim_qtd_sel" not in st.session_state:
         st.session_state["sim_qtd_sel"] = {}
 
@@ -2439,6 +2537,9 @@ elif pagina == "🧪 Simulador de Investimento":
                         st.session_state["sim_historico"].insert(0, {
                             "Operação": "✅ COMPRA", "Ticker": tk or nome,
                             "Qtd": qtd_op, "Preço Unit.": kz(preco), "Total": kz(custo)})
+                        guardar_saldo_simulador(_email_sim, st.session_state["sim_saldo_caixa"])
+                        guardar_posicao_simulador(_email_sim, chave_cart, cart[chave_cart])
+                        registar_operacao_simulador(_email_sim, "✅ COMPRA", tk or nome, qtd_op, preco, custo)
                         st.rerun()
                     else:
                         st.warning(f"Saldo insuficiente — necessitas {kz(custo)}, tens {kz(saldo_caixa)}.")
@@ -2450,11 +2551,15 @@ elif pagina == "🧪 Simulador de Investimento":
                     receita = qtd_op * preco
                     st.session_state["sim_saldo_caixa"] += receita
                     cart[chave_cart]["qtd"] -= qtd_op
-                    if cart[chave_cart]["qtd"] <= 0:
+                    ficou_vazia = cart[chave_cart]["qtd"] <= 0
+                    if ficou_vazia:
                         del cart[chave_cart]
                     st.session_state["sim_historico"].insert(0, {
                         "Operação": "🔴 VENDA", "Ticker": tk or nome,
                         "Qtd": qtd_op, "Preço Unit.": kz(preco), "Total": kz(receita)})
+                    guardar_saldo_simulador(_email_sim, st.session_state["sim_saldo_caixa"])
+                    guardar_posicao_simulador(_email_sim, chave_cart, None if ficou_vazia else cart[chave_cart])
+                    registar_operacao_simulador(_email_sim, "🔴 VENDA", tk or nome, qtd_op, preco, receita)
                     st.rerun()
 
             render_html("""
@@ -2474,6 +2579,7 @@ elif pagina == "🧪 Simulador de Investimento":
             st.info("Ainda não executaste nenhuma ordem.")
 
         if st.button("🔄 Reiniciar carteira virtual (voltar a 3 000 000 Kz)", type="secondary"):
+            reiniciar_simulador_db(_email_sim)
             st.session_state["sim_carteira"] = {}
             st.session_state["sim_saldo_caixa"] = 3_000_000.0
             st.session_state["sim_historico"] = []
@@ -2713,25 +2819,58 @@ elif pagina == "🔐 Painel do Administrador":
             "(ex.: na BFA Capital Markets). É esta tabela que alimenta o relatório PDF — "
             "diferente do Simulador de Investimento, que é só treino com dinheiro fictício."
         )
-        df_carteira_admin = obter_carteira_real()
-        if df_carteira_admin.empty:
-            st.info("Ainda não há nenhuma posição registada na carteira real.")
-        df_editado_carteira = st.data_editor(
-            df_carteira_admin[["ticker", "nome", "qtd", "valor_aquisicao"]] if not df_carteira_admin.empty
-            else pd.DataFrame(columns=["ticker", "nome", "qtd", "valor_aquisicao"]),
-            num_rows="dynamic", key="editor_carteira_real",
-            column_config={
-                "ticker": st.column_config.TextColumn("Ticker", max_chars=12, help="Tem de corresponder exactamente ao ticker em Cotações & Activos."),
-                "nome": "Nome do activo",
-                "qtd": st.column_config.NumberColumn("Quantidade de acções", min_value=0.0, step=1.0),
-                "valor_aquisicao": st.column_config.NumberColumn(
-                    "Valor TOTAL pago na aquisição (Kz)", min_value=0.0, step=100.0, format="%.2f",
-                    help="Não é o preço unitário — é o custo total desta posição. O preço médio é calculado a dividir pela quantidade."),
-            })
-        if st.button("Guardar alterações à Carteira Real"):
-            substituir_carteira_real(df_editado_carteira)
-            st.success("Carteira real actualizada. O relatório PDF passa já a reflectir estes valores.")
-            st.rerun()
+        df_activos_lista = obter_activos()
+        if df_activos_lista.empty:
+            st.warning("Ainda não há activos em Cotações & Activos — regista-os lá primeiro.")
+        else:
+            # Mapa nome-visível → ticker real, para a lista de escolha. Isto
+            # elimina a classe de bugs em que o ticker escrito à mão (aqui ou
+            # em Cotações) não batia certo entre painéis, e o relatório ou
+            # não encontrava preço nenhum, ou "colava" a todos o preço do
+            # primeiro activo com ticker em branco.
+            df_activos_lista["rotulo"] = df_activos_lista.apply(
+                lambda r: f"{r['nome']}" + (f"  ({r['ticker']})" if str(r['ticker'] or '').strip() else "  ⚠️ sem ticker — define-o em Cotações & Activos"),
+                axis=1)
+            mapa_rotulo_para_ticker = dict(zip(df_activos_lista["rotulo"], df_activos_lista["ticker"]))
+            mapa_rotulo_para_nome   = dict(zip(df_activos_lista["rotulo"], df_activos_lista["nome"]))
+
+            df_carteira_admin = obter_carteira_real()
+            # construir a coluna "rotulo" de cada posição já guardada, para o
+            # selector mostrar a escolha actual correcta
+            if not df_carteira_admin.empty:
+                tk_para_rotulo = {v: k for k, v in mapa_rotulo_para_ticker.items()}
+                df_carteira_admin["rotulo"] = df_carteira_admin["ticker"].map(tk_para_rotulo)
+                tabela_base = df_carteira_admin[["rotulo", "qtd", "valor_aquisicao"]]
+            else:
+                st.info("Ainda não há nenhuma posição registada na carteira real.")
+                tabela_base = pd.DataFrame(columns=["rotulo", "qtd", "valor_aquisicao"])
+
+            df_editado_carteira = st.data_editor(
+                tabela_base, num_rows="dynamic", key="editor_carteira_real",
+                column_config={
+                    "rotulo": st.column_config.SelectboxColumn(
+                        "Activo", options=list(mapa_rotulo_para_ticker.keys()), required=True,
+                        help="Escolhe da lista de Cotações & Activos — garante que o relatório encontra sempre o preço certo."),
+                    "qtd": st.column_config.NumberColumn("Quantidade de acções", min_value=0.0, step=1.0),
+                    "valor_aquisicao": st.column_config.NumberColumn(
+                        "Valor TOTAL pago na aquisição (Kz)", min_value=0.0, step=100.0, format="%.2f",
+                        help="Não é o preço unitário — é o custo total desta posição. O preço médio é calculado a dividir pela quantidade."),
+                })
+
+            if st.button("Guardar alterações à Carteira Real"):
+                linhas_validas = df_editado_carteira.dropna(subset=["rotulo"])
+                linhas_validas = linhas_validas[linhas_validas["rotulo"].isin(mapa_rotulo_para_ticker)]
+                if len(linhas_validas) < len(df_editado_carteira):
+                    st.warning("Algumas linhas sem activo escolhido foram ignoradas — selecciona um activo da lista em cada linha antes de gravar.")
+                df_para_gravar = pd.DataFrame({
+                    "ticker": linhas_validas["rotulo"].map(mapa_rotulo_para_ticker),
+                    "nome":   linhas_validas["rotulo"].map(mapa_rotulo_para_nome),
+                    "qtd":    linhas_validas["qtd"],
+                    "valor_aquisicao": linhas_validas["valor_aquisicao"],
+                })
+                substituir_carteira_real(df_para_gravar)
+                st.success("Carteira real actualizada. O relatório PDF passa já a reflectir estes valores.")
+                st.rerun()
 
     with aba_aval:
         st.subheader("Premissas Macro (CAPM)")
