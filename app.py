@@ -2860,6 +2860,8 @@ elif pagina == "🔐 Painel do Administrador":
                 df_carteira_admin = df_carteira_admin.sort_values("_ordem", kind="stable")
                 df_carteira_admin["gravado_como"] = df_carteira_admin["nome"]
                 tabela_base = df_carteira_admin[["rotulo", "gravado_como", "qtd", "valor_aquisicao"]].reset_index(drop=True)
+                tabela_base["valor_aquisicao"] = tabela_base["valor_aquisicao"].apply(
+                    lambda v: f"{float(v):.2f}".replace(".", ","))
 
                 # Diagnóstico: o que o relatório PDF está realmente a usar, linha a linha
                 _preco_por_rotulo = dict(zip(df_activos_lista["rotulo"], df_activos_lista["preco"]))
@@ -2880,7 +2882,8 @@ elif pagina == "🔐 Painel do Administrador":
                 st.dataframe(pd.DataFrame(_diag), hide_index=True)
             else:
                 st.info("Ainda não há nenhuma posição registada na carteira real.")
-                tabela_base = pd.DataFrame(columns=["rotulo", "gravado_como", "qtd", "valor_aquisicao"])
+                tabela_base = pd.DataFrame({"rotulo": pd.Series(dtype="object"), "gravado_como": pd.Series(dtype="object"),
+                                            "qtd": pd.Series(dtype="float"), "valor_aquisicao": pd.Series(dtype="object")})
 
             df_editado_carteira = st.data_editor(
                 tabela_base, num_rows="dynamic", key="editor_carteira_real",
@@ -2891,14 +2894,41 @@ elif pagina == "🔐 Painel do Administrador":
                         "Activo", options=list(mapa_rotulo_para_ticker.keys()), required=True,
                         help="Escolhe da lista de Cotações & Activos — garante que o relatório encontra sempre o preço certo."),
                     "qtd": st.column_config.NumberColumn("Quantidade de acções", min_value=0.0, step=1.0),
-                    "valor_aquisicao": st.column_config.NumberColumn(
-                        "Valor TOTAL pago na aquisição (Kz)", min_value=0.0, step=100.0, format="%.2f",
-                        help="Não é o preço unitário — é o custo total desta posição. O preço médio é calculado a dividir pela quantidade."),
+                    "valor_aquisicao": st.column_config.TextColumn(
+                        "Valor TOTAL pago na aquisição (Kz)",
+                        help="Escreva com vírgula ou ponto nos cêntimos (ex.: 362031,48). Não é o preço unitário — é o custo total desta posição."),
                 })
 
+            def _parse_valor_kz(txt):
+                """Aceita 362031,48 | 362031.48 | 1.311.562,53 | 1 311 562,53 | 1,311,562.53 | 'Kz'."""
+                if txt is None or (isinstance(txt, float) and pd.isna(txt)):
+                    return None
+                t_ = str(txt).replace("Kz", "").replace("\u00a0", "").replace(" ", "").strip()
+                if not t_:
+                    return None
+                if "," in t_ and "." in t_:
+                    dec = "," if t_.rfind(",") > t_.rfind(".") else "."
+                    mil = "." if dec == "," else ","
+                    t_ = t_.replace(mil, "").replace(dec, ".")
+                elif "," in t_ or "." in t_:
+                    sep = "," if "," in t_ else "."
+                    partes = t_.split(sep)
+                    if len(partes) == 2 and 1 <= len(partes[1]) <= 2:
+                        t_ = partes[0] + "." + partes[1]      # separador decimal
+                    else:
+                        t_ = "".join(partes)                   # separador de milhares
+                try:
+                    return float(t_)
+                except ValueError:
+                    return None
+
             if st.button("Guardar alterações à Carteira Real"):
-                linhas_validas = df_editado_carteira.dropna(subset=["rotulo"])
-                linhas_validas = linhas_validas[linhas_validas["rotulo"].isin(mapa_rotulo_para_ticker)]
+                linhas_validas = df_editado_carteira.dropna(subset=["rotulo"]).copy()
+                linhas_validas = linhas_validas[linhas_validas["rotulo"].isin(mapa_rotulo_para_ticker)].copy()
+                linhas_validas["valor_aquisicao"] = linhas_validas["valor_aquisicao"].apply(_parse_valor_kz)
+                if linhas_validas["valor_aquisicao"].isna().any():
+                    st.error("Há valores de aquisição inválidos ou em branco. Escreva só números (ex.: 362031,48). Nada foi gravado.")
+                    st.stop()
                 if len(linhas_validas) < len(df_editado_carteira):
                     st.warning("Algumas linhas sem activo escolhido foram ignoradas — selecciona um activo da lista em cada linha antes de gravar.")
                 df_para_gravar = pd.DataFrame({
