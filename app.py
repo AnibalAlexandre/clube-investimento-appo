@@ -1603,12 +1603,23 @@ def obter_resumo_patrimonial() -> dict:
 def actualizar_resumo_patrimonial(capital_subscrito, capital_realizado, investimentos, reservas):
     executar("UPDATE resumo_patrimonial SET capital_social = %s, capital_subscrito = %s, capital_realizado = %s, investimentos = %s, reservas = %s, actualizado_em = NOW() WHERE id = 1",
              (capital_subscrito, capital_subscrito, capital_realizado, investimentos, reservas))
-    total = capital_realizado + investimentos + reservas
+    total = capital_realizado  # investimentos e reservas são partes do capital realizado
     executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)",
              (capital_realizado, investimentos, reservas, total))
 
 def obter_historico_patrimonio() -> pd.DataFrame:
-    return consultar_df("SELECT registado_em, total FROM historico_patrimonio ORDER BY registado_em")
+    # o Património Total do Clube é o Capital Realizado (investimentos e reservas são partes dele);
+    # a coluna 'total' antiga somava as três coisas e contava duas vezes.
+    return consultar_df("SELECT registado_em, capital_social AS total FROM historico_patrimonio ORDER BY registado_em")
+
+
+def obter_historico_patrimonio_admin(limite: int = 40) -> pd.DataFrame:
+    return consultar_df("SELECT id, registado_em, capital_social, investimentos, reservas FROM historico_patrimonio "
+                        "ORDER BY registado_em DESC LIMIT %s", (int(limite),))
+
+
+def eliminar_registo_historico(registo_id: int):
+    executar("DELETE FROM historico_patrimonio WHERE id = %s", (int(registo_id),))
 
 
 # ---------------- Movimentos ----------------
@@ -2033,8 +2044,18 @@ def _pdf_secao(pdf, titulo):
 _PDF_PALETA = [(124, 31, 62), (166, 72, 106), (94, 24, 48), (200, 130, 150), (150, 110, 120), (210, 180, 190), (70, 50, 60)]
 
 
+def _pdf_nome_curto(nome: str) -> str:
+    """'BAI (ACÇÃO)' -> 'BAI'; 'Acção Unitel' -> 'Unitel'."""
+    import re as _re
+    n = _re.sub(r"\s*\(.*?\)", "", str(nome)).strip()
+    for pref in ("Acção ", "Ação ", "ACÇÃO ", "AÇÃO "):
+        if n.startswith(pref):
+            n = n[len(pref):].strip()
+    return n or str(nome)
+
+
 def _pdf_grafico_composicao(pdf, linhas):
-    """Barra horizontal 100%: peso de cada activo no valor actual da carteira."""
+    """Barra horizontal 100%: nome e peso de cada activo; a legenda traz os valores em Kz."""
     total = sum(max(l["val_act"], 0) for l in linhas)
     if total <= 0:
         return
@@ -2042,32 +2063,38 @@ def _pdf_grafico_composicao(pdf, linhas):
     largura = pdf.w - pdf.l_margin - pdf.r_margin
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 6, "Composição da carteira (peso de cada activo no valor actual)", ln=True)
+    pdf.cell(0, 6, "Composição da carteira (por valor actual)", ln=True)
     y = pdf.get_y() + 1
     x = x0
     for i, l in enumerate(linhas):
         peso = max(l["val_act"], 0) / total
         w = largura * peso
         pdf.set_fill_color(*_PDF_PALETA[i % len(_PDF_PALETA)])
-        pdf.rect(x, y, w, 9, style="F")
-        if w > 14:
-            pdf.set_xy(x, y + 2.2)
-            pdf.set_font("Helvetica", "B", 7)
-            pdf.set_text_color(255, 255, 255)
-            pdf.cell(w, 4.5, f"{peso * 100:.1f}%", align="C")
+        pdf.rect(x, y, w, 11, style="F")
+        pdf.set_text_color(255, 255, 255)
+        nome = _pdf_nome_curto(l["nome"])
+        pdf.set_font("Helvetica", "B", 7)
+        cabe_nome = pdf.get_string_width(nome) + 3 <= w
+        if w > 9:
+            if cabe_nome:
+                pdf.set_xy(x, y + 1.3)
+                pdf.cell(w, 4.2, nome, align="C")
+                pdf.set_xy(x, y + 5.6)
+            else:
+                pdf.set_xy(x, y + 3.4)
+            pdf.cell(w, 4.2, f"{peso * 100:.1f}%", align="C")
         x += w
-    # legenda em duas colunas
+    # legenda: nome completo e valor em Kz (a percentagem já está nas barras)
     pdf.set_font("Helvetica", "", 7.5)
     pdf.set_text_color(40, 40, 40)
-    ly = y + 12
+    ly = y + 14
     for i, l in enumerate(linhas):
         cx = x0 + (i % 2) * (largura / 2)
         cy = ly + (i // 2) * 5
         pdf.set_fill_color(*_PDF_PALETA[i % len(_PDF_PALETA)])
         pdf.rect(cx, cy + 0.8, 3, 3, style="F")
-        peso = max(l["val_act"], 0) / total * 100
         pdf.set_xy(cx + 4.5, cy)
-        pdf.cell(largura / 2 - 6, 4.5, f"{l['nome'][:28]}  -  {peso:.1f}%  ({kz(l['val_act'])})")
+        pdf.cell(largura / 2 - 6, 4.5, f"{_pdf_nome_curto(l['nome'])[:34]}  -  {kz(l['val_act'])}")
     pdf.set_y(ly + ((len(linhas) + 1) // 2) * 5 + 2)
     pdf.set_text_color(0, 0, 0)
 
@@ -2158,6 +2185,86 @@ def _pdf_grafico_evolucao(pdf, df_hist, x0, y0, w, h):
     pdf.set_xy(px0 + pw - 30, bottom + 2)
     pdf.cell(30, 3.5, datas[-1], align="R")
     pdf.set_text_color(0, 0, 0)
+
+
+def _pdf_sector(l) -> str:
+    """Sector do activo, a partir do ticker/nome (Telecomunicações, Banca/Finanças ou Outros)."""
+    chave = f"{l['ticker']} {l['nome']}".upper()
+    if "UNTL" in chave or "UNITEL" in chave:
+        return "Telecomunicações"
+    if any(k in chave for k in ("BAIA", "BFA", "SBA", "STANDARD", "BCGA", "CAIXA", "BDVA", "BODIVA", "ENSA")):
+        return "Banca/Finanças"
+    return "Outros"
+
+
+def _pdf_barras_limite(pdf, titulo, itens, x0, y0, w, limite):
+    """Barras horizontais (rótulo, %) com linha vertical no limite; vermelho se o limite for excedido."""
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w, 6, titulo)
+    lab_w, linha_h = 46, 8
+    pmax = max([p for _, p in itens] + [limite * 1.5])
+    pw = w - lab_w - 16
+    top = y0 + 9
+    for i, (rot, p) in enumerate(itens):
+        y = top + i * linha_h
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(40, 40, 40)
+        pdf.set_xy(x0, y + 1)
+        pdf.cell(lab_w - 2, 5, rot[:26], align="R")
+        bw = pw * p / pmax
+        pdf.set_fill_color(*((220, 38, 38) if p > limite else (22, 163, 74)))
+        pdf.rect(x0 + lab_w, y + 0.5, max(bw, 0.3), 6, style="F")
+        pdf.set_xy(x0 + lab_w + max(bw, pw * limite / pmax) + 1.5, y + 1)
+        pdf.cell(14, 5, f"{p:.1f}%")
+    lx = x0 + lab_w + pw * limite / pmax
+    pdf.set_draw_color(220, 38, 38)
+    pdf.set_line_width(0.4)
+    pdf.line(lx, top - 1, lx, top + len(itens) * linha_h)
+    pdf.set_font("Helvetica", "B", 6.5)
+    pdf.set_text_color(220, 38, 38)
+    pdf.set_xy(lx - 15, top + len(itens) * linha_h + 0.5)
+    pdf.cell(30, 3.5, f"limite {limite:.0f}%", align="C")
+    pdf.set_text_color(0, 0, 0)
+    return top + len(itens) * linha_h + 6
+
+
+def _pdf_barras_duplas(pdf, titulo, itens, x0, y0, w):
+    """Por activo, duas barras: % do número de títulos e % do valor da carteira."""
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w, 6, titulo)
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_fill_color(166, 72, 106)
+    pdf.rect(x0, y0 + 7.3, 3, 3, style="F")
+    pdf.set_xy(x0 + 4.5, y0 + 6.8)
+    pdf.cell(40, 4, "Quantidade de títulos")
+    pdf.set_fill_color(124, 31, 62)
+    pdf.rect(x0 + 48, y0 + 7.3, 3, 3, style="F")
+    pdf.set_xy(x0 + 52.5, y0 + 6.8)
+    pdf.cell(40, 4, "Valor monetário")
+    lab_w, linha_h = 40, 11
+    pmax = max([max(a, b) for _, a, b in itens] + [1])
+    pw = w - lab_w - 14
+    top = y0 + 13
+    for i, (rot, pq, pv) in enumerate(itens):
+        y = top + i * linha_h
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(40, 40, 40)
+        pdf.set_xy(x0, y + 2.5)
+        pdf.cell(lab_w - 2, 5, rot[:22], align="R")
+        for k, (p, cor) in enumerate(((pq, (166, 72, 106)), (pv, (124, 31, 62)))):
+            by = y + k * 4.6
+            bw = pw * p / pmax
+            pdf.set_fill_color(*cor)
+            pdf.rect(x0 + lab_w, by, max(bw, 0.3), 4, style="F")
+            pdf.set_font("Helvetica", "", 6.5)
+            pdf.set_xy(x0 + lab_w + bw + 1, by - 0.2)
+            pdf.cell(12, 4.4, f"{p:.1f}%")
+    pdf.set_text_color(0, 0, 0)
+    return top + len(itens) * linha_h + 2
 
 
 def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
@@ -2329,6 +2436,55 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
             pdf.set_text_color(0, 0, 0)
         except Exception:
             # os gráficos são um complemento: se algo falhar, o relatório sai na mesma, sem eles
+            pdf.set_text_color(0, 0, 0)
+        try:
+            _tot_cart = sum(max(l["val_act"], 0) for l in linhas_carteira)
+            _tot_qtd = sum(max(l["qtd"], 0) for l in linhas_carteira)
+            _fundo = _tot_cart + float(resumo.get("reservas", 0) or 0)
+            if _tot_cart > 0 and _tot_qtd > 0 and _fundo > 0:
+                pdf.add_page("L")
+                _pdf_secao(pdf, "CONCENTRAÇÃO E GOVERNANÇA DA CARTEIRA")
+                y1 = pdf.get_y() + 2
+                itens_dup = [(_pdf_nome_curto(l["nome"]), l["qtd"] / _tot_qtd * 100, l["val_act"] / _tot_cart * 100)
+                             for l in linhas_carteira]
+                fim_esq = _pdf_barras_duplas(pdf, "Peso na carteira: títulos vs valor", itens_dup, pdf.l_margin, y1, 118)
+                itens_act = [(_pdf_nome_curto(l["nome"]), max(l["val_act"], 0) / _fundo * 100) for l in linhas_carteira]
+                fim_dir = _pdf_barras_limite(pdf, "Peso de cada activo no fundo global (limite: 10%)", itens_act,
+                                             pdf.l_margin + 130, y1, 117, 10)
+                y2 = max(fim_esq, fim_dir) + 4
+                por_sector = {}
+                for l in linhas_carteira:
+                    sct = _pdf_sector(l)
+                    por_sector[sct] = por_sector.get(sct, 0.0) + max(l["val_act"], 0)
+                itens_sec = sorted(((k, v / _fundo * 100) for k, v in por_sector.items()), key=lambda t: -t[1])
+                fim_sec = _pdf_barras_limite(pdf, "Peso de cada sector no fundo global (limite: 20%)", itens_sec,
+                                             pdf.l_margin, y2, 118, 20)
+                # resumo de conformidade
+                pdf.set_xy(pdf.l_margin + 130, y2)
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(117, 6, "Cumprimento dos limites do Clube")
+                excessos = [(f"{_pdf_nome_curto(l['nome'])}", max(l["val_act"], 0) / _fundo * 100) for l in linhas_carteira
+                            if max(l["val_act"], 0) / _fundo * 100 > 10]
+                excessos_s = [(k, p_) for k, p_ in itens_sec if p_ > 20]
+                pdf.set_xy(pdf.l_margin + 130, y2 + 8)
+                pdf.set_font("Helvetica", "", 8)
+                if excessos or excessos_s:
+                    pdf.set_text_color(220, 38, 38)
+                    linhas_txt = [f"- {n}: {p_:.1f}% do fundo global (limite por activo: 10%)." for n, p_ in excessos]
+                    linhas_txt += [f"- Sector {n}: {p_:.1f}% do fundo global (limite por sector: 20%)." for n, p_ in excessos_s]
+                    pdf.multi_cell(117, 4.5, "\n".join(linhas_txt))
+                else:
+                    pdf.set_text_color(22, 163, 74)
+                    pdf.multi_cell(117, 4.5, "Todos os limites de concentração (10% por activo e 20% por sector) estão a ser cumpridos.")
+                pdf.set_text_color(120, 120, 120)
+                pdf.set_font("Helvetica", "I", 7)
+                pdf.set_xy(pdf.l_margin, max(fim_sec, pdf.get_y()) + 4)
+                pdf.multi_cell(0, 3.8, "Fundo global = valor actual da carteira + reservas de liquidez. "
+                                       "Sectores atribuídos pela app (Banca/Finanças inclui banca, seguros e BODIVA). "
+                                       "O peso em títulos e em valor refere-se apenas à carteira de acções.")
+                pdf.set_text_color(0, 0, 0)
+        except Exception:
             pdf.set_text_color(0, 0, 0)
     _pdf_secao(pdf, "MOVIMENTOS RECENTES")
     if df_movimentos.empty:
@@ -3378,6 +3534,22 @@ elif pagina == "🔐 Painel do Administrador":
                 actualizar_resumo_patrimonial(novo_subscrito, novo_realizado, novo_invest, novas_reservas)
                 st.success("Resumo patrimonial actualizado e novo ponto de histórico registado.")
                 st.rerun()
+
+        st.divider()
+        st.subheader("Histórico de património (alimenta os gráficos)")
+        st.caption("Cada vez que guarda o resumo acima, regista-se um ponto com o Capital Realizado desse momento. "
+                   "Elimine aqui os pontos de teste ou com valores errados.")
+        _hist_adm = obter_historico_patrimonio_admin()
+        if _hist_adm.empty:
+            st.info("Ainda não há pontos de histórico.")
+        else:
+            for _, _h in _hist_adm.iterrows():
+                hc1, hc2, hc3 = st.columns([2, 3, 1])
+                hc1.write(str(_h["registado_em"])[:16])
+                hc2.write(f"Capital realizado: {kz(_h['capital_social'])}")
+                if hc3.button("Eliminar", key=f"del_hist_{int(_h['id'])}"):
+                    eliminar_registo_historico(int(_h["id"]))
+                    st.rerun()
 
     with aba_activos:
         st.subheader("Editar Cotações & Activos")
