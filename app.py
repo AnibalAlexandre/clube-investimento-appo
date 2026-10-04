@@ -1236,10 +1236,14 @@ def _num_bodiva(valor):
         elif "," in t_ or "." in t_:
             sep = "," if "," in t_ else "."
             partes = t_.split(sep)
-            if len(partes) == 2 and 1 <= len(partes[1]) <= 2:
-                t_ = partes[0] + "." + partes[1]
-            else:
+            # um só separador: é de milhares apenas se vier exactamente 3 dígitos
+            # depois dele e no máximo 3 antes (ex.: 94.600); em qualquer outro
+            # caso é decimal (ex.: 94600.0000, 94600,00, 30600.5)
+            milhares = len(partes) > 2 or (len(partes[1]) == 3 and 1 <= len(partes[0]) <= 3)
+            if milhares:
                 t_ = "".join(partes)
+            else:
+                t_ = partes[0] + "." + partes[1]
         try:
             num = float(t_)
         except ValueError:
@@ -2955,17 +2959,23 @@ elif pagina == "🔐 Painel do Administrador":
             for _, _r in df_activos_admin.iterrows():
                 _tk = str(_r["ticker"] or "").strip().upper()
                 _novo = _prev.get(_tk)
+                _atual = float(_r["preco"])
+                _suspeito = (_novo is not None and _atual > 0 and abs(_novo / _atual - 1) > 0.5)
                 _linhas_prev.append({
                     "Ticker": _tk, "Nome": _r["nome"],
-                    "Preço na app (Kz)": float(_r["preco"]),
+                    "Preço na app (Kz)": _atual,
                     "Preço BODIVA (Kz)": _novo if _novo is not None else "não encontrado",
+                    "Estado": ("⚠️ variação >50% — não será aplicado" if _suspeito
+                               else ("sem alteração" if _novo is not None and _novo == _atual
+                                     else ("a actualizar" if _novo is not None else "mantém preço actual"))),
                 })
             st.dataframe(pd.DataFrame(_linhas_prev), hide_index=True)
             if st.button("✅ Aplicar cotações da BODIVA e guardar"):
                 _df_novo = df_activos_admin[["ticker", "nome", "tipo", "preco"]].copy()
                 for _i in _df_novo.index:
                     _novo = _prev.get(str(_df_novo.at[_i, "ticker"] or "").strip().upper())
-                    if _novo is not None:
+                    _atual = float(_df_novo.at[_i, "preco"])
+                    if _novo is not None and not (_atual > 0 and abs(_novo / _atual - 1) > 0.5):
                         _df_novo.at[_i, "preco"] = _novo
                 substituir_activos(_df_novo)
                 st.session_state.pop("bodiva_prev", None)
