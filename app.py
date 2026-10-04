@@ -2858,14 +2858,35 @@ elif pagina == "🔐 Painel do Administrador":
                 ordem_rotulos = {r: i for i, r in enumerate(df_activos_lista["rotulo"])}
                 df_carteira_admin["_ordem"] = df_carteira_admin["rotulo"].map(ordem_rotulos).fillna(9999)
                 df_carteira_admin = df_carteira_admin.sort_values("_ordem", kind="stable")
-                tabela_base = df_carteira_admin[["rotulo", "qtd", "valor_aquisicao"]].reset_index(drop=True)
+                df_carteira_admin["gravado_como"] = df_carteira_admin["nome"]
+                tabela_base = df_carteira_admin[["rotulo", "gravado_como", "qtd", "valor_aquisicao"]].reset_index(drop=True)
+
+                # Diagnóstico: o que o relatório PDF está realmente a usar, linha a linha
+                _preco_por_rotulo = dict(zip(df_activos_lista["rotulo"], df_activos_lista["preco"]))
+                _diag = []
+                for _, _p in df_carteira_admin.iterrows():
+                    _pr = _preco_por_rotulo.get(_p["rotulo"]) if _p["rotulo"] is not None else None
+                    _pr = float(_pr) if _pr is not None and pd.notna(_pr) else 0.0
+                    _diag.append({
+                        "Gravado como": _p["nome"],
+                        "Activo ligado (ticker)": _p["rotulo"] if _p["rotulo"] is not None else "⚠️ sem correspondência",
+                        "Qtd": _p["qtd"],
+                        "Preço actual (Kz)": _pr,
+                        "Valor actual (Kz)": round(float(_p["qtd"]) * _pr, 2),
+                    })
+                st.caption("Ligação actual de cada posição ao activo (é isto que o relatório PDF usa). "
+                           "Se o nome em 'Gravado como' não corresponde ao 'Activo ligado', "
+                           "corrija o activo na tabela abaixo e grave. Preço a 0 = activo sem cotação em Cotações & Activos.")
+                st.dataframe(pd.DataFrame(_diag), hide_index=True)
             else:
                 st.info("Ainda não há nenhuma posição registada na carteira real.")
-                tabela_base = pd.DataFrame(columns=["rotulo", "qtd", "valor_aquisicao"])
+                tabela_base = pd.DataFrame(columns=["rotulo", "gravado_como", "qtd", "valor_aquisicao"])
 
             df_editado_carteira = st.data_editor(
                 tabela_base, num_rows="dynamic", key="editor_carteira_real",
+                disabled=["gravado_como"],
                 column_config={
+                    "gravado_como": st.column_config.TextColumn("Gravado como (só leitura)"),
                     "rotulo": st.column_config.SelectboxColumn(
                         "Activo", options=list(mapa_rotulo_para_ticker.keys()), required=True,
                         help="Escolhe da lista de Cotações & Activos — garante que o relatório encontra sempre o preço certo."),
