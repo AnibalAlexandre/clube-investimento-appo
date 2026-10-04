@@ -2559,27 +2559,30 @@ elif pagina == "🧪 Simulador de Investimento":
 
     import html as _html
 
-    # Estilo "home broker" (inspirado na BFA Capital Markets) — só nesta página
+    # Estilo "home broker" claro, nas cores do Clube (bordeaux / cinzento avermelhado) — só nesta página
     render_html("""<style>
-    .bfa-wrap{background:#15152B;border-radius:8px;overflow-x:auto;margin-bottom:12px;}
-    .bfa-tbl{width:100%;border-collapse:collapse;font-size:0.78rem;color:#E8E8F0;}
-    .bfa-tbl th{color:#F26B00;font-weight:600;text-align:right;padding:9px 10px;border-bottom:1px solid #F26B00;font-size:0.7rem;white-space:nowrap;}
-    .bfa-tbl td{padding:10px;text-align:right;border-bottom:1px solid #2A2A40;background:#23232F;white-space:nowrap;}
-    .bfa-tbl tr:nth-child(even) td{background:#1E1E2C;}
-    .bfa-tbl tr.sel td{background:#35354F;}
-    .bfa-tbl tr.tot td{background:#15152B;font-weight:700;border-top:1px solid #F26B00;}
+    .bfa-wrap{background:#FFFFFF;border:1px solid #ECDEE3;border-radius:8px;overflow-x:auto;margin-bottom:12px;}
+    .bfa-tbl{width:100%;border-collapse:collapse;font-size:0.8rem;color:#1A1A2E;}
+    .bfa-tbl th{color:#7C1F3E;font-weight:700;text-align:right;padding:9px 10px;background:#F4ECEF;border-bottom:2px solid #7C1F3E;font-size:0.7rem;white-space:nowrap;text-transform:uppercase;letter-spacing:0.4px;}
+    .bfa-tbl td{padding:10px;text-align:right;border-bottom:1px solid #F0E6EA;background:#FFFFFF;white-space:nowrap;}
+    .bfa-tbl tr:nth-child(even) td{background:#FBF8F6;}
+    .bfa-tbl tr.sel td{background:#F1E2E7;}
+    .bfa-tbl tr.tot td{background:#F4ECEF;font-weight:700;border-top:2px solid #7C1F3E;}
     .bfa-tbl th.l,.bfa-tbl td.l{text-align:left;}
-    .bfa-up{color:#22C55E;}.bfa-dn{color:#EF4444;}.bfa-fl{color:#9CA3AF;}
-    .bfa-bar{background:#15152B;border-radius:8px;padding:12px 20px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
-    .bfa-bar .k{font-size:0.62rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:3px;}
-    .bfa-bar .v{font-size:1.02rem;color:#FFFFFF;font-weight:700;background:#22223A;padding:4px 10px;border-radius:4px;display:inline-block;}
-    .bfa-ticket{background:#23232F;border-left:4px solid #F26B00;border-radius:8px;padding:16px 22px;margin:10px 0;display:flex;gap:40px;flex-wrap:wrap;align-items:center;}
-    .bfa-ticket .nome{font-size:1.25rem;font-weight:800;color:#FFFFFF;}
-    .bfa-ticket .sub{font-size:0.7rem;color:#9CA3AF;margin-top:3px;}
-    .bfa-ticket .k{font-size:0.62rem;color:#9CA3AF;text-transform:uppercase;display:block;}
-    .bfa-ticket .big{font-size:1.7rem;font-weight:800;color:#FFFFFF;}
-    .bfa-ticket .m{font-size:1.0rem;font-weight:700;color:#E8E8F0;}
-    .stButton button[kind="primary"],button[data-testid="stBaseButton-primary"]{background:#F26B00 !important;border-color:#F26B00 !important;color:#FFFFFF !important;}
+    .bfa-up{color:#16A34A;}.bfa-dn{color:#DC2626;}.bfa-fl{color:#6B7280;}
+    .bfa-bar{background:#FBF8F6;border:1px solid #ECDEE3;border-radius:8px;padding:12px 20px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
+    .bfa-bar .k{font-size:0.62rem;color:#8A7B80;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:3px;}
+    .bfa-bar .v{font-size:1.02rem;color:#1A1A2E;font-weight:700;background:#F4ECEF;padding:4px 10px;border-radius:4px;display:inline-block;}
+    .bfa-ticket{background:#FBF8F6;border:1px solid #ECDEE3;border-left:4px solid #7C1F3E;border-radius:8px;padding:16px 22px;margin:10px 0;display:flex;gap:40px;flex-wrap:wrap;align-items:center;}
+    .bfa-ticket .nome{font-size:1.25rem;font-weight:800;color:#1A1A2E;}
+    .bfa-ticket .sub{font-size:0.7rem;color:#8A7B80;margin-top:3px;}
+    .bfa-ticket .k{font-size:0.62rem;color:#8A7B80;text-transform:uppercase;display:block;}
+    .bfa-ticket .big{font-size:1.7rem;font-weight:800;color:#7C1F3E;}
+    .bfa-ticket .m{font-size:1.0rem;font-weight:700;color:#1A1A2E;}
+    button[kind="primary"],button[data-testid="stBaseButton-primary"]{background:#6E3B4A !important;border-color:#6E3B4A !important;color:#FFFFFF !important;}
+    button[kind="primary"]:hover,button[data-testid="stBaseButton-primary"]:hover{background:#592E3B !important;border-color:#592E3B !important;}
+    button[kind="secondary"],button[data-testid="stBaseButton-secondary"]{background:#E9D6DB !important;border-color:#D9BCC4 !important;color:#4A2A33 !important;}
+    button[kind="secondary"]:hover,button[data-testid="stBaseButton-secondary"]:hover{background:#DEC4CB !important;}
     </style>""")
 
     # título → preço / variação actuais (chave = ticker, ou nome se não houver ticker)
@@ -2715,7 +2718,7 @@ elif pagina == "🧪 Simulador de Investimento":
             c3.metric("Valor da ordem", kz2(total))
             b1, b2, _ = st.columns([1, 1, 2])
             comprar = b1.button("＋ Comprar", key="sim_btn_buy", type="primary", use_container_width=True)
-            vender  = b2.button("－ Vender", key="sim_btn_sell", type="primary", use_container_width=True,
+            vender  = b2.button("－ Vender", key="sim_btn_sell", type="secondary", use_container_width=True,
                                 disabled=(qtd_cart < qtd_op))
             if comprar or vender:
                 if comprar and saldo_caixa < total:
