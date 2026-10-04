@@ -994,6 +994,10 @@ CSS_APPO = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Baloo+2:wght@600;700&display=swap');
 [data-testid="stAppViewContainer"] {{ background: #FBF8F6; }}
+button[kind="primary"], button[data-testid="stBaseButton-primary"] {{ background: {COR_MARCA}; border-color: {COR_MARCA}; color: #FFFFFF; }}
+button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover {{ background: #5E1830; border-color: #5E1830; color: #FFFFFF; }}
+button[data-baseweb="tab"][aria-selected="true"] {{ color: {COR_MARCA}; }}
+div[data-baseweb="tab-highlight"] {{ background-color: {COR_MARCA}; }}
 div[data-testid="stMetric"] {{ background: linear-gradient(135deg, #ffffff 0%, #F6EFF2 100%); border: 1px solid #ECDEE3; border-left: 4px solid {COR_MARCA}; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(124,31,62,0.08); }}
 .appo-hero {{ position: relative; overflow: hidden; background: linear-gradient(120deg, #4A1226 0%, {COR_MARCA} 55%, #A6486A 100%); color: #FFFFFF; border-radius: 14px; padding: 24px 30px; margin-bottom: 18px; display: flex; align-items: center; gap: 16px; }}
 .appo-hero::before {{ content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 2px, transparent 2px, transparent 16px); pointer-events: none; }}
@@ -3018,6 +3022,11 @@ elif pagina == "🧮 Regra 50/30/20":
             def _recs(df):
                 return df.astype(object).where(df.notna(), None).to_dict("records")
             guardar_orcamento(_email_orc, {"receitas": _recs(df_rec), "despesas": _recs(df_desp)})
+            # a base da sessão passa a ser o que ficou gravado; assim, ao sair da página e voltar,
+            # os dados continuam lá. O editor recomeça com uma chave nova a partir dessa base.
+            st.session_state["orc_rec_base"]  = df_rec.reset_index(drop=True).copy()
+            st.session_state["orc_desp_base"] = df_desp.reset_index(drop=True).copy()
+            st.session_state["orc_versao"] = _ver + 1
             st.session_state["orc_msg"] = "Orçamento guardado na sua conta."
             st.rerun()
         if b2.button("↺ Repor modelo inicial", key="orc_repor", use_container_width=True):
