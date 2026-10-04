@@ -1231,6 +1231,36 @@ def obter_taxas_cambio(base: str) -> dict:
     return {"rates": dados["rates"], "actualizado": dados.get("time_last_update_utc", "")}
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def obter_serie_cambio_aoa(moeda: str, dias: int = 8) -> pd.DataFrame:
+    """Kz por 1 unidade de `moeda`, dia a dia, a partir de uma fonte aberta (fawazahmed0/exchange-api,
+    sem chave): cada dia tem o seu ficheiro. Dias sem publicação são ignorados."""
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import date, timedelta
+    base = moeda.lower()
+
+    def um_dia(i: int):
+        d = date.today() - timedelta(days=i)
+        versao = "latest" if i == 0 else d.isoformat()
+        for url in (f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{versao}/v1/currencies/{base}.json",
+                    f"https://{versao}.currency-api.pages.dev/v1/currencies/{base}.json"):
+            try:
+                r = requests.get(url, timeout=8)
+                if r.status_code == 200:
+                    j = r.json()
+                    return str(j.get("date") or d.isoformat()), float(j[base]["aoa"])
+            except Exception:
+                continue
+        return None
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        resultados = [x for x in ex.map(um_dia, range(dias - 1, -1, -1)) if x]
+    unico = {}
+    for dt, v in resultados:
+        unico[dt] = v
+    return pd.DataFrame({"Data": list(unico.keys()), "Kz": list(unico.values())}).sort_values("Data").reset_index(drop=True)
+
+
 # ---------------- Cotações directas da BODIVA ----------------
 # Mesmo endpoint e mesma lógica de pesquisa do script Apps Script do Google Sheets
 # (que já foi testado e encontra os 7 títulos). Só LÊ dados; nada é gravado
@@ -1700,6 +1730,305 @@ def reiniciar_simulador_db(email: str):
         executar("DELETE FROM sim_posicoes WHERE conta_email = %s", (email,))
         executar("DELETE FROM sim_historico WHERE conta_email = %s", (email,))
         executar("UPDATE sim_estado SET saldo_caixa = 3000000 WHERE conta_email = %s", (email,))
+
+
+# ---------------- Exportação para Excel (formatada, nas cores do Clube) ----------------
+def xlsx_disponivel() -> bool:
+    try:
+        import openpyxl  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _xlsx_estilos():
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    lado = Side(style="thin", color="E3D2D8")
+    return {
+        "borda": Border(left=lado, right=lado, top=lado, bottom=lado),
+        "f_bord": PatternFill("solid", fgColor="7C1F3E"),
+        "f_bord_esc": PatternFill("solid", fgColor="5E1830"),
+        "f_claro": PatternFill("solid", fgColor="F4ECEF"),
+        "f_creme": PatternFill("solid", fgColor="FBF8F6"),
+        "f_branco": PatternFill("solid", fgColor="FFFFFF"),
+        "Font": Font, "Alignment": Alignment,
+    }
+
+
+def _xlsx_banner(ws, ncols: int, titulo: str, subtitulo: str):
+    """Faixa institucional (3 linhas) + título do documento; devolve a próxima linha livre."""
+    from openpyxl.utils import get_column_letter
+    e = _xlsx_estilos()
+    ultima = get_column_letter(ncols)
+    textos = [
+        ("CLUBE DE INVESTIMENTO APPO", e["Font"](name="Calibri", size=18, bold=True, color="FFFFFF"), e["f_bord"], 30),
+        ("Casa nº 5 - Zona C, Av. Ministro Vieira Machado, Benguela, Angola  |  NIF: 001669404BA035  |  "
+         "Tel.: 940 762 278 / 937 696 088  |  clube.investimento.appo@gmail.com",
+         e["Font"](name="Calibri", size=8, color="F4ECEF"), e["f_bord"], 16),
+        (titulo, e["Font"](name="Calibri", size=13, bold=True, color="7C1F3E"), e["f_claro"], 26),
+    ]
+    for i, (txt, fonte, fundo, alt) in enumerate(textos, start=1):
+        ws.merge_cells(f"A{i}:{ultima}{i}")
+        c = ws[f"A{i}"]
+        c.value, c.font, c.fill = txt, fonte, fundo
+        c.alignment = e["Alignment"](horizontal="left", vertical="center", indent=1)
+        for col in range(1, ncols + 1):
+            ws.cell(row=i, column=col).fill = fundo
+        ws.row_dimensions[i].height = alt
+    ws.merge_cells(f"A4:{ultima}4")
+    ws["A4"].value = subtitulo
+    ws["A4"].font = e["Font"](name="Calibri", size=9, italic=True, color="6B6B6B")
+    ws["A4"].alignment = e["Alignment"](horizontal="left", vertical="center", indent=1)
+    ws.row_dimensions[4].height = 18
+    ws.sheet_view.showGridLines = False
+    return 6
+
+
+def _xlsx_rodape(ws, linha: int, ncols: int, nota: str = ""):
+    from openpyxl.utils import get_column_letter
+    e = _xlsx_estilos()
+    ultima = get_column_letter(ncols)
+    if nota:
+        ws.merge_cells(f"A{linha}:{ultima}{linha}")
+        ws[f"A{linha}"].value = nota
+        ws[f"A{linha}"].font = e["Font"](name="Calibri", size=8, italic=True, color="6B6B6B")
+        ws[f"A{linha}"].alignment = e["Alignment"](wrap_text=True, vertical="top", indent=1)
+        ws.row_dimensions[linha].height = 36
+        linha += 1
+    ws.merge_cells(f"A{linha}:{ultima}{linha}")
+    ws[f"A{linha}"].value = "Documento gerado automaticamente pela plataforma APPO. Uso interno e reservado."
+    ws[f"A{linha}"].font = e["Font"](name="Calibri", size=8, italic=True, color="9A9A9A")
+    ws[f"A{linha}"].alignment = e["Alignment"](horizontal="center")
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.oddFooter.center.text = "Clube de Investimento APPO  |  Página &P de &N"
+
+
+def _xlsx_cor_sinal(ws, intervalos, positivo_bom=True):
+    """Texto verde para valores > 0 e vermelho para < 0 (ou o inverso), por formatação condicional."""
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import Font
+    verde, verm = Font(color="16A34A", bold=True), Font(color="DC2626", bold=True)
+    for ref in intervalos:
+        ws.conditional_formatting.add(ref, CellIsRule(operator="greaterThan", formula=["0"], font=verde if positivo_bom else verm))
+        ws.conditional_formatting.add(ref, CellIsRule(operator="lessThan", formula=["0"], font=verm if positivo_bom else verde))
+
+
+def gerar_xlsx_tabela(titulo, subtitulo, colunas, linhas, larguras, formatos, folha="Dados", nota="", cor_cond=()) -> bytes:
+    """Tabela institucional: faixa do Clube, cabeçalho bordeaux, linhas alternadas, filtros e painel fixo."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+    e = _xlsx_estilos()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = folha[:31]
+    n = len(colunas)
+    for i, w in enumerate(larguras, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    cab = _xlsx_banner(ws, n, titulo, subtitulo)
+    for j, nome in enumerate(colunas, start=1):
+        c = ws.cell(row=cab, column=j, value=nome)
+        c.font = e["Font"](name="Calibri", size=10, bold=True, color="FFFFFF")
+        c.fill, c.border = e["f_bord"], e["borda"]
+        c.alignment = e["Alignment"](horizontal="center", vertical="center", wrap_text=True)
+    ws.row_dimensions[cab].height = 30
+    for i, linha in enumerate(linhas):
+        r = cab + 1 + i
+        fundo = e["f_creme"] if i % 2 else e["f_branco"]
+        for j, valor in enumerate(linha, start=1):
+            c = ws.cell(row=r, column=j, value=("n/d" if valor is None else valor))
+            c.fill, c.border = fundo, e["borda"]
+            c.font = e["Font"](name="Calibri", size=10, color="1A1A2E")
+            eh_num = isinstance(valor, (int, float)) and not isinstance(valor, bool)
+            if formatos[j - 1] and (eh_num or hasattr(valor, "year")):
+                c.number_format = formatos[j - 1]
+            c.alignment = e["Alignment"](horizontal="right" if eh_num else ("center" if valor is None else "left"),
+                                         vertical="center", indent=0 if eh_num else 1)
+        ws.row_dimensions[r].height = 20
+    ultima_linha = cab + len(linhas)
+    ws.freeze_panes = ws.cell(row=cab + 1, column=1)
+    if linhas:
+        ws.auto_filter.ref = f"A{cab}:{get_column_letter(n)}{ultima_linha}"
+        _xlsx_cor_sinal(ws, [f"{get_column_letter(j)}{cab + 1}:{get_column_letter(j)}{ultima_linha}" for j in cor_cond])
+    _xlsx_rodape(ws, ultima_linha + 2, n, nota)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def gerar_xlsx_cotacoes(df) -> bytes:
+    colunas = ["Ticker", "Título", "Tipo", "Cotação (Kz)", "Variação diária (%)", "Última actualização"]
+    verde_verm = '+0.00"%";-0.00"%";0.00"%"'
+    linhas = []
+    for _, r in df.iterrows():
+        act = r.get("actualizado_em")
+        try:
+            act = act.to_pydatetime().replace(tzinfo=None)
+        except Exception:
+            act = None
+        linhas.append([str(r.get("ticker") or ""), str(r["nome"]), str(r["tipo"]), float(r["preco"]), float(r["variacao"]), act])
+    from datetime import datetime as _dt
+    base = gerar_xlsx_tabela(
+        "Cotações da BODIVA - Carteira de Activos Seguidos", f"Gerado em {_dt.now():%d/%m/%Y %H:%M}  |  Fonte: BODIVA (actualização pelo administrador)",
+        colunas, linhas, [14, 44, 12, 16, 18, 22], [None, None, None, '#,##0.00', verde_verm, "dd/mm/yyyy hh:mm"], folha="Cotações", cor_cond=(5,),
+        nota="Cotações em kwanzas (Kz). A variação diária compara a última cotação com a de abertura do dia.")
+    return base
+
+
+def gerar_xlsx_comparacao(linhas) -> bytes:
+    """linhas: [empresa, sector, pe, pbv, roe, dy_nominal, upside] com valores numéricos (fracções) ou None."""
+    from datetime import datetime as _dt
+    colunas = ["Empresa", "Sector", "P/E (x)", "P/BV (x)", "ROE", "Dividend Yield nominal", "Upside DDM"]
+    verde_verm = '+0.00%;-0.00%;0.00%'
+    return gerar_xlsx_tabela(
+        "Comparação Sectorial - Avaliação de Activos", f"Gerado em {_dt.now():%d/%m/%Y %H:%M}  |  Modelo de avaliação do Clube (DDM)",
+        colunas, linhas, [26, 30, 12, 12, 14, 20, 16],
+        [None, None, '0.00"x"', '0.00"x"', verde_verm, '0.00%', verde_verm], folha="Comparação sectorial", cor_cond=(5, 7),
+        nota="P/E = preço sobre lucro; P/BV = preço sobre valor contabilístico; ROE = rentabilidade do capital próprio; "
+             "Upside DDM = diferença entre o valor justo estimado e o preço de mercado. O DDM depende das premissas "
+             "de crescimento (g) e custo de capital (Ke): use-o como referência, não como verdade absoluta.")
+
+
+def gerar_xlsx_orcamento(df_rec, df_desp, categorias) -> bytes:
+    """Orçamento mensal com fórmulas vivas (somas, % das receitas, comparação 50/30/20) e linhas extra para preencher."""
+    import io
+    from datetime import datetime as _dt
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+    e = _xlsx_estilos()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Orçamento mensal"
+    larg = [40, 26, 18, 18, 18, 18]
+    n = len(larg)
+    for i, w in enumerate(larg, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    r = _xlsx_banner(ws, n, "Orçamento Mensal Pessoal ou Familiar - Regra 50/30/20",
+                     f"Gerado em {_dt.now():%d/%m/%Y %H:%M}  |  Pode editar os valores a azul: as somas e comparações actualizam-se sozinhas.")
+    FMT = '#,##0'
+    entrada = e["Font"](name="Calibri", size=10, color="1F4E9E")
+    normal = e["Font"](name="Calibri", size=10, color="1A1A2E")
+    negrito = e["Font"](name="Calibri", size=10, bold=True, color="7C1F3E")
+
+    def seccao(linha, texto):
+        ws.merge_cells(f"A{linha}:{get_column_letter(n)}{linha}")
+        c = ws[f"A{linha}"]
+        c.value, c.font, c.fill = texto, e["Font"](name="Calibri", size=11, bold=True, color="FFFFFF"), e["f_bord"]
+        c.alignment = e["Alignment"](vertical="center", indent=1)
+        for col in range(1, n + 1):
+            ws.cell(row=linha, column=col).fill = e["f_bord"]
+        ws.row_dimensions[linha].height = 22
+
+    def cabecalho(linha, nomes):
+        for j, nome in enumerate(nomes, start=1):
+            c = ws.cell(row=linha, column=j, value=nome)
+            c.font = e["Font"](name="Calibri", size=10, bold=True, color="7C1F3E")
+            c.fill, c.border = e["f_claro"], e["borda"]
+            c.alignment = e["Alignment"](horizontal="center", vertical="center", wrap_text=True)
+        ws.row_dimensions[linha].height = 26
+
+    def celula(linha, col, valor, fonte=normal, fmt=None, num=False, zebra=0):
+        c = ws.cell(row=linha, column=col, value=valor)
+        c.font, c.border = fonte, e["borda"]
+        c.fill = e["f_creme"] if zebra % 2 else e["f_branco"]
+        if fmt:
+            c.number_format = fmt
+        c.alignment = e["Alignment"](horizontal="right" if num else "left", vertical="center", indent=0 if num else 1)
+        return c
+
+    EXTRA = 4
+    # 1. Receitas
+    seccao(r, "1. RECEITAS DO MÊS")
+    r += 1
+    cabecalho(r, ["Descrição", "Tipo", "Valor (Kz)"])
+    r += 1
+    rec_ini = r
+    recs = [(str(x["Descrição"] or ""), x["Valor (Kz)"]) for _, x in df_rec.iterrows()
+            if str(x["Descrição"] or "").strip() or (x["Valor (Kz)"] == x["Valor (Kz)"] and x["Valor (Kz)"])]
+    for i in range(len(recs) + EXTRA):
+        d, v = recs[i] if i < len(recs) else ("", None)
+        celula(r, 1, d or None, entrada, zebra=i)
+        celula(r, 2, "Receita", normal, zebra=i)
+        celula(r, 3, (float(v) if v == v and v is not None else None), entrada, FMT, True, zebra=i)
+        r += 1
+    rec_fim = r - 1
+    celula(r, 1, "TOTAL DE RECEITAS", negrito); celula(r, 2, None, negrito)
+    celula(r, 3, f"=SUM(C{rec_ini}:C{rec_fim})", negrito, FMT, True)
+    for col in (1, 2, 3):
+        ws.cell(row=r, column=col).fill = e["f_claro"]
+    tot_rec = f"$C${r}"
+    r += 2
+
+    # 2. Despesas
+    seccao(r, "2. DESPESAS E POUPANÇA DO MÊS")
+    r += 1
+    cabecalho(r, ["Descrição", "Categoria", "Valor (Kz)", "% das receitas"])
+    r += 1
+    des_ini = r
+    desp = [(str(x["Categoria"] or ""), str(x["Descrição"] or ""), x["Valor (Kz)"]) for _, x in df_desp.iterrows()
+            if str(x["Descrição"] or "").strip() or (x["Valor (Kz)"] == x["Valor (Kz)"] and x["Valor (Kz)"])]
+    for i in range(len(desp) + EXTRA):
+        cat, d, v = desp[i] if i < len(desp) else ("", "", None)
+        celula(r, 1, d or None, entrada, zebra=i)
+        celula(r, 2, cat or None, entrada, zebra=i)
+        celula(r, 3, (float(v) if v == v and v is not None else None), entrada, FMT, True, zebra=i)
+        celula(r, 4, f"=IF(AND({tot_rec}>0,C{r}<>\"\"),C{r}/{tot_rec},\"\")", normal, "0.0%", True, zebra=i)
+        r += 1
+    des_fim = r - 1
+    dv = DataValidation(type="list", formula1='"' + ",".join(categorias) + '"', allow_blank=True)
+    ws.add_data_validation(dv)
+    dv.add(f"B{des_ini}:B{des_fim}")
+    celula(r, 1, "TOTAL DE DESPESAS E POUPANÇA", negrito); celula(r, 2, None, negrito)
+    celula(r, 3, f"=SUM(C{des_ini}:C{des_fim})", negrito, FMT, True)
+    celula(r, 4, f"=IF({tot_rec}>0,C{r}/{tot_rec},\"\")", negrito, "0.0%", True)
+    for col in (1, 2, 3, 4):
+        ws.cell(row=r, column=col).fill = e["f_claro"]
+    tot_des = f"$C${r}"
+    r += 2
+
+    # 3. Resultado
+    seccao(r, "3. RESULTADO - COMPARAÇÃO COM A REGRA 50/30/20")
+    r += 1
+    cabecalho(r, ["Categoria", "Meta (% das receitas)", "Meta (Kz)", "O seu orçamento (Kz)", "Diferença (Kz)", "Orçamento (% das receitas)"])
+    r += 1
+    metas = [0.50, 0.30, 0.20]
+    for i, (cat, meta) in enumerate(zip(categorias, metas)):
+        celula(r, 1, cat, normal, zebra=i)
+        celula(r, 2, meta, normal, "0%", True, zebra=i)
+        celula(r, 3, f"={tot_rec}*B{r}", normal, FMT, True, zebra=i)
+        celula(r, 4, f"=SUMIF($B${des_ini}:$B${des_fim},A{r},$C${des_ini}:$C${des_fim})", normal, FMT, True, zebra=i)
+        celula(r, 5, f"=D{r}-C{r}", normal, '+#,##0;-#,##0;0', True, zebra=i)
+        _xlsx_cor_sinal(ws, [f"E{r}"], positivo_bom=(i != 0))
+        celula(r, 6, f"=IF({tot_rec}>0,D{r}/{tot_rec},\"\")", normal, "0.0%", True, zebra=i)
+        r += 1
+    celula(r, 1, "SALDO POR ALOCAR (receitas - despesas e poupança)", negrito)
+    for col in (2, 3, 5, 6):
+        celula(r, col, None, negrito)
+    celula(r, 4, f"={tot_rec}-{tot_des}", negrito, '#,##0;-#,##0;0', True)
+    _xlsx_cor_sinal(ws, [f"D{r}"])
+    for col in range(1, 7):
+        ws.cell(row=r, column=col).fill = e["f_claro"]
+    r += 2
+    _xlsx_rodape(ws, r, n, "Consumo: ideal até 50% das receitas (diferença positiva = a gastar acima da meta). "
+                           "Investimento (30%) e Entesouramento (20%): metas mínimas de poupança (diferença negativa = falta poupar).")
+    ws.freeze_panes = "A6"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _xlsx_seguro(funcao):
+    """Corre a geração do Excel sem nunca deixar a página falhar: devolve bytes ou None."""
+    try:
+        if not xlsx_disponivel():
+            return None
+        return funcao()
+    except Exception:
+        return None
 
 
 ORC_CATEGORIAS = ["Consumo (50%)", "Investimento (30%)", "Entesouramento (20%)"]
@@ -2203,7 +2532,7 @@ def _pdf_barras_limite(pdf, titulo, itens, x0, y0, w, limite):
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(w, 6, titulo)
-    lab_w, linha_h = 46, 8
+    lab_w, linha_h = min(46, w * 0.32), 8
     pmax = max([p for _, p in itens] + [limite * 1.5])
     pw = w - lab_w - 16
     top = y0 + 9
@@ -2228,6 +2557,31 @@ def _pdf_barras_limite(pdf, titulo, itens, x0, y0, w, limite):
     pdf.cell(30, 3.5, f"limite {limite:.0f}%", align="C")
     pdf.set_text_color(0, 0, 0)
     return top + len(itens) * linha_h + 6
+
+
+def _pdf_barras_simples(pdf, titulo, itens, x0, y0, w, cor=(124, 31, 62)):
+    """Barras horizontais (rótulo, %) numa só série."""
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w, 6, titulo)
+    lab_w, linha_h = min(46, w * 0.32), 8
+    pmax = max([p for _, p in itens] + [1]) * 1.15
+    pw = w - lab_w - 14
+    top = y0 + 9
+    for i, (rot, p) in enumerate(itens):
+        y = top + i * linha_h
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(40, 40, 40)
+        pdf.set_xy(x0, y + 1)
+        pdf.cell(lab_w - 2, 5, rot[:22], align="R")
+        bw = pw * p / pmax
+        pdf.set_fill_color(*cor)
+        pdf.rect(x0 + lab_w, y + 0.5, max(bw, 0.3), 6, style="F")
+        pdf.set_xy(x0 + lab_w + bw + 1, y + 1)
+        pdf.cell(14, 5, f"{p:.1f}%")
+    pdf.set_text_color(0, 0, 0)
+    return top + len(itens) * linha_h + 2
 
 
 def _pdf_barras_duplas(pdf, titulo, itens, x0, y0, w):
@@ -2445,12 +2799,15 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
                 pdf.add_page("L")
                 _pdf_secao(pdf, "CONCENTRAÇÃO E GOVERNANÇA DA CARTEIRA")
                 y1 = pdf.get_y() + 2
-                itens_dup = [(_pdf_nome_curto(l["nome"]), l["qtd"] / _tot_qtd * 100, l["val_act"] / _tot_cart * 100)
-                             for l in linhas_carteira]
-                fim_esq = _pdf_barras_duplas(pdf, "Peso na carteira: títulos vs valor", itens_dup, pdf.l_margin, y1, 118)
+                larg3 = 77
+                x_a, x_b, x_c = pdf.l_margin, pdf.l_margin + larg3 + 8, pdf.l_margin + 2 * (larg3 + 8)
+                itens_qtd = [(_pdf_nome_curto(l["nome"]), max(l["qtd"], 0) / _tot_qtd * 100) for l in linhas_carteira]
+                itens_val = [(_pdf_nome_curto(l["nome"]), max(l["val_act"], 0) / _tot_cart * 100) for l in linhas_carteira]
                 itens_act = [(_pdf_nome_curto(l["nome"]), max(l["val_act"], 0) / _fundo * 100) for l in linhas_carteira]
-                fim_dir = _pdf_barras_limite(pdf, "Peso de cada activo no fundo global (limite: 10%)", itens_act,
-                                             pdf.l_margin + 130, y1, 117, 10)
+                f_a = _pdf_barras_simples(pdf, "Quantidade de títulos (% da carteira)", itens_qtd, x_a, y1, larg3, (166, 72, 106))
+                f_b = _pdf_barras_simples(pdf, "Valor monetário (% da carteira)", itens_val, x_b, y1, larg3, (124, 31, 62))
+                f_c = _pdf_barras_limite(pdf, "Peso no fundo global (limite 10%)", itens_act, x_c, y1, larg3, 10)
+                fim_esq, fim_dir = max(f_a, f_b), f_c
                 y2 = max(fim_esq, fim_dir) + 4
                 por_sector = {}
                 for l in linhas_carteira:
@@ -2748,6 +3105,10 @@ elif pagina == "📈 Cotações & Activos":
             df_filtrado  = df_activos if filtro_tipo == tx["cot_filtrar_todos"] else df_activos[df_activos["tipo"] == filtro_tipo]
             st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
             st.caption(f"{tx['cot_ultima_actualizacao']} {df_filtrado['actualizado_em'].max()}")
+            _xl_cot = _xlsx_seguro(lambda: gerar_xlsx_cotacoes(df_filtrado))
+            if _xl_cot:
+                st.download_button("⬇️ Descarregar Excel (formatado)", data=_xl_cot, file_name="cotacoes_appo.xlsx",
+                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_cot_xlsx")
             st.download_button(tx["cot_descarregar_csv"],
                                data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
                                file_name="cotacoes_appo.csv", mime="text/csv")
@@ -2878,6 +3239,7 @@ elif pagina == "📐 Avaliação de Activos":
             st.markdown(tx["aval_comparacao"])
             cols_comp = tx["aval_comp_cols"]
             linhas_comp = []
+            linhas_xlsx_comp = []
             for _, l in df_aval.iterrows():
                 av_l = {"sector": l["sector"], "preco": float(l["preco"]), "acoes_circulacao": float(l["acoes_circulacao"]),
                         "lucro_liquido": float(l["lucro_liquido"]), "ganho_pontual": float(l["ganho_pontual"]),
@@ -2889,6 +3251,7 @@ elif pagina == "📐 Avaliação de Activos":
                                      cols_comp["ROE"]: pct(m_l["roe"]) if m_l["roe"] is not None else "n/d",
                                      cols_comp["DY Nominal"]: pct(m_l["dy_nominal"]),
                                      cols_comp["Upside DDM"]: pct(m_l["upside"]) if m_l["upside"] is not None else "n/d"})
+                linhas_xlsx_comp.append([l["empresa"], l["sector"], m_l["pe"], m_l["pbv"], m_l["roe"], m_l["dy_nominal"], m_l["upside"]])
             df_comp = pd.DataFrame(linhas_comp)
             st.dataframe(df_comp, hide_index=True)
 
@@ -2917,6 +3280,10 @@ elif pagina == "📐 Avaliação de Activos":
 - ⚠️ O DDM é sensível às premissas de crescimento (g) e custo de capital (Ke) — usar sempre como uma referência, não como verdade absoluta.
                 """)
 
+            _xl_comp = _xlsx_seguro(lambda: gerar_xlsx_comparacao(linhas_xlsx_comp))
+            if _xl_comp:
+                st.download_button("⬇️ Descarregar Excel (formatado)", data=_xl_comp, file_name="comparacao_sectorial_appo.xlsx",
+                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_comp_xlsx")
             st.download_button(tx["aval_descarregar_comp"],
                                data=df_comp.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
                                file_name="comparacao_sectorial_appo.csv", mime="text/csv")
@@ -2963,14 +3330,30 @@ elif pagina == "💱 Conversor de Moeda":
 
     st.divider()
     st.subheader(tx["conv_historico_titulo"])
-    df_hist_cambio = obter_historico_cambio()
-    if len(df_hist_cambio) >= 2:
-        moeda_grafico = st.selectbox(tx["conv_historico_select"], ["usd", "eur", "gbp", "zar", "cny", "brl"], format_func=lambda x: x.upper())
-        st.line_chart(df_hist_cambio.set_index("registado_em")[[moeda_grafico]].rename(
-            columns={moeda_grafico: f"{tx['conv_historico_label']} {moeda_grafico.upper()}"}))
-        st.caption(tx["conv_historico_caption"])
+    moeda_graf = st.selectbox(tx["conv_historico_select"], ["USD", "EUR", "GBP", "ZAR", "CNY", "BRL"], key="conv_graf_moeda")
+    try:
+        serie = obter_serie_cambio_aoa(moeda_graf)
+    except Exception:
+        serie = pd.DataFrame()
+    if len(serie) >= 2:
+        primeiro, ultimo = float(serie["Kz"].iloc[0]), float(serie["Kz"].iloc[-1])
+        var_sem = (ultimo / primeiro - 1) * 100 if primeiro else 0.0
+        cg1, cg2, cg3 = st.columns(3)
+        cg1.metric(f"1 {moeda_graf} hoje", f"{ultimo:,.2f} Kz")
+        cg2.metric(f"Variação ({serie['Data'].iloc[0]} → {serie['Data'].iloc[-1]})", f"{var_sem:+.2f}%")
+        cg3.metric("Máximo / mínimo do período", f"{serie['Kz'].max():,.2f} / {serie['Kz'].min():,.2f}")
+        st.line_chart(serie.set_index("Data")[["Kz"]].rename(columns={"Kz": f"Kz por 1 {moeda_graf}"}))
+        st.caption("Taxas indicativas de mercado (fonte aberta: fawazahmed0/exchange-api), últimos 7 dias. "
+                   "Podem diferir da taxa oficial do BNA e das taxas praticadas pelos bancos e casas de câmbio.")
     else:
-        st.info(tx["conv_historico_info"])
+        df_hist_cambio = obter_historico_cambio()
+        if len(df_hist_cambio) >= 2:
+            _col = moeda_graf.lower()
+            st.line_chart(df_hist_cambio.set_index("registado_em")[[_col]].rename(
+                columns={_col: f"{tx['conv_historico_label']} {moeda_graf}"}))
+            st.caption(tx["conv_historico_caption"])
+        else:
+            st.info("Não foi possível obter a série de câmbio da última semana neste momento. Tente de novo dentro de instantes.")
 
 # =========================================================
 # PÁGINA: SIMULADOR — HOME BROKER APPO + JUROS COMPOSTOS
@@ -3424,11 +3807,17 @@ elif pagina == "🧮 Regra 50/30/20":
             st.session_state["orc_desp_base"] = pd.DataFrame(_m["despesas"], columns=["Categoria", "Descrição", "Valor (Kz)"])
             st.session_state["orc_versao"] = _ver + 1
             st.rerun()
-        _csv = pd.concat([
-            df_rec.assign(Tipo="Receita", Categoria=""),
-            df_desp.assign(Tipo="Despesa"),
-        ], ignore_index=True)[["Tipo", "Categoria", "Descrição", "Valor (Kz)"]].to_csv(index=False).encode("utf-8-sig")
-        b3.download_button("⬇️ Descarregar (CSV/Excel)", data=_csv, file_name="orcamento_mensal.csv", mime="text/csv", use_container_width=True)
+        _xl_orc = _xlsx_seguro(lambda: gerar_xlsx_orcamento(df_rec, df_desp, ORC_CATEGORIAS))
+        if _xl_orc:
+            b3.download_button("⬇️ Descarregar Excel", data=_xl_orc, file_name="orcamento_mensal_appo.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                               use_container_width=True, key="dl_orc_xlsx")
+        else:
+            _csv = pd.concat([
+                df_rec.assign(Tipo="Receita", Categoria=""),
+                df_desp.assign(Tipo="Despesa"),
+            ], ignore_index=True)[["Tipo", "Categoria", "Descrição", "Valor (Kz)"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
+            b3.download_button("⬇️ Descarregar (CSV)", data=_csv, file_name="orcamento_mensal.csv", mime="text/csv", use_container_width=True)
         _om = st.session_state.pop("orc_msg", None)
         if _om:
             st.success(_om)
