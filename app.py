@@ -1824,6 +1824,8 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
             "var_dia": var_dia,
         })
 
+    # mesma ordem de Cotações & Activos (alfabética pelo nome do activo)
+    linhas_carteira.sort(key=lambda l: l["nome"].strip().upper())
     if not linhas_carteira:
         pdf.set_font("Helvetica", "I", 9)
         pdf.cell(0, 7, "Sem posicoes registadas na carteira.", ln=True)
@@ -2072,7 +2074,7 @@ if pagina == "🏠 Início & Análises":
     col1, col2 = st.columns(2)
     col1.metric(tx["inicio_capital_subscrito"], kz(resumo["capital_subscrito"]))
     col2.metric(tx["inicio_capital_realizado"],  kz(resumo["capital_realizado"]),
-                delta=(f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}% {tx['inicio_pct_subscrito']}" if resumo["capital_subscrito"] else None),
+                delta=(f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}{tx['inicio_pct_subscrito']}" if resumo["capital_subscrito"] else None),
                 delta_color="off")
     col3, col4, col5 = st.columns(3)
     col3.metric(tx["inicio_investimentos"],   kz(resumo["investimentos"]))
@@ -2838,9 +2840,25 @@ elif pagina == "🔐 Painel do Administrador":
             # construir a coluna "rotulo" de cada posição já guardada, para o
             # selector mostrar a escolha actual correcta
             if not df_carteira_admin.empty:
-                tk_para_rotulo = {v: k for k, v in mapa_rotulo_para_ticker.items()}
-                df_carteira_admin["rotulo"] = df_carteira_admin["ticker"].map(tk_para_rotulo)
-                tabela_base = df_carteira_admin[["rotulo", "qtd", "valor_aquisicao"]]
+                # só tickers não vazios entram no mapa (evita colisões entre activos sem ticker)
+                tk_para_rotulo = {str(v).strip().upper(): k for k, v in mapa_rotulo_para_ticker.items() if str(v or "").strip()}
+                nome_para_rotulo = {str(v).strip().upper(): k for k, v in mapa_rotulo_para_nome.items()}
+
+                def _resolver_rotulo(linha):
+                    r = tk_para_rotulo.get(str(linha["ticker"] or "").strip().upper())
+                    if r is None:
+                        r = nome_para_rotulo.get(str(linha["nome"] or "").strip().upper())
+                    return r
+
+                df_carteira_admin["rotulo"] = df_carteira_admin.apply(_resolver_rotulo, axis=1)
+                if df_carteira_admin["rotulo"].isna().any():
+                    st.warning("⚠️ Há posições gravadas antes que já não correspondem a nenhum activo de Cotações & Activos "
+                               "(ticker ou nome alterado). Escolhe o activo certo na lista para essas linhas e grava.")
+                # mesma ordem de Cotações & Activos (BAI no topo, etc.)
+                ordem_rotulos = {r: i for i, r in enumerate(df_activos_lista["rotulo"])}
+                df_carteira_admin["_ordem"] = df_carteira_admin["rotulo"].map(ordem_rotulos).fillna(9999)
+                df_carteira_admin = df_carteira_admin.sort_values("_ordem", kind="stable")
+                tabela_base = df_carteira_admin[["rotulo", "qtd", "valor_aquisicao"]].reset_index(drop=True)
             else:
                 st.info("Ainda não há nenhuma posição registada na carteira real.")
                 tabela_base = pd.DataFrame(columns=["rotulo", "qtd", "valor_aquisicao"])
