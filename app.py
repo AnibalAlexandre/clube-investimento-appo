@@ -1519,6 +1519,7 @@ def inicializar_bd():
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_abertura_dia NUMERIC")
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS data_abertura_dia DATE")
     executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS documentos_pdf (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, descricao TEXT, nome_ficheiro TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'biblioteca', tamanho INTEGER NOT NULL, conteudo BYTEA NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS socios (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT, contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS premissas_macro (id INTEGER PRIMARY KEY CHECK (id = 1), inflacao NUMERIC NOT NULL DEFAULT 0.135, taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18, premio_risco NUMERIC NOT NULL DEFAULT 0.055, beta_banca NUMERIC NOT NULL DEFAULT 1.0, beta_telecom NUMERIC NOT NULL DEFAULT 0.9, beta_outros NUMERIC NOT NULL DEFAULT 1.0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS avaliacoes (id SERIAL PRIMARY KEY, empresa TEXT UNIQUE NOT NULL, sector TEXT NOT NULL, preco NUMERIC NOT NULL DEFAULT 0, acoes_circulacao NUMERIC NOT NULL DEFAULT 0, lucro_liquido NUMERIC NOT NULL DEFAULT 0, ganho_pontual NUMERIC NOT NULL DEFAULT 0, capital_proprio NUMERIC NOT NULL DEFAULT 0, dividendo_total NUMERIC NOT NULL DEFAULT 0, crescimento_g NUMERIC NOT NULL DEFAULT 0.08, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
@@ -1917,6 +1918,86 @@ def inserir_artigo(titulo, categoria, conteudo):
 
 def eliminar_artigo(artigo_id: int):
     executar("DELETE FROM artigos WHERE id = %s", (artigo_id,))
+
+
+# ---------------- Documentos PDF (Biblioteca e Estatuto) ----------------
+PDF_TAMANHO_MAX = 15 * 1024 * 1024  # 15 MB
+
+
+def inserir_documento(titulo, categoria, descricao, nome_ficheiro, conteudo: bytes, tipo="biblioteca"):
+    executar(
+        "INSERT INTO documentos_pdf (titulo, categoria, descricao, nome_ficheiro, tipo, tamanho, conteudo) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (titulo, categoria, descricao or "", nome_ficheiro, tipo, len(conteudo), psycopg2.Binary(conteudo)))
+
+
+def obter_documentos(tipo="biblioteca") -> pd.DataFrame:
+    return consultar_df(
+        "SELECT id, titulo, categoria, descricao, nome_ficheiro, tamanho, criado_em FROM documentos_pdf "
+        "WHERE tipo = %s ORDER BY criado_em DESC", (tipo,))
+
+
+def eliminar_documento(doc_id: int):
+    executar("DELETE FROM documentos_pdf WHERE id = %s", (int(doc_id),))
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def obter_pdf_bytes(doc_id: int) -> bytes:
+    linha = consultar_um("SELECT conteudo FROM documentos_pdf WHERE id = %s", (int(doc_id),))
+    return bytes(linha[0]) if linha else b""
+
+
+_HTML_VISUALIZADOR_PDF = """
+<div id="vwr" style="height:__ALT__px;overflow-y:auto;background:#EDE6E9;border:1px solid #ECDEE3;border-radius:8px;padding:8px;box-sizing:border-box;font-family:sans-serif;color:#7C1F3E;">A carregar documento…</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+(function () {
+  var box = document.getElementById('vwr');
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    var raw = atob("__B64__");
+    var data = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) { data[i] = raw.charCodeAt(i); }
+    pdfjsLib.getDocument({data: data}).promise.then(function (pdf) {
+      box.innerHTML = "";
+      var chain = Promise.resolve();
+      for (var n = 1; n <= pdf.numPages; n++) {
+        (function (num) {
+          chain = chain.then(function () { return pdf.getPage(num).then(function (page) {
+            var largura = box.clientWidth - 20;
+            var v0 = page.getViewport({scale: 1});
+            var esc = (largura / v0.width) * (window.devicePixelRatio || 1);
+            var vp = page.getViewport({scale: esc});
+            var c = document.createElement('canvas');
+            c.width = vp.width; c.height = vp.height;
+            c.style.width = largura + 'px'; c.style.display = 'block';
+            c.style.margin = '0 auto 10px auto'; c.style.boxShadow = '0 1px 4px rgba(0,0,0,0.25)';
+            box.appendChild(c);
+            return page.render({canvasContext: c.getContext('2d'), viewport: vp}).promise;
+          }); });
+        })(n);
+      }
+    }).catch(function (e) { box.innerHTML = "Não foi possível mostrar o documento no ecrã. Use o botão de descarregar."; });
+  } catch (e) { box.innerHTML = "Não foi possível mostrar o documento no ecrã. Use o botão de descarregar."; }
+})();
+</script>
+"""
+
+
+def bloco_documento_pdf(doc_id: int, nome_ficheiro: str, chave: str, altura: int = 760):
+    """Caixa de selecção 'Abrir documento': mostra o PDF no ecrã e o botão de descarregar (só carrega quando aberto)."""
+    if st.checkbox("📖 Abrir documento", key=f"abrir_pdf_{chave}"):
+        dados = obter_pdf_bytes(int(doc_id))
+        if not dados:
+            st.warning("Documento não encontrado.")
+            return
+        st.download_button("⬇️ Descarregar PDF", data=dados, file_name=nome_ficheiro or "documento.pdf",
+                           mime="application/pdf", key=f"dl_pdf_{chave}")
+        import base64 as _b64
+        import streamlit.components.v1 as _components
+        _components.html(_HTML_VISUALIZADOR_PDF.replace("__ALT__", str(altura - 20)).replace(
+            "__B64__", _b64.b64encode(dados).decode()), height=altura)
+
 
 
 # ---------------- Sócios ----------------
@@ -3052,8 +3133,20 @@ elif pagina == "📚 Biblioteca Educativa":
     tx = t()
     hero("📚 " + tx["nav_map"]["📚 Biblioteca Educativa"].replace("📚 ", ""), tx["bib_hero_sub"])
     df_artigos = obter_artigos()
+    df_docs_bib = obter_documentos("biblioteca")
+    if not df_docs_bib.empty:
+        st.subheader("📄 Publicações em PDF")
+        for _, doc in df_docs_bib.iterrows():
+            with st.expander(f"{ICONES_CATEGORIA.get(doc['categoria'], '📄')} {doc['titulo']}"):
+                st.caption(f"{doc['categoria']} · {tx['bib_publicado']} {doc['criado_em']} · {doc['tamanho'] / 1048576:.1f} MB")
+                if str(doc["descricao"] or "").strip():
+                    st.write(doc["descricao"])
+                bloco_documento_pdf(int(doc["id"]), doc["nome_ficheiro"], f"bib_{int(doc['id'])}")
+        if not df_artigos.empty:
+            st.subheader("📝 Artigos")
     if df_artigos.empty:
-        st.info(tx["bib_sem_artigos"])
+        if df_docs_bib.empty:
+            st.info(tx["bib_sem_artigos"])
     else:
         todas_label = tx["bib_todas"]
         categorias  = [todas_label] + sorted(df_artigos["categoria"].unique().tolist())
@@ -3099,6 +3192,12 @@ elif pagina == "ℹ️ Sobre Nós & Estatutos":
     st.markdown(TEXTO_PRINCIPIOS)   # mantém-se em PT
     st.subheader(tx["sobre_estatutos"])
     st.markdown(tx["sobre_estatutos_texto"])
+    _df_est = obter_documentos("estatuto")
+    if not _df_est.empty:
+        _est = _df_est.iloc[0]
+        st.markdown(f"**📜 {_est['titulo']}**")
+        st.caption(f"{_est['criado_em']} · {_est['tamanho'] / 1048576:.1f} MB")
+        bloco_documento_pdf(int(_est["id"]), _est["nome_ficheiro"], f"estatuto_{int(_est['id'])}", altura=820)
     st.caption(tx["sobre_nota"])
 
 # =========================================================
@@ -3410,6 +3509,68 @@ elif pagina == "🔐 Painel do Administrador":
             if col_c.button("Eliminar", key=f"eliminar_artigo_{artigo['id']}"):
                 eliminar_artigo(int(artigo["id"]))
                 st.rerun()
+
+        st.divider()
+        st.subheader("📄 Publicar documento PDF (com gráficos e imagens)")
+        st.caption("O PDF original é guardado tal como está: os sócios podem lê-lo no ecrã ou descarregá-lo, "
+                   "com gráficos, imagens e formatação. Tamanho máximo: 15 MB.")
+        with st.form("form_doc_pdf", clear_on_submit=True):
+            f_pdf  = st.file_uploader("Ficheiro PDF", type=["pdf"], key="doc_pdf_up")
+            t_doc  = st.text_input("Título do documento")
+            c_doc  = st.selectbox("Categoria", ["Institucional", "Educação", "Análise de Mercado", "Referência"], key="doc_pdf_cat")
+            d_doc  = st.text_area("Descrição curta (opcional)", height=80)
+            pub_doc = st.form_submit_button("Publicar documento")
+        if pub_doc:
+            if f_pdf is None or not t_doc.strip():
+                st.error("Escolha o ficheiro PDF e escreva o título.")
+            else:
+                _bytes = f_pdf.getvalue()
+                if not _bytes.startswith(b"%PDF"):
+                    st.error("O ficheiro não parece ser um PDF válido.")
+                elif len(_bytes) > PDF_TAMANHO_MAX:
+                    st.error(f"O ficheiro tem {len(_bytes) / 1048576:.1f} MB — o máximo é 15 MB. Comprima o PDF e tente de novo.")
+                else:
+                    inserir_documento(t_doc.strip(), c_doc, d_doc.strip(), f_pdf.name, _bytes, "biblioteca")
+                    st.success("Documento publicado na Biblioteca Educativa.")
+                    st.rerun()
+        _docs_adm = obter_documentos("biblioteca")
+        if not _docs_adm.empty:
+            st.markdown("**Documentos PDF publicados**")
+            for _, _d in _docs_adm.iterrows():
+                ca, cb, cc = st.columns([3, 1.5, 1])
+                ca.write(f"{_d['titulo']}  ·  {_d['tamanho'] / 1048576:.1f} MB")
+                cb.write(_d["categoria"])
+                if cc.button("Eliminar", key=f"eliminar_doc_{int(_d['id'])}"):
+                    eliminar_documento(int(_d["id"]))
+                    st.rerun()
+
+        st.divider()
+        st.subheader("📜 Estatuto do Clube (PDF)")
+        _df_est_adm = obter_documentos("estatuto")
+        if not _df_est_adm.empty:
+            _e = _df_est_adm.iloc[0]
+            ce1, ce2 = st.columns([3, 1])
+            ce1.info(f"Estatuto publicado: {_e['nome_ficheiro']} ({_e['tamanho'] / 1048576:.1f} MB, {_e['criado_em']})")
+            if ce2.button("Eliminar estatuto", key="eliminar_estatuto"):
+                eliminar_documento(int(_e["id"]))
+                st.rerun()
+        with st.form("form_estatuto_pdf", clear_on_submit=True):
+            f_est   = st.file_uploader("Ficheiro PDF do Estatuto (substitui o anterior)", type=["pdf"], key="estatuto_pdf_up")
+            pub_est = st.form_submit_button("Publicar estatuto")
+        if pub_est:
+            if f_est is None:
+                st.error("Escolha o ficheiro PDF do Estatuto.")
+            else:
+                _b = f_est.getvalue()
+                if not _b.startswith(b"%PDF"):
+                    st.error("O ficheiro não parece ser um PDF válido.")
+                elif len(_b) > PDF_TAMANHO_MAX:
+                    st.error(f"O ficheiro tem {len(_b) / 1048576:.1f} MB — o máximo é 15 MB.")
+                else:
+                    executar("DELETE FROM documentos_pdf WHERE tipo = 'estatuto'")
+                    inserir_documento("Estatuto do Clube de Investimento APPO", "Institucional", "", f_est.name, _b, "estatuto")
+                    st.success("Estatuto publicado. Já aparece em Sobre Nós & Estatutos.")
+                    st.rerun()
 
     with aba_socios:
         st.subheader("Pedidos de adesão recebidos")
