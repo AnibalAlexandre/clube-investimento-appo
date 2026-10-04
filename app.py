@@ -1310,7 +1310,16 @@ def buscar_cotacoes_bodiva(tickers) -> dict:
         "Accept": "application/json, text/plain, */*",
         "Referer": "https://www.bodiva.ao/",
     }
-    resp = requests.get(URL_BODIVA_RESUMO, headers=cabecalhos, timeout=20)
+    try:
+        resp = requests.get(URL_BODIVA_RESUMO, headers=cabecalhos, timeout=20)
+    except requests.exceptions.SSLError:
+        # O servidor da BODIVA não envia a cadeia completa de certificados (os
+        # navegadores e o Google conseguem completá-la, o Python não). Como são
+        # dados públicos, só de leitura, e o admin confere os preços na
+        # pré-visualização antes de gravar, repete-se o pedido sem verificar o certificado.
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        resp = requests.get(URL_BODIVA_RESUMO, headers=cabecalhos, timeout=20, verify=False)
     if resp.status_code != 200:
         raise ValueError(f"A BODIVA respondeu com o código HTTP {resp.status_code}.")
     conteudo = resp.text
