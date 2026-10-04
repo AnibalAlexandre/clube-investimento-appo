@@ -3477,11 +3477,14 @@ elif pagina == "🔐 Painel do Administrador":
         st.dataframe(df_mov_admin, hide_index=True)
 
     with aba_biblioteca:
-        st.subheader("Adicionar novo artigo")
-        modo = st.radio("Fonte do conteúdo", ["Carregar PDF", "Escrever manualmente"], horizontal=True, key="modo_artigo")
+        st.subheader("Adicionar novo artigo (texto)")
+        st.info("📌 Para publicar um PDF **tal como é** (com gráficos, imagens e formatação), use a secção "
+                "**\"📄 Publicar documento PDF\"**, mais abaixo nesta página. Este formulário cria um artigo só de texto.")
+        modo = st.radio("Fonte do conteúdo", ["Extrair só o texto de um PDF (perde gráficos e imagens)", "Escrever manualmente"],
+                        horizontal=True, key="modo_artigo")
         texto_extraido = ""
-        if modo == "Carregar PDF":
-            ficheiro_pdf = st.file_uploader("Carregar ficheiro PDF", type=["pdf"], key="uploader_pdf")
+        if modo.startswith("Extrair"):
+            ficheiro_pdf = st.file_uploader("Ficheiro PDF (só o texto será aproveitado)", type=["pdf"], key="uploader_pdf")
             if ficheiro_pdf is not None:
                 try:
                     texto_extraido = extrair_texto_pdf(ficheiro_pdf)
