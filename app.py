@@ -1212,6 +1212,125 @@ def obter_taxas_cambio(base: str) -> dict:
     return {"rates": dados["rates"], "actualizado": dados.get("time_last_update_utc", "")}
 
 
+# ---------------- Cotações directas da BODIVA ----------------
+# Mesmo endpoint e mesma lógica de pesquisa do script Apps Script do Google Sheets
+# (que já foi testado e encontra os 7 títulos). Só LÊ dados; nada é gravado
+# sem o admin confirmar na pré-visualização.
+URL_BODIVA_RESUMO = "https://www.bodiva.ao/website/api/GetAllMarketSummary_no.php"
+
+
+def _num_bodiva(valor):
+    """Converte um valor vindo da BODIVA em preço (>100 e diferente de 2026), ou None."""
+    if valor is None or isinstance(valor, (dict, list, bool)):
+        return None
+    if isinstance(valor, (int, float)):
+        num = float(valor)
+    else:
+        t_ = str(valor).replace("\u00a0", "").replace(" ", "").strip()
+        if not t_:
+            return None
+        if "," in t_ and "." in t_:
+            dec = "," if t_.rfind(",") > t_.rfind(".") else "."
+            mil = "." if dec == "," else ","
+            t_ = t_.replace(mil, "").replace(dec, ".")
+        elif "," in t_ or "." in t_:
+            sep = "," if "," in t_ else "."
+            partes = t_.split(sep)
+            if len(partes) == 2 and 1 <= len(partes[1]) <= 2:
+                t_ = partes[0] + "." + partes[1]
+            else:
+                t_ = "".join(partes)
+        try:
+            num = float(t_)
+        except ValueError:
+            return None
+    return num if (num > 100 and num != 2026) else None
+
+
+_CHAVES_PRECO_BODIVA = [
+    "ultimo_preco", "ultimopreco", "last_price", "lastprice",
+    "preco_fecho", "precofecho", "close_price", "closeprice",
+    "cotacao", "preco", "price", "ultimo", "last", "fecho", "close", "valor",
+]
+
+
+def _preco_do_objecto_bodiva(obj):
+    if not isinstance(obj, dict):
+        return None
+    for chave in _CHAVES_PRECO_BODIVA:
+        for prop, val in obj.items():
+            if str(prop).lower() == chave or chave in str(prop).lower():
+                v = _num_bodiva(val)
+                if v is not None:
+                    return v
+    return None
+
+
+def _procurar_em_json_bodiva(dados, ticker):
+    import json as _json
+    lista = dados if isinstance(dados, list) else [dados]
+    base = ticker.rstrip("A")
+    for item in lista:
+        txt = _json.dumps(item, ensure_ascii=False).upper()
+        if ticker in txt or (len(base) >= 4 and base in txt):
+            v = _preco_do_objecto_bodiva(item)
+            if v is not None:
+                return v
+    filhos = dados.values() if isinstance(dados, dict) else (dados if isinstance(dados, list) else [])
+    for filho in filhos:
+        if isinstance(filho, (dict, list)):
+            v = _procurar_em_json_bodiva(filho, ticker)
+            if v is not None:
+                return v
+    return None
+
+
+def _procurar_em_texto_bodiva(conteudo, ticker):
+    import re as _re
+    texto = conteudo.upper()
+    base = ticker.rstrip("A")
+    pos = texto.find(ticker)
+    if pos == -1 and len(base) >= 4:
+        pos = texto.find(base)
+    if pos == -1:
+        return None
+    trecho = conteudo[pos:pos + 300]
+    padrao = r':\s*"?(\d{1,3}(?:[ .]\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)"?'
+    for m in _re.finditer(padrao, trecho):
+        v = _num_bodiva(_re.sub(r'^:\s*"?', "", m.group(0)).rstrip('"'))
+        if v is not None:
+            return v
+    return None
+
+
+def buscar_cotacoes_bodiva(tickers) -> dict:
+    """Devolve {ticker: preço ou None}. Levanta excepção se a BODIVA não responder."""
+    cabecalhos = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.bodiva.ao/",
+    }
+    resp = requests.get(URL_BODIVA_RESUMO, headers=cabecalhos, timeout=20)
+    if resp.status_code != 200:
+        raise ValueError(f"A BODIVA respondeu com o código HTTP {resp.status_code}.")
+    conteudo = resp.text
+    try:
+        dados = resp.json()
+    except ValueError:
+        dados = None
+    resultado = {}
+    for tk in tickers:
+        tk = str(tk or "").strip().upper()
+        if not tk:
+            continue
+        preco = _procurar_em_json_bodiva(dados, tk) if dados is not None else None
+        if preco is None:
+            preco = _procurar_em_texto_bodiva(conteudo, tk)
+        resultado[tk] = preco
+    return resultado
+
+
+
 # =========================================================
 # CONTEÚDO EDUCATIVO (fica em PT — conforme acordado)
 # =========================================================
@@ -2809,6 +2928,41 @@ elif pagina == "🔐 Painel do Administrador":
                 "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
             })
         st.dataframe(df_admin_display[["ticker", "Var.% (auto)"]], hide_index=True)
+        # ---- Actualização directa a partir da BODIVA (com pré-visualização) ----
+        st.markdown("**Actualização directa a partir da BODIVA**")
+        st.caption("Vai buscar as cotações à BODIVA para os tickers registados acima (gravados). "
+                   "Nada é gravado até confirmar na pré-visualização.")
+        if st.button("🔄 Buscar cotações na BODIVA"):
+            try:
+                _tks = [str(x or "").strip().upper() for x in df_activos_admin["ticker"] if str(x or "").strip()]
+                st.session_state["bodiva_prev"] = buscar_cotacoes_bodiva(_tks)
+            except Exception as _e:
+                st.session_state.pop("bodiva_prev", None)
+                st.error(f"Não foi possível obter as cotações da BODIVA agora ({_e}). "
+                         "Pode continuar a editar os preços manualmente.")
+        _prev = st.session_state.get("bodiva_prev")
+        if _prev:
+            _linhas_prev = []
+            for _, _r in df_activos_admin.iterrows():
+                _tk = str(_r["ticker"] or "").strip().upper()
+                _novo = _prev.get(_tk)
+                _linhas_prev.append({
+                    "Ticker": _tk, "Nome": _r["nome"],
+                    "Preço na app (Kz)": float(_r["preco"]),
+                    "Preço BODIVA (Kz)": _novo if _novo is not None else "não encontrado",
+                })
+            st.dataframe(pd.DataFrame(_linhas_prev), hide_index=True)
+            if st.button("✅ Aplicar cotações da BODIVA e guardar"):
+                _df_novo = df_activos_admin[["ticker", "nome", "tipo", "preco"]].copy()
+                for _i in _df_novo.index:
+                    _novo = _prev.get(str(_df_novo.at[_i, "ticker"] or "").strip().upper())
+                    if _novo is not None:
+                        _df_novo.at[_i, "preco"] = _novo
+                substituir_activos(_df_novo)
+                st.session_state.pop("bodiva_prev", None)
+                st.success("Cotações da BODIVA aplicadas. Índice APPO e variações actualizados.")
+                st.rerun()
+
         if st.button("Guardar alterações às cotações"):
             substituir_activos(df_editado)
             st.success("Cotações e Índice APPO actualizados com sucesso.")
