@@ -1154,6 +1154,21 @@ def pct_bruto(valor) -> str:
         return "0.00%"
 
 
+def kz2(valor) -> str:
+    """Formato de corretora: 94 600,00"""
+    try:
+        return f"{float(valor):,.2f}".replace(",", " ").replace(".", ",")
+    except (TypeError, ValueError):
+        return "0,00"
+
+
+def _fmt_dt(v) -> str:
+    try:
+        return v.strftime("%d/%m/%Y | %H:%M:%S")
+    except Exception:
+        return "—"
+
+
 def multiplo(v) -> str:
     if v is None:
         return "n/d"
@@ -2539,176 +2554,239 @@ elif pagina == "🧪 Simulador de Investimento":
     else:
         acoes_sim = pd.DataFrame()
 
-    aba_broker, aba_carteira, aba_compostos = st.tabs(
-        ["📊 Home Broker APPO", "💼 Minha Carteira Virtual", "📈 Simulador de Juros Compostos"])
+    aba_broker, aba_carteira, aba_ordens, aba_compostos = st.tabs(
+        ["📊 Mercado", "💼 Carteira", "🧾 Ordens", "📈 Juros Compostos"])
+
+    import html as _html
+
+    # Estilo "home broker" (inspirado na BFA Capital Markets) — só nesta página
+    render_html("""<style>
+    .bfa-wrap{background:#15152B;border-radius:8px;overflow-x:auto;margin-bottom:12px;}
+    .bfa-tbl{width:100%;border-collapse:collapse;font-size:0.78rem;color:#E8E8F0;}
+    .bfa-tbl th{color:#F26B00;font-weight:600;text-align:right;padding:9px 10px;border-bottom:1px solid #F26B00;font-size:0.7rem;white-space:nowrap;}
+    .bfa-tbl td{padding:10px;text-align:right;border-bottom:1px solid #2A2A40;background:#23232F;white-space:nowrap;}
+    .bfa-tbl tr:nth-child(even) td{background:#1E1E2C;}
+    .bfa-tbl tr.sel td{background:#35354F;}
+    .bfa-tbl tr.tot td{background:#15152B;font-weight:700;border-top:1px solid #F26B00;}
+    .bfa-tbl th.l,.bfa-tbl td.l{text-align:left;}
+    .bfa-up{color:#22C55E;}.bfa-dn{color:#EF4444;}.bfa-fl{color:#9CA3AF;}
+    .bfa-bar{background:#15152B;border-radius:8px;padding:12px 20px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
+    .bfa-bar .k{font-size:0.62rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:3px;}
+    .bfa-bar .v{font-size:1.02rem;color:#FFFFFF;font-weight:700;background:#22223A;padding:4px 10px;border-radius:4px;display:inline-block;}
+    .bfa-ticket{background:#23232F;border-left:4px solid #F26B00;border-radius:8px;padding:16px 22px;margin:10px 0;display:flex;gap:40px;flex-wrap:wrap;align-items:center;}
+    .bfa-ticket .nome{font-size:1.25rem;font-weight:800;color:#FFFFFF;}
+    .bfa-ticket .sub{font-size:0.7rem;color:#9CA3AF;margin-top:3px;}
+    .bfa-ticket .k{font-size:0.62rem;color:#9CA3AF;text-transform:uppercase;display:block;}
+    .bfa-ticket .big{font-size:1.7rem;font-weight:800;color:#FFFFFF;}
+    .bfa-ticket .m{font-size:1.0rem;font-weight:700;color:#E8E8F0;}
+    .stButton button[kind="primary"],button[data-testid="stBaseButton-primary"]{background:#F26B00 !important;border-color:#F26B00 !important;color:#FFFFFF !important;}
+    </style>""")
+
+    # título → preço / variação actuais (chave = ticker, ou nome se não houver ticker)
+    _mapa_preco, _mapa_var = {}, {}
+    if not df_activos_sim.empty:
+        for _, _r in df_activos_sim.iterrows():
+            _k = str(_r.get("ticker") or "").strip().upper() or str(_r["nome"])
+            _mapa_preco[_k] = float(_r["preco"])
+            _mapa_var[_k]   = float(_r["variacao"])
 
     # ══════════════════════════════════════════════════════════════
-    # ABA 1 — HOME BROKER (fundo claro, estilo corretora real)
+    # ABA 1 — MERCADO + PAINEL DE NEGOCIAÇÃO (estilo BFA Capital Markets)
     # ══════════════════════════════════════════════════════════════
     with aba_broker:
         saldo_caixa = st.session_state["sim_saldo_caixa"]
         cart        = st.session_state["sim_carteira"]
+        valor_acoes = sum(d["qtd"] * _mapa_preco.get(k, d["preco_medio"]) for k, d in cart.items())
+        patrimonio  = saldo_caixa + valor_acoes
+        var_total   = patrimonio - 3_000_000
+        cls_vt      = "bfa-up" if var_total >= 0 else "bfa-dn"
 
-        # Calcular valor da carteira
-        valor_acoes = 0.0
-        for tk_c, dados_c in cart.items():
-            row_p = df_activos_sim[df_activos_sim["ticker"].str.strip().str.upper() == tk_c.strip().upper()]
-            if not row_p.empty:
-                valor_acoes += dados_c["qtd"] * float(row_p["preco"].values[0])
-            else:
-                valor_acoes += dados_c["qtd"] * dados_c["preco_medio"]
+        render_html(f"""<div class="bfa-bar">
+        <div><span class="k">Conta</span><span class="v">Virtual APPO</span></div>
+        <div><span class="k">Titular</span><span class="v">{_html.escape(str(st.session_state.get('conta_nome', '')).upper())}</span></div>
+        <div><span class="k">Saldo negociação</span><span class="v">{kz2(saldo_caixa)}</span></div>
+        <div><span class="k">Em acções</span><span class="v">{kz2(valor_acoes)}</span></div>
+        <div><span class="k">Património total</span><span class="v">{kz2(patrimonio)}</span></div>
+        <div><span class="k">Ganho / perda</span><span class="v {cls_vt}">{kz2(var_total)} ({var_total/3_000_000*100:+.2f}%)</span></div>
+        </div>""")
 
-        patrimonio = saldo_caixa + valor_acoes
-        var_total  = patrimonio - 3_000_000
-        cor_var_t  = "#16A34A" if var_total >= 0 else "#DC2626"
-
-        # ── Barra de conta (estilo BFA Capital Market) ─────────────
-        render_html(f"""
-        <div style="background:#FBF8F6; border:1px solid #ECDEE3; border-radius:10px;
-                    padding:12px 20px; margin-bottom:12px;
-                    display:flex; gap:40px; align-items:center; flex-wrap:wrap;">
-            <div style="display:flex;flex-direction:column;">
-                <span style="font-size:0.68rem;color:#888;text-transform:uppercase;letter-spacing:1px;">Saldo Disponível</span>
-                <span style="font-size:1.5rem;font-weight:700;color:{COR_MARCA};">{kz(saldo_caixa)}</span>
-            </div>
-            <div style="display:flex;flex-direction:column;">
-                <span style="font-size:0.68rem;color:#888;text-transform:uppercase;letter-spacing:1px;">Em Acções</span>
-                <span style="font-size:1.5rem;font-weight:700;color:#1A1A2E;">{kz(valor_acoes)}</span>
-            </div>
-            <div style="display:flex;flex-direction:column;">
-                <span style="font-size:0.68rem;color:#888;text-transform:uppercase;letter-spacing:1px;">Patrimônio Total</span>
-                <span style="font-size:1.5rem;font-weight:700;color:#1A1A2E;">{kz(patrimonio)}</span>
-            </div>
-            <div style="display:flex;flex-direction:column;">
-                <span style="font-size:0.68rem;color:#888;text-transform:uppercase;letter-spacing:1px;">Ganho / Perda</span>
-                <span style="font-size:1.5rem;font-weight:700;color:{cor_var_t};">{kz(var_total)} ({var_total/3_000_000*100:+.2f}%)</span>
-            </div>
-            <div style="margin-left:auto;font-size:0.72rem;color:#aaa;">💡 Dinheiro virtual · BODIVA fictícia</div>
-        </div>
-        """)
+        _msg = st.session_state.pop("sim_msg", None)
+        if _msg:
+            st.success(_msg)
 
         if acoes_sim.empty:
             st.info("Ainda não existem acções cotadas para negociar.")
         else:
-            # ── Cabeçalho tabela (estilo BFA claro) ────────────────
-            render_html("""
-            <div style="display:grid;grid-template-columns:2.5fr 1.2fr 1.2fr 1fr 1.6fr 1.2fr 1.2fr;
-                        background:#F0EBF3; padding:9px 12px; border-radius:8px 8px 0 0;
-                        font-size:0.71rem;font-weight:700;color:#7C1F3E;
-                        letter-spacing:0.6px;text-transform:uppercase;">
-                <span>Título / Ticker</span>
-                <span style="text-align:right;">Cotação</span>
-                <span style="text-align:right;">Var. Diária</span>
-                <span style="text-align:right;">Em Carteira</span>
-                <span style="text-align:center;">Quantidade</span>
-                <span style="text-align:center;">Comprar ＋</span>
-                <span style="text-align:center;">Vender －</span>
-            </div>
-            """)
+            _lista = []
+            for _, row in acoes_sim.iterrows():
+                _tk = str(row.get("ticker") or "").strip().upper()
+                _lista.append({
+                    "chave": _tk or str(row["nome"]), "nome": str(row["nome"]), "tk": _tk,
+                    "preco": float(row["preco"]), "var": float(row["variacao"]),
+                    "act": row.get("actualizado_em"),
+                })
+            _rotulos = [x["nome"] + (f"  ({x['tk']})" if x["tk"] else "") for x in _lista]
+            if st.session_state.get("sim_sel") not in _rotulos:
+                st.session_state["sim_sel"] = _rotulos[0]
+            _sel = st.session_state["sim_sel"]
 
-            for i, (_, row) in enumerate(acoes_sim.iterrows()):
-                tk    = str(row.get("ticker") or "").strip().upper()
-                nome  = str(row["nome"])
-                preco = float(row["preco"])
-                var   = float(row["variacao"])
-                # chave única baseada em índice + ticker — nunca haverá duplicados
-                id_ln = f"{i}_{tk or nome[:8]}"
-                chave_cart = tk if tk else f"__idx_{i}"
-                qtd_cart   = cart.get(chave_cart, {}).get("qtd", 0)
-                cor_v = "#16A34A" if var > 0 else ("#DC2626" if var < 0 else "#6B7280")
-                seta  = "▲" if var > 0 else ("▼" if var < 0 else "—")
-                bg    = "#FFFFFF" if i % 2 == 0 else "#FAF7FB"
+            _linhas_html = []
+            for x, rot in zip(_lista, _rotulos):
+                v    = x["var"]
+                cls  = "bfa-up" if v > 0 else ("bfa-dn" if v < 0 else "bfa-fl")
+                seta = "↑" if v > 0 else ("↓" if v < 0 else "—")
+                qc   = cart.get(x["chave"], {}).get("qtd", 0)
+                sel  = " class='sel'" if rot == _sel else ""
+                _linhas_html.append(
+                    f"<tr{sel}><td class='l'><b>{_html.escape(x['nome'].upper())}</b></td>"
+                    f"<td class='l'>{_html.escape(x['tk'] or '—')}</td><td class='l'>BODIVA ACÇÕES</td>"
+                    f"<td><b>{kz2(x['preco'])}</b></td><td>AOA</td><td>{_fmt_dt(x['act'])}</td>"
+                    f"<td class='{cls}'>{pct_bruto(v)} {seta}</td><td>{qc:g}</td></tr>")
+            render_html(
+                "<div class='bfa-wrap'><table class='bfa-tbl'><thead><tr>"
+                "<th class='l'>título</th><th class='l'>ticker</th><th class='l'>mercado</th>"
+                "<th>cotação</th><th>moeda</th><th>últ. cotação</th><th>% var. diária</th><th>em carteira</th>"
+                "</tr></thead><tbody>" + "".join(_linhas_html) + "</tbody></table></div>")
 
-                # linha visual
-                render_html(f"""
-                <div style="display:grid;grid-template-columns:2.5fr 1.2fr 1.2fr 1fr 1.6fr 1.2fr 1.2fr;
-                            background:{bg};padding:10px 12px;
-                            border-bottom:1px solid #ECDEE3;align-items:center;">
-                    <div>
-                        <span style="font-weight:700;color:#1A1A2E;font-size:0.9rem;">{nome}</span>
-                        <span style="font-size:0.7rem;color:#999;margin-left:5px;">{tk or "—"}</span>
-                    </div>
-                    <div style="text-align:right;font-weight:600;color:#1A1A2E;">{kz(preco)}</div>
-                    <div style="text-align:right;font-weight:700;color:{cor_v};">{seta} {pct_bruto(var)}</div>
-                    <div style="text-align:right;color:#555;font-size:0.85rem;">{qtd_cart}</div>
-                </div>
-                """)
+            st.selectbox("Título a negociar", _rotulos, key="sim_sel")
+            a        = _lista[_rotulos.index(st.session_state["sim_sel"])]
+            ent      = cart.get(a["chave"], {})
+            qtd_cart = ent.get("qtd", 0)
+            cls_a    = "bfa-up" if a["var"] > 0 else ("bfa-dn" if a["var"] < 0 else "bfa-fl")
+            pm_txt   = kz2(ent["preco_medio"]) if ent else "—"
+            render_html(f"""<div class="bfa-ticket">
+            <div><div class="nome">{_html.escape(a['nome'].upper())}</div>
+            <div class="sub">{_html.escape(a['tk'] or '—')} &nbsp;|&nbsp; BODIVA ACÇÕES &nbsp;|&nbsp; AOA</div></div>
+            <div><span class="k">Cotação</span><span class="big">{kz2(a['preco'])}</span></div>
+            <div><span class="k">Variação</span><span class="m {cls_a}">{pct_bruto(a['var'])}</span></div>
+            <div><span class="k">Em carteira</span><span class="m">{qtd_cart:g}</span></div>
+            <div><span class="k">Preço médio</span><span class="m">{pm_txt}</span></div>
+            </div>""")
 
-                # controlos: − | qtd | + | Comprar | Vender
-                qtd_key = f"sim_qtd_{id_ln}"
-                if qtd_key not in st.session_state:
-                    st.session_state[qtd_key] = 1
-                qtd_op = st.session_state[qtd_key]
-                custo  = qtd_op * preco
-
-                c_m, c_q, c_p, c_buy, c_sell = st.columns([0.5, 0.7, 0.5, 1.2, 1.2])
-
-                if c_m.button("－", key=f"m_{id_ln}", use_container_width=True,
-                               disabled=(qtd_op <= 1)):
-                    st.session_state[qtd_key] = max(1, qtd_op - 1)
-                    st.rerun()
-
-                c_q.markdown(
-                    f"<p style='text-align:center;font-weight:700;font-size:1.1rem;"
-                    f"color:{COR_MARCA};margin:4px 0;'>{qtd_op}</p>",
-                    unsafe_allow_html=True)
-
-                if c_p.button("＋", key=f"p_{id_ln}", use_container_width=True):
-                    st.session_state[qtd_key] = qtd_op + 1
-                    st.rerun()
-
-                # COMPRAR
-                if c_buy.button(f"Comprar · {kz(custo)}", key=f"buy_{id_ln}",
-                                 use_container_width=True, type="primary"):
-                    if saldo_caixa >= custo:
-                        st.session_state["sim_saldo_caixa"] -= custo
-                        if chave_cart in cart:
-                            tq = cart[chave_cart]["qtd"] + qtd_op
-                            tc = cart[chave_cart]["qtd"] * cart[chave_cart]["preco_medio"] + custo
-                            cart[chave_cart] = {"qtd": tq, "preco_medio": tc / tq, "nome": nome}
-                        else:
-                            cart[chave_cart] = {"qtd": qtd_op, "preco_medio": preco, "nome": nome}
-                        st.session_state["sim_historico"].insert(0, {
-                            "Operação": "✅ COMPRA", "Ticker": tk or nome,
-                            "Qtd": qtd_op, "Preço Unit.": kz(preco), "Total": kz(custo)})
-                        guardar_saldo_simulador(_email_sim, st.session_state["sim_saldo_caixa"])
-                        guardar_posicao_simulador(_email_sim, chave_cart, cart[chave_cart])
-                        registar_operacao_simulador(_email_sim, "✅ COMPRA", tk or nome, qtd_op, preco, custo)
+            # confirmação de ordem pendente
+            pend = st.session_state.get("sim_ordem_pend")
+            if pend:
+                _tp = pend["qtd"] * pend["preco"]
+                st.info(f"**Confirmar ordem de {'COMPRA' if pend['op'] == 'C' else 'VENDA'}** — "
+                        f"{pend['qtd']:g} × {pend['nome']} a {kz2(pend['preco'])} = **{kz2(_tp)} Kz**")
+                cc1, cc2, _ = st.columns([1, 1, 2])
+                if cc1.button("✅ Confirmar ordem", key="sim_conf", type="primary", use_container_width=True):
+                    ch, nm, tkp, q, p = pend["chave"], pend["nome"], pend["tk"], pend["qtd"], pend["preco"]
+                    valor = q * p
+                    oper  = None
+                    if pend["op"] == "C":
+                        if st.session_state["sim_saldo_caixa"] >= valor:
+                            st.session_state["sim_saldo_caixa"] -= valor
+                            if ch in cart:
+                                tq = cart[ch]["qtd"] + q
+                                tc = cart[ch]["qtd"] * cart[ch]["preco_medio"] + valor
+                                cart[ch] = {"qtd": tq, "preco_medio": tc / tq, "nome": nm}
+                            else:
+                                cart[ch] = {"qtd": q, "preco_medio": p, "nome": nm}
+                            oper = "✅ COMPRA"
+                    else:
+                        if cart.get(ch, {}).get("qtd", 0) >= q:
+                            st.session_state["sim_saldo_caixa"] += valor
+                            cart[ch]["qtd"] -= q
+                            if cart[ch]["qtd"] <= 0:
+                                del cart[ch]
+                            oper = "🔴 VENDA"
+                    if oper is None:
+                        st.session_state.pop("sim_ordem_pend", None)
+                        st.session_state["sim_msg"] = "Ordem não executada: saldo ou quantidade insuficiente."
                         st.rerun()
                     else:
-                        st.warning(f"Saldo insuficiente — necessitas {kz(custo)}, tens {kz(saldo_caixa)}.")
-
-                # VENDER
-                if c_sell.button(f"Vender · {kz(qtd_op * preco)}", key=f"sell_{id_ln}",
-                                  use_container_width=True,
-                                  disabled=(qtd_cart < qtd_op)):
-                    receita = qtd_op * preco
-                    st.session_state["sim_saldo_caixa"] += receita
-                    cart[chave_cart]["qtd"] -= qtd_op
-                    ficou_vazia = cart[chave_cart]["qtd"] <= 0
-                    if ficou_vazia:
-                        del cart[chave_cart]
-                    st.session_state["sim_historico"].insert(0, {
-                        "Operação": "🔴 VENDA", "Ticker": tk or nome,
-                        "Qtd": qtd_op, "Preço Unit.": kz(preco), "Total": kz(receita)})
-                    guardar_saldo_simulador(_email_sim, st.session_state["sim_saldo_caixa"])
-                    guardar_posicao_simulador(_email_sim, chave_cart, None if ficou_vazia else cart[chave_cart])
-                    registar_operacao_simulador(_email_sim, "🔴 VENDA", tk or nome, qtd_op, preco, receita)
+                        st.session_state["sim_historico"].insert(0, {
+                            "Operação": oper, "Ticker": tkp or nm, "Qtd": q, "Preço Unit.": p, "Total": valor})
+                        guardar_saldo_simulador(_email_sim, st.session_state["sim_saldo_caixa"])
+                        guardar_posicao_simulador(_email_sim, ch, cart.get(ch))
+                        registar_operacao_simulador(_email_sim, oper, tkp or nm, q, p, valor)
+                        st.session_state.pop("sim_ordem_pend", None)
+                        st.session_state["sim_msg"] = f"{oper} executada: {q:g} × {nm} a {kz2(p)} Kz."
+                        st.rerun()
+                if cc2.button("✖ Cancelar", key="sim_canc", use_container_width=True):
+                    st.session_state.pop("sim_ordem_pend", None)
                     st.rerun()
 
-            render_html("""
-            <div style="background:#FBF8F6;border-radius:0 0 8px 8px;
-                        padding:7px 12px;font-size:0.73rem;color:#7C1F3E;
-                        border:1px solid #ECDEE3;border-top:none;">
-                ⚠️ Preços actualizados manualmente pelo administrador.
-                Não são cotações em tempo real da BODIVA.
-            </div>
-            """)
+            c1, c2, c3 = st.columns(3)
+            qtd_op = int(c1.number_input("Quantidade", min_value=1, value=1, step=1, key="sim_qtd_op"))
+            total  = qtd_op * a["preco"]
+            c2.metric("Preço (cotação de mercado)", kz2(a["preco"]))
+            c3.metric("Valor da ordem", kz2(total))
+            b1, b2, _ = st.columns([1, 1, 2])
+            comprar = b1.button("＋ Comprar", key="sim_btn_buy", type="primary", use_container_width=True)
+            vender  = b2.button("－ Vender", key="sim_btn_sell", type="primary", use_container_width=True,
+                                disabled=(qtd_cart < qtd_op))
+            if comprar or vender:
+                if comprar and saldo_caixa < total:
+                    st.warning(f"Saldo insuficiente — necessitas {kz2(total)} Kz, tens {kz2(saldo_caixa)} Kz.")
+                else:
+                    st.session_state["sim_ordem_pend"] = {
+                        "op": "C" if comprar else "V", "chave": a["chave"], "nome": a["nome"],
+                        "tk": a["tk"], "qtd": qtd_op, "preco": a["preco"]}
+                    st.rerun()
 
-        st.divider()
+            st.caption("⚠️ Preços da BODIVA actualizados pelo administrador — não são cotações em tempo real. "
+                       "Dinheiro virtual, só para treino.")
+
+    # ══════════════════════════════════════════════════════════════
+    # ABA 2 — CARTEIRA (estilo BFA Capital Markets)
+    # ══════════════════════════════════════════════════════════════
+    with aba_carteira:
+        cart        = st.session_state["sim_carteira"]
+        saldo_caixa = st.session_state["sim_saldo_caixa"]
+        if not cart:
+            st.info("A tua carteira virtual está vazia. Vai ao Mercado e compra as tuas primeiras acções!")
+        else:
+            _vals      = {k: d["qtd"] * _mapa_preco.get(k, d["preco_medio"]) for k, d in cart.items()}
+            _tot_acoes = sum(_vals.values())
+            _tot_aq    = sum(d["qtd"] * d["preco_medio"] for d in cart.values())
+            _linhas_c  = []
+            for k, d in cart.items():
+                p_act  = _mapa_preco.get(k, d["preco_medio"])
+                var_d  = _mapa_var.get(k, 0.0)
+                v_act  = _vals[k]
+                v_aq   = d["qtd"] * d["preco_medio"]
+                pl     = v_act - v_aq
+                cls_pl = "bfa-up" if pl > 0 else ("bfa-dn" if pl < 0 else "bfa-fl")
+                cls_vd = "bfa-up" if var_d > 0 else ("bfa-dn" if var_d < 0 else "bfa-fl")
+                peso   = (v_act / _tot_acoes * 100) if _tot_acoes else 0
+                _linhas_c.append(
+                    f"<tr><td class='l'><b>{_html.escape(str(d['nome']).upper())}</b></td><td class='l'>{_html.escape(k)}</td>"
+                    f"<td class='l'>BODIVA ACÇÕES</td><td>{d['qtd']:g}</td><td>{kz2(p_act)}</td><td>AOA</td>"
+                    f"<td>{kz2(v_act)}</td><td>{kz2(v_aq)}</td><td class='{cls_pl}'>{kz2(pl)}</td>"
+                    f"<td class='{cls_vd}'>{pct_bruto(var_d)}</td><td>{peso:.2f}%</td></tr>")
+            _pl_t   = _tot_acoes - _tot_aq
+            cls_plt = "bfa-up" if _pl_t > 0 else ("bfa-dn" if _pl_t < 0 else "bfa-fl")
+            _linhas_c.append(
+                f"<tr class='tot'><td class='l' colspan='6'>TOTAL</td><td>{kz2(_tot_acoes)}</td>"
+                f"<td>{kz2(_tot_aq)}</td><td class='{cls_plt}'>{kz2(_pl_t)}</td><td></td><td>100,00%</td></tr>")
+            render_html(
+                "<div class='bfa-wrap'><table class='bfa-tbl'><thead><tr>"
+                "<th class='l'>título</th><th class='l'>ticker</th><th class='l'>mercado</th>"
+                "<th>quantidade</th><th>cotação</th><th>moeda</th><th>valor actual</th><th>aquisição</th>"
+                "<th>valias potenciais</th><th>var. diária</th><th>% carteira</th>"
+                "</tr></thead><tbody>" + "".join(_linhas_c) + "</tbody></table></div>")
+
+            col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+            col_r1.metric("Saldo negociação", kz2(saldo_caixa))
+            col_r2.metric("Valor em acções", kz2(_tot_acoes))
+            col_r3.metric("Património total", kz2(saldo_caixa + _tot_acoes))
+            var_t = saldo_caixa + _tot_acoes - 3_000_000
+            col_r4.metric("Ganho/Perda total", kz2(var_t), delta=f"{var_t/3_000_000*100:+.2f}%")
+            nota_indicador("<b>Valias potenciais</b> = diferença entre o valor actual e o que pagaste (ganho/perda ainda não realizado).")
+
+    # ══════════════════════════════════════════════════════════════
+    # ABA 3 — ORDENS (histórico) + reiniciar
+    # ══════════════════════════════════════════════════════════════
+    with aba_ordens:
         st.subheader("📜 Histórico de Ordens")
         if st.session_state["sim_historico"]:
-            st.dataframe(pd.DataFrame(st.session_state["sim_historico"]), hide_index=True)
+            df_h = pd.DataFrame(st.session_state["sim_historico"])
+            for _c in ("Preço Unit.", "Total"):
+                if _c in df_h.columns:
+                    df_h[_c] = df_h[_c].apply(lambda v: kz2(v) if isinstance(v, (int, float)) else v)
+            st.dataframe(df_h, hide_index=True)
         else:
             st.info("Ainda não executaste nenhuma ordem.")
 
@@ -2717,55 +2795,14 @@ elif pagina == "🧪 Simulador de Investimento":
             st.session_state["sim_carteira"] = {}
             st.session_state["sim_saldo_caixa"] = 3_000_000.0
             st.session_state["sim_historico"] = []
+            st.session_state.pop("sim_ordem_pend", None)
             for k in list(st.session_state.keys()):
-                if k.startswith("sim_qtd_"):
+                if k.startswith("sim_qtd_") and k != "sim_qtd_op":
                     del st.session_state[k]
             st.rerun()
 
     # ══════════════════════════════════════════════════════════════
-    # ABA 2 — CARTEIRA VIRTUAL
-    # ══════════════════════════════════════════════════════════════
-    with aba_carteira:
-        st.subheader("💼 Composição da Minha Carteira Virtual")
-        cart        = st.session_state["sim_carteira"]
-        saldo_caixa = st.session_state["sim_saldo_caixa"]
-
-        if not cart:
-            st.info("A tua carteira virtual está vazia. Vai ao Home Broker e compra as tuas primeiras acções!")
-        else:
-            linhas_cart = []
-            valor_total_carteira = saldo_caixa
-            for tk_c, dados_c in cart.items():
-                preco_act = float(df_activos_sim[df_activos_sim["ticker"] == tk_c]["preco"].values[0])                             if tk_c in df_activos_sim["ticker"].values else dados_c["preco_medio"]
-                val_act  = dados_c["qtd"] * preco_act
-                val_custo= dados_c["qtd"] * dados_c["preco_medio"]
-                pl       = val_act - val_custo
-                pl_pct   = (pl / val_custo * 100) if val_custo else 0
-                valor_total_carteira += val_act
-                linhas_cart.append({
-                    "Ticker":        tk_c,
-                    "Nome":          dados_c["nome"],
-                    "Qtd":           dados_c["qtd"],
-                    "Preço Médio":   kz(dados_c["preco_medio"]),
-                    "Preço Actual":  kz(preco_act),
-                    "Valor Actual":  kz(val_act),
-                    "P&L":           kz(pl),
-                    "P&L (%)":       f"{pl_pct:+.2f}%",
-                })
-
-            st.dataframe(pd.DataFrame(linhas_cart), hide_index=True)
-
-            col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-            col_r1.metric("Saldo em Caixa",        kz(saldo_caixa))
-            col_r2.metric("Valor em Acções",        kz(valor_total_carteira - saldo_caixa))
-            col_r3.metric("Patrimônio Total",       kz(valor_total_carteira))
-            var_t = valor_total_carteira - 3_000_000
-            col_r4.metric("Ganho/Perda Total",      kz(var_t),
-                           delta=f"{var_t/3_000_000*100:+.2f}%")
-            nota_indicador("<b>P&L</b> = diferença entre o preço que pagaste e o preço actual de mercado (ganho/perda não realizado).")
-
-    # ══════════════════════════════════════════════════════════════
-    # ABA 3 — JUROS COMPOSTOS
+    # ABA 4 — JUROS COMPOSTOS
     # ══════════════════════════════════════════════════════════════
     with aba_compostos:
         st.subheader("📈 Simulador de Juros Compostos")
