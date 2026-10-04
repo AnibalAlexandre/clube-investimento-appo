@@ -2029,6 +2029,137 @@ def _pdf_secao(pdf, titulo):
     pdf.ln(1)
 
 
+# ---------------- Gráficos do relatório PDF (desenhados com o próprio FPDF, sem bibliotecas extra) ----------------
+_PDF_PALETA = [(124, 31, 62), (166, 72, 106), (94, 24, 48), (200, 130, 150), (150, 110, 120), (210, 180, 190), (70, 50, 60)]
+
+
+def _pdf_grafico_composicao(pdf, linhas):
+    """Barra horizontal 100%: peso de cada activo no valor actual da carteira."""
+    total = sum(max(l["val_act"], 0) for l in linhas)
+    if total <= 0:
+        return
+    x0 = pdf.l_margin
+    largura = pdf.w - pdf.l_margin - pdf.r_margin
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 6, "Composição da carteira (peso de cada activo no valor actual)", ln=True)
+    y = pdf.get_y() + 1
+    x = x0
+    for i, l in enumerate(linhas):
+        peso = max(l["val_act"], 0) / total
+        w = largura * peso
+        pdf.set_fill_color(*_PDF_PALETA[i % len(_PDF_PALETA)])
+        pdf.rect(x, y, w, 9, style="F")
+        if w > 14:
+            pdf.set_xy(x, y + 2.2)
+            pdf.set_font("Helvetica", "B", 7)
+            pdf.set_text_color(255, 255, 255)
+            pdf.cell(w, 4.5, f"{peso * 100:.1f}%", align="C")
+        x += w
+    # legenda em duas colunas
+    pdf.set_font("Helvetica", "", 7.5)
+    pdf.set_text_color(40, 40, 40)
+    ly = y + 12
+    for i, l in enumerate(linhas):
+        cx = x0 + (i % 2) * (largura / 2)
+        cy = ly + (i // 2) * 5
+        pdf.set_fill_color(*_PDF_PALETA[i % len(_PDF_PALETA)])
+        pdf.rect(cx, cy + 0.8, 3, 3, style="F")
+        peso = max(l["val_act"], 0) / total * 100
+        pdf.set_xy(cx + 4.5, cy)
+        pdf.cell(largura / 2 - 6, 4.5, f"{l['nome'][:28]}  -  {peso:.1f}%  ({kz(l['val_act'])})")
+    pdf.set_y(ly + ((len(linhas) + 1) // 2) * 5 + 2)
+    pdf.set_text_color(0, 0, 0)
+
+
+def _pdf_grafico_mais_valias(pdf, linhas, x0, y0, w, h):
+    """Barras verticais: ganho (verde) ou perda (vermelho) por activo."""
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w, 6, "Mais-valias por activo (Kz)")
+    vals = [l["mais_valia"] for l in linhas]
+    vmax, vmin = max(0, max(vals)), min(0, min(vals))
+    rng = (vmax - vmin) or 1
+    top = y0 + 12
+    bottom = top + h
+
+    def yv(v):
+        return top + (vmax - v) / rng * h
+
+    pdf.set_draw_color(170, 170, 170)
+    pdf.set_line_width(0.2)
+    pdf.line(x0, yv(0), x0 + w, yv(0))
+    n = len(linhas)
+    slot = w / n
+    bw = min(slot * 0.6, 22)
+    for i, l in enumerate(linhas):
+        v = vals[i]
+        bx = x0 + slot * i + (slot - bw) / 2
+        y1, y2 = yv(max(v, 0)), yv(min(v, 0))
+        pdf.set_fill_color(*((22, 163, 74) if v >= 0 else (220, 38, 38)))
+        pdf.rect(bx, y1, bw, max(y2 - y1, 0.3), style="F")
+        pdf.set_font("Helvetica", "", 6.5)
+        pdf.set_text_color(60, 60, 60)
+        pdf.set_xy(bx - 5, (y1 - 3.8) if v >= 0 else (y2 + 0.5))
+        pdf.cell(bw + 10, 3.5, kz(v), align="C")
+        pdf.set_xy(x0 + slot * i, bottom + 6)
+        pdf.cell(slot, 3.5, (l["ticker"] or l["nome"])[:9], align="C")
+    pdf.set_text_color(0, 0, 0)
+
+
+def _pdf_grafico_evolucao(pdf, df_hist, x0, y0, w, h):
+    """Linha: evolução do património do Clube (histórico diário)."""
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w, 6, "Evolução do património do Clube (Kz)")
+    if df_hist is None or len(df_hist) < 2:
+        pdf.set_xy(x0, y0 + 14)
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(120, 120, 120)
+        pdf.multi_cell(w, 4.5, "O histórico ainda está a ser construído: o gráfico aparece a partir do segundo registo diário do património.")
+        pdf.set_text_color(0, 0, 0)
+        return
+    d = df_hist.tail(60)
+    ys = [float(v) for v in d["total"]]
+    datas = [str(v)[:10] for v in d["registado_em"]]
+    ymin, ymax = min(ys), max(ys)
+    if ymax == ymin:
+        pad = abs(ymax) * 0.05 or 1.0
+        ymin, ymax = ymin - pad, ymax + pad
+    esq = 24
+    px0, pw = x0 + esq, w - esq
+    top = y0 + 12
+    bottom = top + h
+    pdf.set_draw_color(225, 225, 225)
+    pdf.set_line_width(0.2)
+    pdf.set_font("Helvetica", "", 6.5)
+    pdf.set_text_color(90, 90, 90)
+    for k in range(4):
+        gy = top + h * k / 3
+        pdf.line(px0, gy, px0 + pw, gy)
+        pdf.set_xy(x0, gy - 1.8)
+        pdf.cell(esq - 2, 3.5, kz(ymax - (ymax - ymin) * k / 3), align="R")
+    n = len(ys)
+    pts = [(px0 + pw * i / (n - 1), top + (ymax - v) / (ymax - ymin) * h) for i, v in enumerate(ys)]
+    pdf.set_draw_color(124, 31, 62)
+    pdf.set_line_width(0.6)
+    for (xa, ya), (xb, yb) in zip(pts[:-1], pts[1:]):
+        pdf.line(xa, ya, xb, yb)
+    if n <= 20:
+        pdf.set_fill_color(124, 31, 62)
+        for (xp, yp) in pts:
+            pdf.rect(xp - 0.7, yp - 0.7, 1.4, 1.4, style="F")
+    pdf.set_font("Helvetica", "", 6.5)
+    pdf.set_text_color(90, 90, 90)
+    pdf.set_xy(px0, bottom + 2)
+    pdf.cell(30, 3.5, datas[0], align="L")
+    pdf.set_xy(px0 + pw - 30, bottom + 2)
+    pdf.cell(30, 3.5, datas[-1], align="R")
+    pdf.set_text_color(0, 0, 0)
+
+
 def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     tx  = t()
     pdf = FPDF()
@@ -2178,6 +2309,27 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         pdf.cell(30, 7, kz(mais_valias_total), border="B", fill=True, align="R", ln=False)
         pdf.cell(19, 7, f"{mv_total_pct:+.2f}%", border="B", fill=True, align="R", ln=True)
         pdf.set_text_color(0,0,0)
+    # Análise gráfica (página própria): composição, mais-valias por activo e evolução do património
+    if linhas_carteira:
+        try:
+            pdf.add_page("L")
+            _pdf_secao(pdf, "ANÁLISE GRÁFICA DA CARTEIRA")
+            _pdf_grafico_composicao(pdf, linhas_carteira)
+            y_g = pdf.get_y() + 3
+            if y_g + 76 > pdf.h - 20:
+                pdf.add_page("L")
+                y_g = pdf.get_y()
+            _pdf_grafico_mais_valias(pdf, linhas_carteira, pdf.l_margin, y_g, 115, 50)
+            try:
+                df_hist_pdf = obter_historico_patrimonio()
+            except Exception:
+                df_hist_pdf = None
+            _pdf_grafico_evolucao(pdf, df_hist_pdf, pdf.l_margin + 130, y_g, 117, 50)
+            pdf.set_y(y_g + 72)
+            pdf.set_text_color(0, 0, 0)
+        except Exception:
+            # os gráficos são um complemento: se algo falhar, o relatório sai na mesma, sem eles
+            pdf.set_text_color(0, 0, 0)
     _pdf_secao(pdf, "MOVIMENTOS RECENTES")
     if df_movimentos.empty:
         pdf.set_font("Helvetica", "I", 10)
@@ -2200,7 +2352,7 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
             pdf.cell(50, 6, str(linha["tipo"])[:26],                border="B", fill=fill, ln=False)
             pdf.cell(70, 6, str(linha.get("descricao","") or "")[:38], border="B", fill=fill, ln=False)
             pdf.cell(0,  6, kz(linha["montante"]),                  border="B", fill=fill, align="R", ln=True)
-    pdf.ln(8)
+    pdf.ln(3)
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(150, 150, 150)
     pdf.cell(0, 5, "Clube de Investimento APPO  |  clube.investimento.appo@gmail.com  |  Benguela, Angola", align="C", ln=True)
