@@ -1231,17 +1231,112 @@ def obter_taxas_cambio(base: str) -> dict:
     return {"rates": dados["rates"], "actualizado": dados.get("time_last_update_utc", "")}
 
 
+# ---------------- Painéis de gráficos (estilo home broker) ----------------
+PERIODOS_GRAFICO = ["Hoje", "7d", "1m", "3m", "6m", "1a", "5a"]
+_PERIODO_DIAS = {"Hoje": 1, "7d": 7, "1m": 30, "3m": 91, "6m": 182, "1a": 365, "5a": 1826}
+_PERIODO_PASSO = {"Hoje": 1, "7d": 1, "1m": 1, "3m": 3, "6m": 7, "1a": 7, "5a": 30}
+_PERIODO_NOME = {"Hoje": "hoje face a ontem", "7d": "últimos 7 dias", "1m": "último mês", "3m": "últimos 3 meses",
+                 "6m": "último semestre", "1a": "último ano", "5a": "últimos 5 anos"}
+CAMBIO_DADOS_DESDE = "2024-03-02"  # primeiro dia disponível na fonte aberta de câmbio
+
+
+def _numero_flex(valor):
+    """'94 600,00' | '94600.0000' | 94600 -> float; None se não for número."""
+    if valor is None or isinstance(valor, (dict, list, bool)):
+        return None
+    if isinstance(valor, (int, float)):
+        return None if valor != valor else float(valor)
+    t_ = str(valor).replace("\u00a0", "").replace(" ", "").replace("Kz", "").strip()
+    if not t_:
+        return None
+    if "," in t_ and "." in t_:
+        dec = "," if t_.rfind(",") > t_.rfind(".") else "."
+        mil = "." if dec == "," else ","
+        t_ = t_.replace(mil, "").replace(dec, ".")
+    elif "," in t_ or "." in t_:
+        sep = "," if "," in t_ else "."
+        partes = t_.split(sep)
+        milhares = len(partes) > 2 or (len(partes[1]) == 3 and 1 <= len(partes[0]) <= 3)
+        t_ = "".join(partes) if milhares else partes[0] + "." + partes[1]
+    try:
+        return float(t_)
+    except ValueError:
+        return None
+
+
+def registar_cotacoes_hoje(df_activos_: pd.DataFrame):
+    """Guarda (ou actualiza) a cotação de hoje de cada activo no histórico. Nunca interrompe quem chama."""
+    try:
+        hoje = datetime.now().date()
+        for _, r in df_activos_.iterrows():
+            tk = str(r.get("ticker") or "").strip().upper()
+            pr = _num_seguro(r.get("preco"), default=0.0)
+            if tk and pr > 0:
+                executar("INSERT INTO historico_cotacoes (dia, ticker, preco) VALUES (%s, %s, %s) "
+                         "ON CONFLICT (ticker, dia) DO UPDATE SET preco = EXCLUDED.preco", (hoje, tk, pr))
+    except Exception:
+        pass
+
+
+def obter_serie_cotacao(ticker: str, periodo: str) -> pd.DataFrame:
+    from datetime import timedelta
+    inicio = datetime.now().date() - timedelta(days=_PERIODO_DIAS[periodo])
+    df = consultar_df("SELECT dia AS \"Data\", preco AS \"Valor\" FROM historico_cotacoes "
+                      "WHERE ticker = %s AND dia >= %s ORDER BY dia", (ticker, inicio))
+    if not df.empty:
+        df["Valor"] = df["Valor"].astype(float)
+    return df
+
+
+def importar_historico_cotacoes(df_ficheiro: pd.DataFrame) -> tuple:
+    """Importa linhas (data, ticker, preço) de um CSV/Excel. Devolve (linhas_importadas, linhas_ignoradas)."""
+    import unicodedata
+
+    def norm(c):
+        return "".join(ch for ch in unicodedata.normalize("NFKD", str(c).strip().lower()) if not unicodedata.combining(ch))
+
+    cols = {norm(c): c for c in df_ficheiro.columns}
+
+    def achar(opcoes):
+        for o in opcoes:
+            for k, original in cols.items():
+                if k == o or o in k:
+                    return original
+        return None
+
+    c_data = achar(["data", "date", "dia"])
+    c_tk = achar(["ticker", "codigo", "simbolo", "symbol", "cevama"])
+    c_pr = achar(["preco", "cotacao", "fecho", "close", "price", "ultimo"])
+    if not (c_data and c_tk and c_pr):
+        raise ValueError("Não encontrei as colunas de data, ticker e preço. Use cabeçalhos como: data, ticker, preco.")
+    ok = bad = 0
+    for _, r in df_ficheiro.iterrows():
+        d = pd.to_datetime(r[c_data], dayfirst=True, errors="coerce")
+        tk = str(r[c_tk] or "").strip().upper()
+        pr = _numero_flex(r[c_pr])
+        if pd.isna(d) or not tk or not pr or pr <= 0:
+            bad += 1
+            continue
+        executar("INSERT INTO historico_cotacoes (dia, ticker, preco) VALUES (%s, %s, %s) "
+                 "ON CONFLICT (ticker, dia) DO UPDATE SET preco = EXCLUDED.preco", (d.date(), tk, pr))
+        ok += 1
+    return ok, bad
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
-def obter_serie_cambio_aoa(moeda: str, dias: int = 8) -> pd.DataFrame:
-    """Kz por 1 unidade de `moeda`, dia a dia, a partir de uma fonte aberta (fawazahmed0/exchange-api,
-    sem chave): cada dia tem o seu ficheiro. Dias sem publicação são ignorados."""
+def obter_serie_cambio_aoa(moeda: str, periodo: str = "1m") -> pd.DataFrame:
+    """Kz por 1 unidade de `moeda` ao longo do período, a partir de uma fonte aberta (fawazahmed0/exchange-api,
+    sem chave; um ficheiro por dia, disponível desde 02/03/2024). Períodos longos usam amostragem (3, 7 ou 30 dias)."""
     from concurrent.futures import ThreadPoolExecutor
     from datetime import date, timedelta
     base = moeda.lower()
+    hoje = date.today()
+    minimo = date.fromisoformat(CAMBIO_DADOS_DESDE)
+    datas = [hoje - timedelta(days=i) for i in range(0, _PERIODO_DIAS[periodo] + 1, _PERIODO_PASSO[periodo])]
+    datas = [d for d in datas if d >= minimo]
 
-    def um_dia(i: int):
-        d = date.today() - timedelta(days=i)
-        versao = "latest" if i == 0 else d.isoformat()
+    def um_dia(d):
+        versao = "latest" if d == hoje else d.isoformat()
         for url in (f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{versao}/v1/currencies/{base}.json",
                     f"https://{versao}.currency-api.pages.dev/v1/currencies/{base}.json"):
             try:
@@ -1253,12 +1348,58 @@ def obter_serie_cambio_aoa(moeda: str, dias: int = 8) -> pd.DataFrame:
                 continue
         return None
 
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        resultados = [x for x in ex.map(um_dia, range(dias - 1, -1, -1)) if x]
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        resultados = [x for x in ex.map(um_dia, datas) if x]
     unico = {}
     for dt, v in resultados:
         unico[dt] = v
-    return pd.DataFrame({"Data": list(unico.keys()), "Kz": list(unico.values())}).sort_values("Data").reset_index(drop=True)
+    df = pd.DataFrame({"Data": list(unico.keys()), "Valor": list(unico.values())})
+    if df.empty:
+        return pd.DataFrame(columns=["Data", "Valor"])
+    return df.sort_values("Data").reset_index(drop=True)
+
+
+def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: str, periodo: str, nota: str = ""):
+    """Painel no estilo do home broker: cabeçalho, indicadores do período e gráfico de área na cor do Clube."""
+    import html as _h
+    import altair as alt
+    render_html(f"""<div style="border-bottom:2px solid #7C1F3E;padding-bottom:6px;margin:6px 0 12px 0;">
+    <span style="font-size:1.2rem;font-weight:800;color:#1A1A2E;">{_h.escape(titulo)}</span>
+    <span style="color:#8A7B80;font-size:0.8rem;margin-left:10px;">{_h.escape(subtitulo)}</span></div>""")
+    if serie is None or serie.empty:
+        st.info("Ainda não há dados para este período.")
+        return
+    df = serie.copy()
+    df["Data"] = pd.to_datetime(df["Data"])
+    ultimo, primeiro = float(df["Valor"].iloc[-1]), float(df["Valor"].iloc[0])
+    var = (ultimo / primeiro - 1) * 100 if primeiro else 0.0
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Último valor", f"{ultimo:,.2f} {unidade}")
+    m2.metric(f"Variação ({_PERIODO_NOME[periodo]})", f"{var:+.2f}%", delta=f"{var:+.2f}%" if len(df) > 1 else None)
+    m3.metric("Máximo do período", f"{df['Valor'].max():,.2f}")
+    m4.metric("Mínimo do período", f"{df['Valor'].min():,.2f}")
+    if len(df) < 2:
+        st.info("Só existe um registo neste período, por isso ainda não há linha para desenhar. "
+                "A série cresce a cada nova actualização.")
+    else:
+        vmin, vmax = float(df["Valor"].min()), float(df["Valor"].max())
+        pad = (vmax - vmin) * 0.15 or vmax * 0.01
+        df["_base"] = vmin - pad
+        eixo_x = alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y", labelColor="#6B6B6B", grid=False))
+        eixo_y = alt.Y("Valor:Q", title=None, scale=alt.Scale(domain=[vmin - pad, vmax + pad], zero=False),
+                       axis=alt.Axis(orient="right", labelColor="#6B6B6B", gridColor="#EADFE4", format=",.2f"))
+        base = alt.Chart(df).encode(
+            x=eixo_x, y=eixo_y,
+            tooltip=[alt.Tooltip("Data:T", format="%d/%m/%Y", title="Data"),
+                     alt.Tooltip("Valor:Q", format=",.2f", title=unidade)])
+        # a área fecha na base visível do gráfico (y2), e não no zero, que está fora do eixo
+        area = alt.Chart(df).mark_area(opacity=0.12, color="#7C1F3E").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
+        camadas = area + base.mark_line(color="#7C1F3E", strokeWidth=2.2, interpolate="monotone")
+        if len(df) <= 40:
+            camadas = camadas + base.mark_circle(color="#7C1F3E", size=28)
+        st.altair_chart(camadas.properties(height=340), use_container_width=True)
+    if nota:
+        st.caption(nota)
 
 
 # ---------------- Cotações directas da BODIVA ----------------
@@ -1549,6 +1690,7 @@ def inicializar_bd():
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_abertura_dia NUMERIC")
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS data_abertura_dia DATE")
     executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS historico_cotacoes (dia DATE NOT NULL, ticker TEXT NOT NULL, preco NUMERIC NOT NULL, PRIMARY KEY (ticker, dia))""")
     executar("""CREATE TABLE IF NOT EXISTS documentos_pdf (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, descricao TEXT, nome_ficheiro TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'biblioteca', tamanho INTEGER NOT NULL, conteudo BYTEA NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS socios (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT, contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS premissas_macro (id INTEGER PRIMARY KEY CHECK (id = 1), inflacao NUMERIC NOT NULL DEFAULT 0.135, taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18, premio_risco NUMERIC NOT NULL DEFAULT 0.055, beta_banca NUMERIC NOT NULL DEFAULT 1.0, beta_telecom NUMERIC NOT NULL DEFAULT 0.9, beta_outros NUMERIC NOT NULL DEFAULT 1.0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
@@ -2226,6 +2368,7 @@ def substituir_activos(df: pd.DataFrame):
         )
 
     registar_historico_indice(calcular_indice_mercado(obter_activos()))
+    registar_cotacoes_hoje(obter_activos())
 
 def obter_favoritos(conta_id: int) -> set:
     df = consultar_df("SELECT activo_id FROM favoritos WHERE conta_id = %s", (conta_id,))
@@ -3083,7 +3226,7 @@ elif pagina == "📈 Cotações & Activos":
             st.caption(tx["cot_tendencia_sem_caption2"])
         st.divider()
 
-        aba_fav, aba_todos = st.tabs([tx["cot_tab_favoritos"], tx["cot_tab_todos"]])
+        aba_fav, aba_todos, aba_graf = st.tabs([tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos"])
         conta_id          = st.session_state["conta_id"]
         favoritos_actuais = obter_favoritos(conta_id)
 
@@ -3116,6 +3259,30 @@ elif pagina == "📈 Cotações & Activos":
             st.subheader(tx["cot_comparacao"])
             cols_tb = tx["cot_tabela_cols"]
             st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": tx["cot_preco_kz"]}))
+
+        with aba_graf:
+            registar_cotacoes_hoje(df_activos)
+            try:
+                _tk_cart = {str(x).strip().upper() for x in obter_carteira_real()["ticker"]}
+            except Exception:
+                _tk_cart = set()
+            _ops = []
+            for _, _a in df_activos.iterrows():
+                _t = str(_a.get("ticker") or "").strip().upper()
+                if _t:
+                    _ops.append((("★ " if _t in _tk_cart else "") + str(_a["nome"]), _t, str(_a["nome"])))
+            _ops.sort(key=lambda x: (not x[0].startswith("★"), x[0]))
+            if not _ops:
+                st.info("Registe os tickers dos activos em Painel do Administrador → Cotações & Activos.")
+            else:
+                gc1, gc2 = st.columns([2, 3])
+                _rot = gc1.selectbox("Título (★ = em carteira do Clube)", [o[0] for o in _ops], key="graf_titulo")
+                _periodo = gc2.radio("Período", PERIODOS_GRAFICO, index=2, horizontal=True, key="graf_periodo")
+                _sel = next(o for o in _ops if o[0] == _rot)
+                painel_grafico(_sel[2].upper(), f"{_sel[1]}  |  BODIVA  |  AOA", obter_serie_cotacao(_sel[1], _periodo), "Kz", _periodo,
+                               nota=("O histórico do Clube é gravado de cada vez que as cotações são actualizadas (um valor por dia, "
+                                     "o último desse dia). Quanto mais actualizações, mais completo o gráfico. "
+                                     "Não há valores dentro do dia (intraday)."))
 
 # =========================================================
 # PÁGINA: CONTABILIDADE & FINANÇAS
@@ -3329,31 +3496,19 @@ elif pagina == "💱 Conversor de Moeda":
         st.caption(tx["conv_tabela_indisponivel"])
 
     st.divider()
-    st.subheader(tx["conv_historico_titulo"])
-    moeda_graf = st.selectbox(tx["conv_historico_select"], ["USD", "EUR", "GBP", "ZAR", "CNY", "BRL"], key="conv_graf_moeda")
+    st.subheader("📈 Evolução do câmbio do Kwanza")
+    cg_a, cg_b = st.columns([1, 3])
+    moeda_graf = cg_a.selectbox("Moeda", ["USD", "EUR", "GBP", "ZAR", "CNY", "BRL"], key="conv_graf_moeda")
+    periodo_cambio = cg_b.radio("Período", PERIODOS_GRAFICO, index=2, horizontal=True, key="conv_graf_periodo")
     try:
-        serie = obter_serie_cambio_aoa(moeda_graf)
+        serie_cambio = obter_serie_cambio_aoa(moeda_graf, periodo_cambio)
     except Exception:
-        serie = pd.DataFrame()
-    if len(serie) >= 2:
-        primeiro, ultimo = float(serie["Kz"].iloc[0]), float(serie["Kz"].iloc[-1])
-        var_sem = (ultimo / primeiro - 1) * 100 if primeiro else 0.0
-        cg1, cg2, cg3 = st.columns(3)
-        cg1.metric(f"1 {moeda_graf} hoje", f"{ultimo:,.2f} Kz")
-        cg2.metric(f"Variação ({serie['Data'].iloc[0]} → {serie['Data'].iloc[-1]})", f"{var_sem:+.2f}%")
-        cg3.metric("Máximo / mínimo do período", f"{serie['Kz'].max():,.2f} / {serie['Kz'].min():,.2f}")
-        st.line_chart(serie.set_index("Data")[["Kz"]].rename(columns={"Kz": f"Kz por 1 {moeda_graf}"}))
-        st.caption("Taxas indicativas de mercado (fonte aberta: fawazahmed0/exchange-api), últimos 7 dias. "
-                   "Podem diferir da taxa oficial do BNA e das taxas praticadas pelos bancos e casas de câmbio.")
-    else:
-        df_hist_cambio = obter_historico_cambio()
-        if len(df_hist_cambio) >= 2:
-            _col = moeda_graf.lower()
-            st.line_chart(df_hist_cambio.set_index("registado_em")[[_col]].rename(
-                columns={_col: f"{tx['conv_historico_label']} {moeda_graf}"}))
-            st.caption(tx["conv_historico_caption"])
-        else:
-            st.info("Não foi possível obter a série de câmbio da última semana neste momento. Tente de novo dentro de instantes.")
+        serie_cambio = pd.DataFrame(columns=["Data", "Valor"])
+    painel_grafico(f"{moeda_graf} / AOA", f"Kz por 1 {moeda_graf}", serie_cambio, "Kz", periodo_cambio,
+                   nota=("Taxas indicativas de mercado (fonte aberta: fawazahmed0/exchange-api), uma por dia; "
+                         f"os dados existem desde {CAMBIO_DADOS_DESDE[8:]}/{CAMBIO_DADOS_DESDE[5:7]}/{CAMBIO_DADOS_DESDE[:4]}, "
+                         "por isso o período de 5 anos mostra só o que há desde essa data. Não há valores dentro do dia (intraday). "
+                         "Podem diferir da taxa oficial do BNA e das praticadas pelos bancos."))
 
 # =========================================================
 # PÁGINA: SIMULADOR — HOME BROKER APPO + JUROS COMPOSTOS
@@ -3997,6 +4152,24 @@ elif pagina == "🔐 Painel do Administrador":
                 st.session_state.pop("bodiva_prev", None)
                 st.success("Cotações da BODIVA aplicadas. Índice APPO e variações actualizados.")
                 st.rerun()
+
+        with st.expander("📥 Importar histórico de cotações (CSV ou Excel)"):
+            st.caption("Para preencher o passado nos gráficos. O ficheiro precisa de três colunas, com cabeçalhos como "
+                       "**data**, **ticker** e **preço** (ex.: 02/10/2026; BAIAAAAA; 94600). Aceita as exportações da BODIVA/BFA se tiverem estas colunas.")
+            _f_hist = st.file_uploader("Ficheiro de histórico", type=["csv", "xlsx"], key="hist_cot_up")
+            if _f_hist is not None and st.button("Importar histórico", key="hist_cot_btn"):
+                try:
+                    if _f_hist.name.lower().endswith(".csv"):
+                        _dfh = pd.read_csv(_f_hist, sep=None, engine="python", encoding="utf-8-sig")
+                    else:
+                        _dfh = pd.read_excel(_f_hist)
+                    if len(_dfh) > 20000:
+                        st.error("O ficheiro tem demasiadas linhas (máximo 20 000).")
+                    else:
+                        _ok, _mau = importar_historico_cotacoes(_dfh)
+                        st.success(f"Importadas {_ok} cotações" + (f"; {_mau} linhas ignoradas (data, ticker ou preço inválidos)." if _mau else "."))
+                except Exception as _e:
+                    st.error(f"Não foi possível importar: {_e}")
 
         if st.button("Guardar alterações às cotações"):
             substituir_activos(df_editado)
