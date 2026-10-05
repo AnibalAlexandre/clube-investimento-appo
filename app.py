@@ -1092,7 +1092,7 @@ def ticker_tape(df_activos: pd.DataFrame):
     for _, a in df_activos.iterrows():
         v = float(a["variacao"])
         cor = "#16A34A" if v > 0 else ("#DC2626" if v < 0 else "#6B7280")
-        itens.append(f'<span style="color:{cor}; margin-right:36px;">{a["ticker"] or a["nome"]} &nbsp;{kz(a["preco"])} &nbsp;({v:+.2f}%)</span>')
+        itens.append(f'<span style="color:{cor}; margin-right:36px;">{a["ticker"] or a["nome"]} &nbsp;{kz(a["preco"])} &nbsp;({pct_bruto(v)})</span>')
     conteudo = "".join(itens) * 3
     render_html(f'<div class="appo-ticker-wrap"><div class="appo-ticker-move"><span>{conteudo}</span></div></div>')
 
@@ -1235,7 +1235,7 @@ def obter_taxas_cambio(base: str) -> dict:
 PERIODOS_GRAFICO = ["Hoje", "7d", "1m", "3m", "6m", "1a", "5a"]
 _PERIODO_DIAS = {"Hoje": 1, "7d": 7, "1m": 30, "3m": 91, "6m": 182, "1a": 365, "5a": 1826}
 _PERIODO_PASSO = {"Hoje": 1, "7d": 1, "1m": 1, "3m": 3, "6m": 7, "1a": 7, "5a": 30}
-_PERIODO_NOME = {"Hoje": "hoje face a ontem", "7d": "últimos 7 dias", "1m": "último mês", "3m": "últimos 3 meses",
+_PERIODO_NOME = {"Hoje": "último dia face ao anterior", "7d": "últimos 7 dias", "1m": "último mês", "3m": "últimos 3 meses",
                  "6m": "último semestre", "1a": "último ano", "5a": "últimos 5 anos"}
 CAMBIO_DADOS_DESDE = "2024-03-02"  # primeiro dia disponível na fonte aberta de câmbio
 
@@ -1264,8 +1264,10 @@ def _numero_flex(valor):
         return None
 
 
-def registar_cotacoes_hoje(df_activos_: pd.DataFrame):
-    """Guarda (ou actualiza) a cotação de hoje de cada activo no histórico. Nunca interrompe quem chama."""
+def registar_cotacoes_hoje(df_activos_: pd.DataFrame, sobrepor: bool = False):
+    """Guarda a cotação de hoje de cada activo no histórico. Só substitui um valor já existente (por exemplo, o fecho
+    importado da BODIVA) quando `sobrepor` é verdadeiro, ou seja, quando o administrador grava cotações.
+    Nunca interrompe quem chama."""
     try:
         hoje = datetime.now().date()
         for _, r in df_activos_.iterrows():
@@ -1273,22 +1275,30 @@ def registar_cotacoes_hoje(df_activos_: pd.DataFrame):
             pr = _num_seguro(r.get("preco"), default=0.0)
             if tk and pr > 0:
                 executar("INSERT INTO historico_cotacoes (dia, ticker, preco) VALUES (%s, %s, %s) "
-                         "ON CONFLICT (ticker, dia) DO UPDATE SET preco = EXCLUDED.preco", (hoje, tk, pr))
+                         "ON CONFLICT (ticker, dia) DO " + ("UPDATE SET preco = EXCLUDED.preco" if sobrepor else "NOTHING"),
+                         (hoje, tk, pr))
     except Exception:
         pass
 
 
 def obter_serie_cotacao(ticker: str, periodo: str) -> pd.DataFrame:
+    """Série (Data, Valor) do título. Compara o ticker sem os 'A' finais, para que 'BFAAAAA' e 'BFAAAAAA' sejam o mesmo
+    título; se houver os dois no mesmo dia, prevalece o ticker mais comprido (o da BODIVA)."""
     from datetime import timedelta
-    inicio = datetime.now().date() - timedelta(days=_PERIODO_DIAS[periodo])
-    df = consultar_df("SELECT dia AS \"Data\", preco AS \"Valor\" FROM historico_cotacoes "
-                      "WHERE ticker = %s AND dia >= %s ORDER BY dia", (ticker, inicio))
+    base = ("SELECT DISTINCT ON (dia) dia AS \"Data\", preco AS \"Valor\" FROM historico_cotacoes "
+            "WHERE RTRIM(ticker, 'A') = RTRIM(%s, 'A') {filtro} ORDER BY dia, LENGTH(ticker) DESC")
+    if periodo == "Hoje":
+        df = consultar_df("SELECT * FROM (" + base.format(filtro="") + ") t ORDER BY \"Data\" DESC LIMIT 2", (ticker,))
+        df = df.sort_values("Data").reset_index(drop=True)
+    else:
+        inicio = datetime.now().date() - timedelta(days=_PERIODO_DIAS[periodo])
+        df = consultar_df(base.format(filtro="AND dia >= %s"), (ticker, inicio))
     if not df.empty:
         df["Valor"] = df["Valor"].astype(float)
     return df
 
 
-def importar_historico_cotacoes(df_ficheiro: pd.DataFrame) -> tuple:
+def importar_historico_cotacoes(df_ficheiro: pd.DataFrame, ticker_forcado: str = "") -> tuple:
     """Importa linhas (data, ticker, preço) de um CSV/Excel. Devolve (linhas_importadas, linhas_ignoradas)."""
     import unicodedata
 
@@ -1304,11 +1314,12 @@ def importar_historico_cotacoes(df_ficheiro: pd.DataFrame) -> tuple:
                     return original
         return None
 
-    c_data = achar(["data", "date", "dia"])
+    c_data = achar(["data", "date", "dia", "category"])
     c_tk = achar(["ticker", "codigo", "simbolo", "symbol", "cevama"])
     c_pr = achar(["preco", "cotacao", "fecho", "close", "price", "ultimo"])
-    if not (c_data and c_tk and c_pr):
-        raise ValueError("Não encontrei as colunas de data, ticker e preço. Use cabeçalhos como: data, ticker, preco.")
+    if not (c_data and c_pr and (c_tk or ticker_forcado)):
+        raise ValueError("Não encontrei as colunas de data e preço (e de ticker, se não escolher o título). "
+                         "Use cabeçalhos como: data, ticker, preco.")
     import re as _re
     ok = bad = 0
     registos = {}
@@ -1318,7 +1329,7 @@ def importar_historico_cotacoes(df_ficheiro: pd.DataFrame) -> tuple:
             d = pd.to_datetime(bruto[:10], format="%Y-%m-%d", errors="coerce")   # ISO: nunca troca dia e mês
         else:
             d = pd.to_datetime(bruto, dayfirst=True, errors="coerce")
-        tk = str(r[c_tk] or "").strip().upper()
+        tk = (str(ticker_forcado).strip().upper() if ticker_forcado else str(r[c_tk] or "").strip().upper())
         pr = _numero_flex(r[c_pr])
         if pd.isna(d) or not tk or not pr or pr <= 0:
             bad += 1
@@ -1389,7 +1400,12 @@ def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: st
     var = (ultimo / primeiro - 1) * 100 if primeiro else 0.0
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Último valor", f"{ultimo:,.2f} {unidade}")
-    m2.metric(f"Variação ({_PERIODO_NOME[periodo]})", f"{var:+.2f}%", delta=f"{var:+.2f}%" if len(df) > 1 else None)
+    from datetime import timedelta
+    inicio_janela = datetime.now().date() - timedelta(days=_PERIODO_DIAS[periodo])
+    d0 = df["Data"].iloc[0].date()
+    rotulo_var = (f"Variação (desde {d0:%d/%m/%y})" if periodo != "Hoje" and d0 > inicio_janela + timedelta(days=10)
+                  else f"Variação ({_PERIODO_NOME[periodo]})")
+    m2.metric(rotulo_var, pct_bruto(var), delta=pct_bruto(var) if len(df) > 1 else None)
     m3.metric("Máximo do período", f"{df['Valor'].max():,.2f}")
     m4.metric("Mínimo do período", f"{df['Valor'].min():,.2f}")
     if len(df) < 2:
@@ -1399,7 +1415,14 @@ def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: st
         vmin, vmax = float(df["Valor"].min()), float(df["Valor"].max())
         pad = (vmax - vmin) * 0.15 or vmax * 0.01
         df["_base"] = vmin - pad
-        eixo_x = alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y", labelColor="#6B6B6B", grid=False))
+        span_dias = (df["Data"].max() - df["Data"].min()).days
+        if span_dias <= 14:
+            eixo_datas = alt.Axis(format="%d/%m", labelColor="#6B6B6B", grid=False, tickCount={"interval": "day", "step": 1})
+        elif span_dias <= 100:
+            eixo_datas = alt.Axis(format="%d/%m/%y", labelColor="#6B6B6B", grid=False, tickCount={"interval": "week", "step": 1})
+        else:
+            eixo_datas = alt.Axis(format="%d/%m/%y", labelColor="#6B6B6B", grid=False)
+        eixo_x = alt.X("Data:T", title=None, axis=eixo_datas)
         eixo_y = alt.Y("Valor:Q", title=None, scale=alt.Scale(domain=[vmin - pad, vmax + pad], zero=False),
                        axis=alt.Axis(orient="right", labelColor="#6B6B6B", gridColor="#EADFE4", format=",.2f"))
         base = alt.Chart(df).encode(
@@ -1407,7 +1430,7 @@ def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: st
             tooltip=[alt.Tooltip("Data:T", format="%d/%m/%Y", title="Data"),
                      alt.Tooltip("Valor:Q", format=",.2f", title=unidade)])
         # a área fecha na base visível do gráfico (y2), e não no zero, que está fora do eixo
-        area = alt.Chart(df).mark_area(opacity=0.12, color="#7C1F3E").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
+        area = alt.Chart(df).mark_area(opacity=0.12, color="#7C1F3E", interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
         camadas = area + base.mark_line(color="#7C1F3E", strokeWidth=2.2, interpolate="monotone")
         if len(df) <= 40:
             camadas = camadas + base.mark_circle(color="#7C1F3E", size=28)
@@ -2261,8 +2284,15 @@ def substituir_carteira_real(df: pd.DataFrame):
             "INSERT INTO carteira_real (ticker, nome, qtd, valor_aquisicao) VALUES (%s, %s, %s, %s)",
             (ticker, nome, qtd, val_aq))
 
+def _eh_accao(tipo) -> bool:
+    """Reconhece 'Ação', 'ACÇÃO', 'Acção', 'Acao', 'Ações'... (a tabela de cotações usa 'ACÇÃO')."""
+    import unicodedata
+    n = "".join(c for c in unicodedata.normalize("NFKD", str(tipo or "")) if not unicodedata.combining(c)).upper().strip()
+    return n.startswith("AC") and (n.endswith("AO") or n.endswith("OES"))
+
+
 def calcular_indice_mercado(df_activos: pd.DataFrame) -> float:
-    acoes = df_activos[df_activos["tipo"] == "Ação"]
+    acoes = df_activos[df_activos["tipo"].apply(_eh_accao)] if not df_activos.empty else df_activos
     return float(acoes["variacao"].mean()) if not acoes.empty else 0.0
 
 def registar_historico_indice(valor: float):
@@ -2338,6 +2368,11 @@ def substituir_activos(df: pd.DataFrame):
             "corrige os tickers para que sejam únicos."
         )
 
+    # os favoritos guardam o id do activo; como a tabela é regravada (ids novos), lembra-os por ticker/nome
+    try:
+        fav_antigos = consultar_df("SELECT f.conta_id, a.ticker, a.nome FROM favoritos f JOIN activos a ON a.id = f.activo_id")
+    except Exception:
+        fav_antigos = pd.DataFrame(columns=["conta_id", "ticker", "nome"])
     executar("DELETE FROM activos")
     avisos_variacao_extrema = []
 
@@ -2381,8 +2416,19 @@ def substituir_activos(df: pd.DataFrame):
             "um erro de dígitos ao introduzir o preço: " + "; ".join(avisos_variacao_extrema)
         )
 
-    registar_historico_indice(calcular_indice_mercado(obter_activos()))
-    registar_cotacoes_hoje(obter_activos())
+    novos_activos = obter_activos()
+    try:
+        por_ticker = {str(r["ticker"]).strip().upper(): int(r["id"]) for _, r in novos_activos.iterrows() if str(r["ticker"]).strip()}
+        por_nome = {str(r["nome"]).strip().upper(): int(r["id"]) for _, r in novos_activos.iterrows()}
+        for _, f in fav_antigos.iterrows():
+            novo_id = por_ticker.get(str(f["ticker"] or "").strip().upper()) or por_nome.get(str(f["nome"] or "").strip().upper())
+            if novo_id:
+                executar("INSERT INTO favoritos (conta_id, activo_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (int(f["conta_id"]), novo_id))
+        executar("DELETE FROM favoritos WHERE activo_id NOT IN (SELECT id FROM activos)")
+    except Exception:
+        pass
+    registar_historico_indice(calcular_indice_mercado(novos_activos))
+    registar_cotacoes_hoje(novos_activos, sobrepor=True)
 
 def obter_favoritos(conta_id: int) -> set:
     df = consultar_df("SELECT activo_id FROM favoritos WHERE conta_id = %s", (conta_id,))
@@ -2884,7 +2930,7 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
             else:
                 pdf.set_fill_color(255, 255, 255)
             mv = l["mais_valia"]
-            cor_mv = (22,163,74) if mv >= 0 else (220,38,38)
+            cor_mv = (107,114,128) if round(mv) == 0 else ((22,163,74) if mv > 0 else (220,38,38))
 
             def _c(txt, w, align="C", color=None, bold=False):
                 if color:
@@ -2904,11 +2950,11 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
             _c(kz(l["val_aq"]),       W[5], "R")
             _c(kz(l["val_act"]),      W[6], "R")
             _c(kz(mv),                W[7], "R", cor_mv, True)
-            vp = l["mais_valia_pct"]
-            cor_vp = (22,163,74) if vp >= 0 else (220,38,38)
+            vp = round(float(l["mais_valia_pct"]), 2)
+            cor_vp = (107,114,128) if vp == 0 else ((22,163,74) if vp > 0 else (220,38,38))
             pdf.set_text_color(*cor_vp)
             pdf.set_font("Helvetica","B",8)
-            pdf.cell(0, 6, f"{vp:+.2f}%", border="B", fill=fill, align="R", ln=True)
+            pdf.cell(0, 6, pct_bruto(vp), border="B", fill=fill, align="R", ln=True)
             pdf.set_text_color(0,0,0)
             pdf.set_font("Helvetica","",8)
 
@@ -2922,10 +2968,10 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         soma_ate_vact = 20+48+10+28+28+32
         pdf.cell(soma_ate_vact, 7, "TOTAL DA CARTEIRA", border="B", fill=True, ln=False, align="R")
         pdf.cell(32, 7, kz(valor_total_carteira), border="B", fill=True, align="R", ln=False)
-        cor_tot = (22,163,74) if mais_valias_total >= 0 else (220,38,38)
+        cor_tot = (107,114,128) if round(mais_valias_total) == 0 else ((22,163,74) if mais_valias_total > 0 else (220,38,38))
         pdf.set_text_color(*cor_tot)
         pdf.cell(30, 7, kz(mais_valias_total), border="B", fill=True, align="R", ln=False)
-        pdf.cell(19, 7, f"{mv_total_pct:+.2f}%", border="B", fill=True, align="R", ln=True)
+        pdf.cell(19, 7, pct_bruto(round(mv_total_pct, 2)), border="B", fill=True, align="R", ln=True)
         pdf.set_text_color(0,0,0)
     # Análise gráfica (página própria): composição, mais-valias por activo e evolução do património
     if linhas_carteira:
@@ -4171,6 +4217,10 @@ elif pagina == "🔐 Painel do Administrador":
             st.caption("Para preencher o passado nos gráficos. O ficheiro precisa de três colunas, com cabeçalhos como "
                        "**data**, **ticker** e **preço** (ex.: 02/10/2026; BAIAAAAA; 94600). Aceita as exportações da BODIVA/BFA se tiverem estas colunas.")
             _f_hist = st.file_uploader("Ficheiro de histórico", type=["csv", "xlsx"], key="hist_cot_up")
+            _tks_app = [str(x).strip().upper() for x in df_activos_admin["ticker"] if str(x).strip()]
+            _tk_esc = st.selectbox("Se o ficheiro for de UM só título (sem coluna de ticker), escolha o título:",
+                                   ["(o ficheiro já traz a coluna de ticker)"] + _tks_app, key="hist_cot_tk")
+            _tk_forcado = "" if _tk_esc.startswith("(") else _tk_esc
             if _f_hist is not None and st.button("Importar histórico", key="hist_cot_btn"):
                 try:
                     if _f_hist.name.lower().endswith(".csv"):
@@ -4180,7 +4230,7 @@ elif pagina == "🔐 Painel do Administrador":
                     if len(_dfh) > 20000:
                         st.error("O ficheiro tem demasiadas linhas (máximo 20 000).")
                     else:
-                        _ok, _mau = importar_historico_cotacoes(_dfh)
+                        _ok, _mau = importar_historico_cotacoes(_dfh, _tk_forcado)
                         st.success(f"Importadas {_ok} cotações" + (f"; {_mau} linhas ignoradas (data, ticker ou preço inválidos)." if _mau else "."))
                 except Exception as _e:
                     st.error(f"Não foi possível importar: {_e}")
