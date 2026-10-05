@@ -1309,17 +1309,31 @@ def importar_historico_cotacoes(df_ficheiro: pd.DataFrame) -> tuple:
     c_pr = achar(["preco", "cotacao", "fecho", "close", "price", "ultimo"])
     if not (c_data and c_tk and c_pr):
         raise ValueError("Não encontrei as colunas de data, ticker e preço. Use cabeçalhos como: data, ticker, preco.")
+    import re as _re
     ok = bad = 0
+    registos = {}
     for _, r in df_ficheiro.iterrows():
-        d = pd.to_datetime(r[c_data], dayfirst=True, errors="coerce")
+        bruto = str(r[c_data]).strip()
+        if _re.match(r"^\d{4}-\d{1,2}-\d{1,2}", bruto):
+            d = pd.to_datetime(bruto[:10], format="%Y-%m-%d", errors="coerce")   # ISO: nunca troca dia e mês
+        else:
+            d = pd.to_datetime(bruto, dayfirst=True, errors="coerce")
         tk = str(r[c_tk] or "").strip().upper()
         pr = _numero_flex(r[c_pr])
         if pd.isna(d) or not tk or not pr or pr <= 0:
             bad += 1
             continue
-        executar("INSERT INTO historico_cotacoes (dia, ticker, preco) VALUES (%s, %s, %s) "
-                 "ON CONFLICT (ticker, dia) DO UPDATE SET preco = EXCLUDED.preco", (d.date(), tk, pr))
-        ok += 1
+        registos[(tk, d.date())] = pr          # a última linha de cada (ticker, dia) prevalece
+    itens = list(registos.items())
+    for i in range(0, len(itens), 200):         # inserção em blocos: muito mais rápido do que linha a linha
+        bloco = itens[i:i + 200]
+        sql = "INSERT INTO historico_cotacoes (dia, ticker, preco) VALUES " + ",".join(["(%s, %s, %s)"] * len(bloco)) + \
+              " ON CONFLICT (ticker, dia) DO UPDATE SET preco = EXCLUDED.preco"
+        params = []
+        for (tk, dia), pr in bloco:
+            params += [dia, tk, pr]
+        executar(sql, tuple(params))
+        ok += len(bloco)
     return ok, bad
 
 
