@@ -1,4 +1,4 @@
-p"""
+"""
 Clube de Investimento APPO
 Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios
 Aplicação web corporativa privada — Streamlit + PostgreSQL (Neon)
@@ -1755,6 +1755,8 @@ def inicializar_bd():
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_abertura_dia NUMERIC")
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS data_abertura_dia DATE")
     executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS unidades_movimentos (id SERIAL PRIMARY KEY, data DATE NOT NULL, socio TEXT NOT NULL, socio_email TEXT, tipo TEXT NOT NULL, montante NUMERIC NOT NULL, vup NUMERIC NOT NULL, unidades NUMERIC NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS historico_vup (dia DATE PRIMARY KEY, vlg NUMERIC NOT NULL, unidades NUMERIC NOT NULL, vup NUMERIC NOT NULL)""")
     executar("""CREATE TABLE IF NOT EXISTS opv_activos (ticker TEXT PRIMARY KEY, preco NUMERIC NOT NULL, data DATE)""")
     executar("INSERT INTO opv_activos (ticker, preco, data) VALUES ('SBAOAAAA', 50000, '2026-09-28') ON CONFLICT (ticker) DO NOTHING")
     executar("INSERT INTO opv_activos (ticker, preco, data) VALUES ('UNTLAAAA', 40040, NULL) ON CONFLICT (ticker) DO NOTHING")
@@ -1860,6 +1862,136 @@ def obter_historico_patrimonio_admin(limite: int = 40) -> pd.DataFrame:
 
 def eliminar_registo_historico(registo_id: int):
     executar("DELETE FROM historico_patrimonio WHERE id = %s", (int(registo_id),))
+
+
+# ---------------- Valor da Unidade de Participação (VUP) ----------------
+def valor_carteira_real_actual() -> tuple:
+    """(valor actual, valor de aquisição) da carteira real, a preços de mercado registados na app."""
+    cart = obter_carteira_real()
+    ativos = obter_activos()
+    por_tk = {str(r["ticker"]).strip().upper().rstrip("A"): float(r["preco"]) for _, r in ativos.iterrows() if str(r["ticker"]).strip()}
+    por_nome = {str(r["nome"]).strip().upper(): float(r["preco"]) for _, r in ativos.iterrows()}
+    va = vq = 0.0
+    for _, l in cart.iterrows():
+        chave = str(l["ticker"] or "").strip().upper().rstrip("A")
+        preco = por_tk.get(chave) if chave else None
+        if preco is None:
+            preco = por_nome.get(str(l["nome"] or "").strip().upper(), 0.0)
+        va += float(l["qtd"]) * preco
+        vq += float(l["valor_aquisicao"])
+    return va, vq
+
+
+def obter_vup_info() -> dict:
+    """VUP = (carteira real a preços de mercado + reservas de liquidez) / unidades em circulação."""
+    resumo = obter_resumo_patrimonial()
+    va, vq = valor_carteira_real_actual()
+    vlg = va + float(resumo["reservas"])
+    un = float(consultar_um("SELECT COALESCE(SUM(unidades), 0) FROM unidades_movimentos")[0] or 0)
+    base = consultar_um("SELECT vup FROM unidades_movimentos ORDER BY data, id LIMIT 1")
+    return {"valor_carteira": va, "custo_carteira": vq, "reservas": float(resumo["reservas"]), "vlg": vlg,
+            "unidades": un, "vup": (vlg / un) if un > 0 else 0.0, "vup_base": float(base[0]) if base else 0.0}
+
+
+def registar_vup_hoje():
+    """Grava o VUP de hoje no histórico (um por dia). Nunca interrompe quem chama."""
+    try:
+        i = obter_vup_info()
+        if i["unidades"] > 0 and i["vup"] > 0:
+            executar("INSERT INTO historico_vup (dia, vlg, unidades, vup) VALUES (%s, %s, %s, %s) "
+                     "ON CONFLICT (dia) DO UPDATE SET vlg = EXCLUDED.vlg, unidades = EXCLUDED.unidades, vup = EXCLUDED.vup",
+                     (datetime.now().date(), i["vlg"], i["unidades"], i["vup"]))
+    except Exception:
+        pass
+
+
+def obter_serie_vup(periodo: str) -> pd.DataFrame:
+    from datetime import timedelta
+    if periodo == "Hoje":
+        df = consultar_df('SELECT dia AS "Data", vup AS "Valor" FROM historico_vup ORDER BY dia DESC LIMIT 2')
+        df = df.sort_values("Data").reset_index(drop=True)
+    else:
+        inicio = datetime.now().date() - timedelta(days=_PERIODO_DIAS[periodo])
+        df = consultar_df('SELECT dia AS "Data", vup AS "Valor" FROM historico_vup WHERE dia >= %s ORDER BY dia', (inicio,))
+    if not df.empty:
+        df["Valor"] = df["Valor"].astype(float)
+    return df
+
+
+def obter_unidades_movimentos() -> pd.DataFrame:
+    return consultar_df("SELECT id, data, socio, socio_email, tipo, montante, vup, unidades FROM unidades_movimentos "
+                        "ORDER BY data DESC, id DESC")
+
+
+def registar_movimento_unidades(data, socio, socio_email, tipo, montante, vup, unidades):
+    executar("INSERT INTO unidades_movimentos (data, socio, socio_email, tipo, montante, vup, unidades) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+             (data, socio.strip(), (socio_email or None), tipo, montante, vup, unidades))
+
+
+def eliminar_movimento_unidades(mov_id: int):
+    executar("DELETE FROM unidades_movimentos WHERE id = %s", (int(mov_id),))
+
+
+def secao_vup_inicio():
+    """Cartões, participação pessoal e evolução do VUP, na página Início. Não aparece enquanto não houver unidades."""
+    try:
+        info = obter_vup_info()
+    except Exception:
+        return
+    if info["unidades"] <= 0 or info["vup"] <= 0:
+        return
+    rent = (info["vup"] / info["vup_base"] - 1) * 100 if info["vup_base"] > 0 else 0.0
+    st.divider()
+    st.subheader("📐 Valor da Unidade de Participação")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("VUP actual", f"{kz2(info['vup'])} Kz")
+    c2.metric("Rentabilidade desde o início", pct_bruto(rent), delta=pct_bruto(rent))
+    c3.metric("Valor líquido global", kz(info["vlg"]))
+    st.caption("O VUP é o preço de uma unidade do Clube: o valor líquido (carteira a preços de mercado mais reservas de liquidez) "
+               "dividido pelas unidades em circulação. É a referência para novas entradas e saídas de sócios.")
+    email = str(st.session_state.get("conta_email", "") or "").strip().lower()
+    if email:
+        mov = obter_unidades_movimentos()
+        meu = mov[mov["socio_email"].fillna("").str.lower() == email] if not mov.empty else mov
+        if not meu.empty and float(meu["unidades"].sum()) > 0:
+            un_m, ap_m = float(meu["unidades"].sum()), float(meu["montante"].sum())
+            val_m = un_m * info["vup"]
+            st.markdown("**A minha participação**")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Unidades", f"{un_m:,.2f}".replace(",", " "))
+            m2.metric("Valor actual", kz(val_m))
+            m3.metric("Capital aportado (líquido)", kz(ap_m))
+            m4.metric("Ganho / perda", kz(val_m - ap_m), delta=pct_bruto((val_m / ap_m - 1) * 100) if ap_m > 0 else None)
+    periodo_vup = st.radio("Período", PERIODOS_GRAFICO, index=3, horizontal=True, key="vup_periodo")
+    painel_grafico("Valor da unidade de participação", "Kz por unidade", obter_serie_vup(periodo_vup), "Kz", periodo_vup)
+
+
+def _pdf_kpis_vup(pdf, info):
+    """Faixa de quatro indicadores: valor líquido, unidades, VUP e rentabilidade desde o início."""
+    rent = (info["vup"] / info["vup_base"] - 1) * 100 if info["vup_base"] > 0 else 0.0
+    itens = [("Valor líquido global", kz(info["vlg"])),
+             ("Unidades em circulação", f"{info['unidades']:,.2f}".replace(",", " ").replace(".", ",")),
+             ("Valor da unidade (VUP)", kz2(info["vup"]) + " Kz"),
+             ("Rentabilidade desde o início", pct_bruto(rent))]
+    x0, largura = pdf.l_margin, pdf.w - pdf.l_margin - pdf.r_margin
+    w = (largura - 3 * 4) / 4
+    y = pdf.get_y() + 1
+    for i, (rot, val) in enumerate(itens):
+        x = x0 + i * (w + 4)
+        pdf.set_fill_color(244, 236, 239)
+        pdf.rect(x, y, w, 15, style="F")
+        pdf.set_fill_color(124, 31, 62)
+        pdf.rect(x, y, 1.2, 15, style="F")
+        pdf.set_xy(x + 3, y + 1.5)
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(110, 110, 110)
+        pdf.cell(w - 4, 4, rot)
+        pdf.set_xy(x + 3, y + 6.5)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(124, 31, 62)
+        pdf.cell(w - 4, 6, val)
+    pdf.set_y(y + 19)
+    pdf.set_text_color(0, 0, 0)
 
 
 # ---------------- Movimentos ----------------
@@ -2460,6 +2592,7 @@ def substituir_activos(df: pd.DataFrame):
         pass
     registar_historico_indice(calcular_indice_mercado(novos_activos))
     registar_cotacoes_hoje(novos_activos, sobrepor=True)
+    registar_vup_hoje()
 
 def obter_favoritos(conta_id: int) -> set:
     df = consultar_df("SELECT activo_id FROM favoritos WHERE conta_id = %s", (conta_id,))
@@ -3009,6 +3142,12 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         try:
             pdf.add_page("L")
             _pdf_secao(pdf, "ANÁLISE GRÁFICA DA CARTEIRA")
+            try:
+                _vi_pdf = obter_vup_info()
+            except Exception:
+                _vi_pdf = None
+            if _vi_pdf and _vi_pdf["unidades"] > 0 and _vi_pdf["vup"] > 0:
+                _pdf_kpis_vup(pdf, _vi_pdf)
             _pdf_grafico_composicao(pdf, linhas_carteira)
             y_g = pdf.get_y() + 3
             if y_g + 76 > pdf.h - 20:
@@ -3282,6 +3421,8 @@ if pagina == "🏠 Início & Análises":
     st.subheader(tx["inicio_cotacoes_destaque"])
     if not _df_activos_ticker.empty:
         st.dataframe(tabela_cotacoes_estilizada(_df_activos_ticker), hide_index=True)
+
+    secao_vup_inicio()
 
 # =========================================================
 # PÁGINA: COTAÇÕES & ACTIVOS
@@ -4151,8 +4292,8 @@ elif pagina == "ℹ️ Sobre Nós & Estatutos":
 elif pagina == "🔐 Painel do Administrador":
     hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
 
-    aba_resumo, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca = st.tabs(
-        ["Resumo Patrimonial", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança"])
+    aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca = st.tabs(
+        ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança"])
 
     with aba_resumo:
         st.subheader("Editar Resumo Patrimonial")
@@ -4186,6 +4327,92 @@ elif pagina == "🔐 Painel do Administrador":
                 hc2.write(f"Capital realizado: {kz(_h['capital_social'])}")
                 if hc3.button("Eliminar", key=f"del_hist_{int(_h['id'])}"):
                     eliminar_registo_historico(int(_h["id"]))
+                    st.rerun()
+
+    with aba_unidades:
+        st.subheader("📐 Valor da Unidade de Participação (VUP)")
+        st.caption("VUP = (valor actual da carteira real + reservas de liquidez) ÷ unidades em circulação. É o preço a que os sócios "
+                   "entram e saem do Clube: quem entra hoje paga o VUP de hoje, e não o de há seis meses.")
+        _vi = obter_vup_info()
+        _rent_u = (_vi["vup"] / _vi["vup_base"] - 1) * 100 if _vi["vup_base"] > 0 and _vi["unidades"] > 0 else 0.0
+        u1, u2, u3, u4 = st.columns(4)
+        u1.metric("Valor líquido global", kz(_vi["vlg"]))
+        u2.metric("Unidades em circulação", f"{_vi['unidades']:,.4f}".replace(",", " "))
+        u3.metric("VUP actual", (kz2(_vi["vup"]) + " Kz") if _vi["unidades"] > 0 else "—")
+        u4.metric("Rentabilidade desde o início", pct_bruto(_rent_u) if _vi["unidades"] > 0 else "—")
+        st.caption(f"Carteira real a preços da app: {kz(_vi['valor_carteira'])}  +  reservas de liquidez: {kz(_vi['reservas'])}. "
+                   "Mantenha o Resumo Patrimonial (reservas) e as cotações actualizados: o VUP depende deles.")
+        if _vi["unidades"] <= 0:
+            st.info("Ainda não há unidades emitidas. Comece por registar a **subscrição inicial** de cada sócio fundador, "
+                    "com o valor que aportou e o VUP de partida (por defeito 1 000 Kz por unidade).")
+
+        st.markdown("**Registar movimento**")
+        _contas_u = listar_contas()
+        _opc_u = [f"{r['nome']} — {r['email']}" for _, r in _contas_u.iterrows()] + ["Outro (escrever o nome)"]
+        with st.form("form_unidades", clear_on_submit=True):
+            _sel_u = st.selectbox("Sócio", _opc_u)
+            _nome_u = st.text_input("Nome (só se escolheu 'Outro')")
+            _tipo_u = st.selectbox("Operação", ["Subscrição inicial (ao VUP de partida)", "Subscrição (ao VUP actual)", "Resgate (ao VUP actual)"])
+            fu1, fu2, fu3 = st.columns(3)
+            _mont_u = fu1.number_input("Montante (Kz, inteiro)", min_value=0.0, step=1000.0)
+            _vup0_u = fu2.number_input("VUP de partida (só subscrição inicial)", min_value=1.0, value=1000.0, step=10.0)
+            _data_u = fu3.date_input("Data", value=datetime.now().date())
+            _ok_u = st.form_submit_button("Registar")
+        if _ok_u:
+            if _sel_u.startswith("Outro"):
+                _socio_u, _mail_u = _nome_u.strip(), None
+            else:
+                _linha_u = _contas_u.iloc[_opc_u.index(_sel_u)]
+                _socio_u, _mail_u = str(_linha_u["nome"]), str(_linha_u["email"])
+            _mov_atual = obter_unidades_movimentos()
+            if not _socio_u or _mont_u <= 0:
+                st.error("Indique o sócio e um montante superior a zero.")
+            elif _tipo_u.startswith("Subscrição inicial"):
+                registar_movimento_unidades(_data_u, _socio_u, _mail_u, "Subscrição inicial", float(_mont_u), float(_vup0_u), float(_mont_u) / float(_vup0_u))
+                registar_vup_hoje()
+                st.success("Subscrição inicial registada.")
+                st.rerun()
+            elif _vi["unidades"] <= 0 or _vi["vup"] <= 0:
+                st.error("Ainda não há unidades em circulação: registe primeiro a subscrição inicial.")
+            else:
+                _un_u = float(_mont_u) / _vi["vup"]
+                if _tipo_u.startswith("Resgate"):
+                    _disp = float(_mov_atual.loc[_mov_atual["socio"].str.strip().str.lower() == _socio_u.lower(), "unidades"].sum()) if not _mov_atual.empty else 0.0
+                    if _un_u > _disp + 1e-9:
+                        st.error(f"O sócio só tem {_disp:,.4f} unidades; o resgate pedido equivale a {_un_u:,.4f}.".replace(",", " "))
+                    else:
+                        registar_movimento_unidades(_data_u, _socio_u, _mail_u, "Resgate", -float(_mont_u), _vi["vup"], -_un_u)
+                        registar_vup_hoje()
+                        st.success("Resgate registado. Depois, actualize o Resumo Patrimonial (reservas) com a saída de dinheiro.")
+                        st.rerun()
+                else:
+                    registar_movimento_unidades(_data_u, _socio_u, _mail_u, "Subscrição", float(_mont_u), _vi["vup"], _un_u)
+                    registar_vup_hoje()
+                    st.success("Subscrição registada ao VUP actual. Depois, actualize o Resumo Patrimonial (reservas) com o dinheiro que entrou.")
+                    st.rerun()
+        st.caption("Ordem correcta numa entrada de sócio: 1) registe aqui a subscrição (ao VUP de hoje); 2) só depois actualize as reservas no Resumo Patrimonial. "
+                   "Se inverter, o VUP usado fica distorcido.")
+
+        _mov_u = obter_unidades_movimentos()
+        if not _mov_u.empty:
+            st.markdown("**Posição de cada sócio**")
+            _pos = _mov_u.groupby("socio").agg(unidades=("unidades", "sum"), aportado=("montante", "sum")).reset_index()
+            _pos["valor"] = _pos["unidades"] * _vi["vup"]
+            _pos["ganho"] = _pos["valor"] - _pos["aportado"]
+            _pos["%"] = _pos.apply(lambda r: pct_bruto((r["valor"] / r["aportado"] - 1) * 100) if r["aportado"] > 0 else "—", axis=1)
+            _pos_x = _pos.copy()
+            _pos_x["unidades"] = _pos_x["unidades"].apply(lambda v: f"{v:,.4f}".replace(",", " "))
+            for _c in ("aportado", "valor", "ganho"):
+                _pos_x[_c] = _pos_x[_c].apply(kz)
+            st.dataframe(_pos_x.rename(columns={"socio": "Sócio", "unidades": "Unidades", "aportado": "Capital aportado",
+                                                "valor": "Valor actual", "ganho": "Ganho/perda", "%": "Rentabilidade"}), hide_index=True)
+            st.markdown("**Últimos movimentos**")
+            for _, _m in _mov_u.head(15).iterrows():
+                mc1, mc2 = st.columns([5, 1])
+                mc1.write(f"{_m['data']}  ·  {_m['socio']}  ·  {_m['tipo']}  ·  {kz(_m['montante'])}  ·  VUP {kz2(_m['vup'])}  ·  {float(_m['unidades']):,.4f} un.".replace(",", " "))
+                if mc2.button("Eliminar", key=f"del_un_{int(_m['id'])}"):
+                    eliminar_movimento_unidades(int(_m["id"]))
+                    registar_vup_hoje()
                     st.rerun()
 
     with aba_activos:
