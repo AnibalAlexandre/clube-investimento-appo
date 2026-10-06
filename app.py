@@ -1,4 +1,4 @@
-"""
+p"""
 Clube de Investimento APPO
 Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios
 Aplicação web corporativa privada — Streamlit + PostgreSQL (Neon)
@@ -1281,6 +1281,21 @@ def registar_cotacoes_hoje(df_activos_: pd.DataFrame, sobrepor: bool = False):
         pass
 
 
+def obter_opv(ticker: str):
+    """(preço, data|None) da OPV do título, ou None. Compara o ticker sem os 'A' finais."""
+    linha = consultar_um("SELECT preco, data FROM opv_activos WHERE RTRIM(ticker, 'A') = RTRIM(%s, 'A') LIMIT 1", (ticker,))
+    return (float(linha[0]), linha[1]) if linha else None
+
+
+def guardar_opv(ticker: str, preco: float, data=None):
+    executar("INSERT INTO opv_activos (ticker, preco, data) VALUES (%s, %s, %s) "
+             "ON CONFLICT (ticker) DO UPDATE SET preco = EXCLUDED.preco, data = EXCLUDED.data", (ticker.strip().upper(), preco, data))
+
+
+def eliminar_opv(ticker: str):
+    executar("DELETE FROM opv_activos WHERE ticker = %s", (ticker,))
+
+
 def obter_serie_cotacao(ticker: str, periodo: str) -> pd.DataFrame:
     """Série (Data, Valor) do título. Compara o ticker sem os 'A' finais, para que 'BFAAAAA' e 'BFAAAAAA' sejam o mesmo
     título; se houver os dois no mesmo dia, prevalece o ticker mais comprido (o da BODIVA)."""
@@ -1384,7 +1399,7 @@ def obter_serie_cambio_aoa(moeda: str, periodo: str = "1m") -> pd.DataFrame:
     return df.sort_values("Data").reset_index(drop=True)
 
 
-def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: str, periodo: str, nota: str = ""):
+def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: str, periodo: str, nota: str = "", referencia=None):
     """Painel no estilo do home broker: cabeçalho, indicadores do período e gráfico de área na cor do Clube."""
     import html as _h
     import altair as alt
@@ -1413,6 +1428,8 @@ def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: st
                 "A série cresce a cada nova actualização.")
     else:
         vmin, vmax = float(df["Valor"].min()), float(df["Valor"].max())
+        if referencia:
+            vmin, vmax = min(vmin, referencia[1]), max(vmax, referencia[1])
         pad = (vmax - vmin) * 0.15 or vmax * 0.01
         df["_base"] = vmin - pad
         span_dias = (df["Data"].max() - df["Data"].min()).days
@@ -1434,7 +1451,18 @@ def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: st
         camadas = area + base.mark_line(color="#7C1F3E", strokeWidth=2.2, interpolate="monotone")
         if len(df) <= 40:
             camadas = camadas + base.mark_circle(color="#7C1F3E", size=28)
+        if referencia:
+            ref_df = pd.DataFrame({"y": [float(referencia[1])], "txt": [referencia[0]]})
+            esc_y = alt.Scale(domain=[vmin - pad, vmax + pad], zero=False)
+            eixo_ref = alt.Axis(orient="right", labelColor="#6B6B6B", gridColor="#EADFE4", format=",.2f")
+            camadas = camadas + alt.Chart(ref_df).mark_rule(color="#6B6B6B", strokeDash=[6, 4], strokeWidth=1.4).encode(
+                y=alt.Y("y:Q", title=None, scale=esc_y, axis=eixo_ref)) + alt.Chart(ref_df).mark_text(
+                align="left", dx=6, dy=-7, color="#6B6B6B", fontSize=11).encode(
+                y=alt.Y("y:Q", title=None, scale=esc_y, axis=eixo_ref), text="txt:N", x=alt.value(2))
         st.altair_chart(camadas.properties(height=340), use_container_width=True)
+    if referencia:
+        var_ref = (ultimo / referencia[1] - 1) * 100 if referencia[1] else 0.0
+        st.markdown(f"🏷️ **{referencia[0]}** · variação desde a OPV: **{pct_bruto(var_ref)}**")
     if nota:
         st.caption(nota)
 
@@ -1727,6 +1755,9 @@ def inicializar_bd():
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_abertura_dia NUMERIC")
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS data_abertura_dia DATE")
     executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS opv_activos (ticker TEXT PRIMARY KEY, preco NUMERIC NOT NULL, data DATE)""")
+    executar("INSERT INTO opv_activos (ticker, preco, data) VALUES ('SBAOAAAA', 50000, '2026-09-28') ON CONFLICT (ticker) DO NOTHING")
+    executar("INSERT INTO opv_activos (ticker, preco, data) VALUES ('UNTLAAAA', 40040, NULL) ON CONFLICT (ticker) DO NOTHING")
     executar("""CREATE TABLE IF NOT EXISTS historico_cotacoes (dia DATE NOT NULL, ticker TEXT NOT NULL, preco NUMERIC NOT NULL, PRIMARY KEY (ticker, dia))""")
     executar("""CREATE TABLE IF NOT EXISTS documentos_pdf (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, descricao TEXT, nome_ficheiro TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'biblioteca', tamanho INTEGER NOT NULL, conteudo BYTEA NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS socios (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT, contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
@@ -3339,7 +3370,9 @@ elif pagina == "📈 Cotações & Activos":
                 _rot = gc1.selectbox("Título (★ = em carteira do Clube)", [o[0] for o in _ops], key="graf_titulo")
                 _periodo = gc2.radio("Período", PERIODOS_GRAFICO, index=2, horizontal=True, key="graf_periodo")
                 _sel = next(o for o in _ops if o[0] == _rot)
-                painel_grafico(_sel[2].upper(), f"{_sel[1]}  |  BODIVA  |  AOA", obter_serie_cotacao(_sel[1], _periodo), "Kz", _periodo,
+                _opv = obter_opv(_sel[1])
+                _ref = ((f"Preço da OPV: {_opv[0]:,.0f} Kz".replace(",", " ") + (f" ({_opv[1]:%d/%m/%Y})" if _opv[1] else "")), _opv[0]) if _opv else None
+                painel_grafico(_sel[2].upper(), f"{_sel[1]}  |  BODIVA  |  AOA", obter_serie_cotacao(_sel[1], _periodo), "Kz", _periodo, referencia=_ref,
                                nota=("O histórico do Clube é gravado de cada vez que as cotações são actualizadas (um valor por dia, "
                                      "o último desse dia). Quanto mais actualizações, mais completo o gráfico. "
                                      "Não há valores dentro do dia (intraday)."))
@@ -4212,6 +4245,28 @@ elif pagina == "🔐 Painel do Administrador":
                 st.session_state.pop("bodiva_prev", None)
                 st.success("Cotações da BODIVA aplicadas. Índice APPO e variações actualizados.")
                 st.rerun()
+
+        with st.expander("🏷️ Preço da OPV (oferta pública de venda) — referência nos gráficos"):
+            st.caption("Aparece nos gráficos como uma linha tracejada, com a variação desde a OPV.")
+            _tks_opv = [str(x).strip().upper() for x in df_activos_admin["ticker"] if str(x).strip()]
+            oc1, oc2, oc3 = st.columns([2, 1.5, 1.5])
+            _t_opv = oc1.selectbox("Título", _tks_opv, key="opv_tk")
+            _p_opv = oc2.number_input("Preço da OPV (Kz)", min_value=0.0, step=100.0, key="opv_pr")
+            _d_opv = oc3.date_input("Data (opcional)", value=None, key="opv_dt")
+            if st.button("Guardar preço da OPV", key="opv_btn"):
+                if _p_opv > 0:
+                    guardar_opv(_t_opv, float(_p_opv), _d_opv)
+                    st.success("Preço da OPV guardado.")
+                    st.rerun()
+                else:
+                    st.error("Indique um preço superior a zero.")
+            _opvs = consultar_df("SELECT ticker, preco, data FROM opv_activos ORDER BY ticker")
+            for _, _o in _opvs.iterrows():
+                od1, od2 = st.columns([4, 1])
+                od1.write(f"{_o['ticker']}  ·  {float(_o['preco']):,.0f} Kz".replace(",", " ") + (f"  ·  {_o['data']}" if _o["data"] else ""))
+                if od2.button("Eliminar", key=f"del_opv_{_o['ticker']}"):
+                    eliminar_opv(_o["ticker"])
+                    st.rerun()
 
         with st.expander("📥 Importar histórico de cotações (CSV ou Excel)"):
             st.caption("Para preencher o passado nos gráficos. O ficheiro precisa de três colunas, com cabeçalhos como "
