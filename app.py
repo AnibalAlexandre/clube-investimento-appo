@@ -1,6 +1,6 @@
 """
 Clube de Investimento APPO
-Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios
+APPO — Educação Financeira e Área Privada de Investimentos
 Aplicação web corporativa privada — Streamlit + PostgreSQL (Neon)
 """
 
@@ -47,7 +47,7 @@ TRADUCOES = {
     # ─────────────────────────────────────────────────────
     "Português": {
         # ── sistema / login ──────────────────────────────
-        "tagline": "Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios",
+        "tagline": "APPO — Educação Financeira e Área Privada de Investimentos",
         "login_titulo": "Acesso reservado a sócios",
         "email": "E-mail", "password": "Palavra-passe", "entrar": "Entrar",
         "erro_login": "E-mail ou palavra-passe incorrectos. Contacta um administrador do Clube.",
@@ -63,12 +63,12 @@ TRADUCOES = {
             "🧪 Simulador de Investimento": "🧪 Simulador de Investimento",
             "🧮 Regra 50/30/20":            "🧮 Regra 50/30/20",
             "📚 Biblioteca Educativa":       "📚 Biblioteca Educativa",
-            "🧾 Adesão de Sócios":          "🧾 Adesão de Sócios",
+            "🧾 Adesão de Sócios":          "🧾 Manifestação de Interesse",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ Sobre Nós & Estatutos",
             "🔐 Painel do Administrador":   "🔐 Painel do Administrador",
         },
         # ── página início ────────────────────────────────
-        "inicio_hero_sub": "Portal Oficial de Cotações BODIVA, Contabilidade e Adesão de Sócios",
+        "inicio_hero_sub": "APPO — Educação Financeira e Área Privada de Investimentos",
         "inicio_capital_subscrito": "Capital Subscrito",
         "inicio_capital_realizado": "Capital Realizado",
         "inicio_pct_subscrito": "% do subscrito",
@@ -245,7 +245,7 @@ TRADUCOES = {
 
     # ─────────────────────────────────────────────────────
     "English": {
-        "tagline": "Official BODIVA Quotes, Accounting and Membership Portal",
+        "tagline": "APPO — Financial Education and Private Investment Area",
         "login_titulo": "Members-only access",
         "email": "E-mail", "password": "Password", "entrar": "Sign in",
         "erro_login": "Incorrect e-mail or password. Contact a Club administrator.",
@@ -260,11 +260,11 @@ TRADUCOES = {
             "🧪 Simulador de Investimento": "🧪 Investment Simulator",
             "🧮 Regra 50/30/20":            "🧮 50/30/20 Rule",
             "📚 Biblioteca Educativa":       "📚 Learning Library",
-            "🧾 Adesão de Sócios":          "🧾 Membership Application",
+            "🧾 Adesão de Sócios":          "🧾 Expression of Interest",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ About Us & Bylaws",
             "🔐 Painel do Administrador":   "🔐 Admin Panel",
         },
-        "inicio_hero_sub": "Official BODIVA Quotes, Accounting and Membership Portal",
+        "inicio_hero_sub": "APPO — Financial Education and Private Investment Area",
         "inicio_capital_subscrito": "Subscribed Capital",
         "inicio_capital_realizado": "Paid-up Capital",
         "inicio_pct_subscrito": "% of subscribed",
@@ -428,7 +428,7 @@ TRADUCOES = {
 
     # ─────────────────────────────────────────────────────
     "Français": {
-        "tagline": "Portail Officiel des Cotations BODIVA, Comptabilité et Adhésion",
+        "tagline": "APPO — Éducation financière et espace privé d'investissement",
         "login_titulo": "Accès réservé aux membres",
         "email": "E-mail", "password": "Mot de passe", "entrar": "Se connecter",
         "erro_login": "E-mail ou mot de passe incorrect. Contactez un administrateur du Club.",
@@ -443,11 +443,11 @@ TRADUCOES = {
             "🧪 Simulador de Investimento": "🧪 Simulateur d'Investissement",
             "🧮 Regra 50/30/20":            "🧮 Règle 50/30/20",
             "📚 Biblioteca Educativa":       "📚 Bibliothèque Éducative",
-            "🧾 Adesão de Sócios":          "🧾 Adhésion des Membres",
+            "🧾 Adesão de Sócios":          "🧾 Manifestation d'intérêt",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ À propos & Statuts",
             "🔐 Painel do Administrador":   "🔐 Panneau d'Administration",
         },
-        "inicio_hero_sub": "Portail Officiel des Cotations BODIVA, Comptabilité et Adhésion",
+        "inicio_hero_sub": "APPO — Éducation financière et espace privé d'investissement",
         "inicio_capital_subscrito": "Capital Souscrit",
         "inicio_capital_realizado": "Capital Libéré",
         "inicio_pct_subscrito": "% du souscrit",
@@ -611,7 +611,7 @@ TRADUCOES = {
 
     # ─────────────────────────────────────────────────────
     "Español": {
-        "tagline": "Portal Oficial de Cotizaciones BODIVA, Contabilidad y Adhesión",
+        "tagline": "APPO — Educación financiera y área privada de inversiones",
         "login_titulo": "Acceso reservado a socios",
         "email": "Correo electrónico", "password": "Contraseña", "entrar": "Entrar",
         "erro_login": "Correo o contraseña incorrectos. Contacta a un administrador del Club.",
@@ -626,11 +626,11 @@ TRADUCOES = {
             "🧪 Simulador de Investimento": "🧪 Simulador de Inversión",
             "🧮 Regra 50/30/20":            "🧮 Regla 50/30/20",
             "📚 Biblioteca Educativa":       "📚 Biblioteca Educativa",
-            "🧾 Adesão de Sócios":          "🧾 Adhesión de Socios",
+            "🧾 Adesão de Sócios":          "🧾 Manifestación de interés",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ Sobre Nosotros y Estatutos",
             "🔐 Painel do Administrador":   "🔐 Panel de Administrador",
         },
-        "inicio_hero_sub": "Portal Oficial de Cotizaciones BODIVA, Contabilidad y Adhesión",
+        "inicio_hero_sub": "APPO — Educación financiera y área privada de inversiones",
         "inicio_capital_subscrito": "Capital Suscrito",
         "inicio_capital_realizado": "Capital Desembolsado",
         "inicio_pct_subscrito": "% del suscrito",
@@ -794,7 +794,7 @@ TRADUCOES = {
 
     # ─────────────────────────────────────────────────────
     "中文 (Mandarim)": {
-        "tagline": "BODIVA官方行情、会计与会员门户",
+        "tagline": "APPO — 金融教育与私人投资专区",
         "login_titulo": "仅限会员访问",
         "email": "电子邮件", "password": "密码", "entrar": "登录",
         "erro_login": "邮箱或密码错误。请联系俱乐部管理员。",
@@ -809,11 +809,11 @@ TRADUCOES = {
             "🧪 Simulador de Investimento": "🧪 投资模拟器",
             "🧮 Regra 50/30/20":            "🧮 50/30/20法则",
             "📚 Biblioteca Educativa":       "📚 教育图书馆",
-            "🧾 Adesão de Sócios":          "🧾 会员申请",
+            "🧾 Adesão de Sócios":          "🧾 意向登记",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ 关于我们与章程",
             "🔐 Painel do Administrador":   "🔐 管理员面板",
         },
-        "inicio_hero_sub": "BODIVA官方行情、会计与会员门户",
+        "inicio_hero_sub": "APPO — 金融教育与私人投资专区",
         "inicio_capital_subscrito": "认缴资本",
         "inicio_capital_realizado": "实缴资本",
         "inicio_pct_subscrito": "% 已认缴",
@@ -1936,7 +1936,7 @@ def q6(x) -> Decimal:
 @contextmanager
 def transaccao():
     """Ligação própria e transacção única (tudo ou nada) para operações financeiras. Devolve um cursor."""
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = psycopg2.connect(DATABASE_URL, connect_timeout=15)
     try:
         with conn.cursor() as cur:
             yield cur
@@ -3828,6 +3828,359 @@ if st.session_state["autenticado"] and st.session_state["login_timestamp"]:
         st.warning("A tua sessão expirou por inactividade. Inicia sessão novamente.")
 
 
+# =========================================================
+# EDUCAÇÃO & SERVIÇOS · MANIFESTAÇÃO DE INTERESSE · DESPESAS DO GRUPO
+# (as áreas públicas NÃO dão acesso à carteira nem tornam ninguém participante dos investimentos)
+# =========================================================
+import re as _re_pub
+
+TEXTO_MANIFESTACAO = ("Manifestação de interesse — este pedido não constitui admissão, atribuição de cotas nem autorização para transferir dinheiro. "
+                      "As novas admissões dependem da definição e validação da estrutura aplicável.")
+MSG_INSCRICAO = "Inscrição recebida. A confirmação e as instruções de pagamento serão comunicadas posteriormente."
+AVISO_EDUCACAO = ("**Aviso importante.** As actividades do APPO são educativas e informativas. Não prestamos recomendações personalizadas de compra ou venda, "
+                  "não gerimos carteiras, não executamos operações em nome dos alunos, não pedimos palavras-passe de homebrokers e não recebemos dinheiro para comprar activos por ninguém. "
+                  "O APPO não é uma entidade autorizada, registada ou supervisionada pela CMC, nem parceiro oficial da BODIVA ou de qualquer correctora. "
+                  "Comprar uma formação ou pagar uma mensalidade educativa **não** atribui cotas, dividendos, direitos de voto nem participação no património de investimento. "
+                  "Nada aqui garante rendimentos ou resultados.")
+ESTADOS_SERVICO = ["Recebido", "Confirmado", "Cancelado", "Concluído"]
+ESTADOS_MANIFESTACAO = ["Recebida", "Em análise", "Arquivada"]
+ESTADOS_DESPESA = ["Proposta", "Aprovada", "Rejeitada"]
+_REGEX_EMAIL = _re_pub.compile(r"^[^@\s]{1,64}@[^@\s]{1,200}\.[^@\s]{2,}$")
+
+
+def validar_contacto(nome: str, email: str, telefone: str):
+    """Devolve uma mensagem de erro ou None se os dados de contacto forem aceitáveis."""
+    nome, email, telefone = (nome or "").strip(), (email or "").strip(), (telefone or "").strip()
+    if len(nome) < 2 or len(nome) > 120:
+        return "Indique o seu nome (2 a 120 caracteres)."
+    if not email and not telefone:
+        return "Indique pelo menos um contacto: e-mail ou telefone."
+    if email and not _REGEX_EMAIL.match(email):
+        return "O e-mail indicado não parece válido."
+    if len(telefone) > 30:
+        return "O telefone indicado é demasiado longo."
+    return None
+
+
+def _pode_enviar(chave: str, segundos: int = 30) -> bool:
+    """Limite simples por sessão para evitar envios repetidos por engano ou abuso."""
+    agora = time.time()
+    if agora - float(st.session_state.get(chave, 0)) < segundos:
+        return False
+    st.session_state[chave] = agora
+    return True
+
+
+def obter_servicos_publicos() -> pd.DataFrame:
+    # Só serviços educativos, activos e visíveis: as propostas de consultoria nunca aparecem em público.
+    return consultar_df("SELECT id, nome, descricao, preco, nota_preco, contratavel FROM servicos_catalogo "
+                        "WHERE activo = TRUE AND visivel_publico = TRUE AND tipo = 'educativo' ORDER BY ordem, id")
+
+
+def registar_pedido_servico(servico_id: int, nome: str, email: str, telefone: str, participantes: int, mensagem: str):
+    s = consultar_um("SELECT id, nome FROM servicos_catalogo WHERE id = %s AND activo = TRUE AND visivel_publico = TRUE AND tipo = 'educativo'", (int(servico_id),))
+    if not s:
+        raise ValueError("Este serviço já não está disponível.")
+    executar("INSERT INTO pedidos_servicos (servico_id, servico_nome, nome, email, telefone, participantes, mensagem) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+             (s[0], s[1], nome.strip(), email.strip() or None, telefone.strip() or None, int(participantes), (mensagem or "").strip()[:1000] or None))
+
+
+def registar_manifestacao_interesse(nome: str, email: str, telefone: str, mensagem: str):
+    executar("INSERT INTO manifestacoes_interesse (nome, email, telefone, mensagem, consentimento) VALUES (%s, %s, %s, %s, TRUE)",
+             (nome.strip(), email.strip() or None, telefone.strip() or None, (mensagem or "").strip()[:1000] or None))
+
+
+def pagina_educacao_servicos():
+    st.markdown("### 🎓 APPO — Educação Financeira")
+    st.write("O APPO nasceu em Benguela, em 2024, como um grupo de estudo e prática de investimento. Aqui encontra formação, guias e ferramentas educativas "
+             "sobre o mercado angolano: BODIVA, acções, dividendos, riscos e comissões, leitura de demonstrações financeiras, valuation com exercícios e planeamento financeiro (regra 50/30/20).")
+    st.info(AVISO_EDUCACAO)
+    st.markdown("#### Formação e workshops")
+    try:
+        df = obter_servicos_publicos()
+    except Exception:
+        st.warning("O catálogo não está disponível neste momento. Tente novamente dentro de instantes.")
+        return
+    if df.empty:
+        st.info("Brevemente. Entretanto, pode deixar o seu contacto na secção «Manifestação de interesse».")
+        return
+    for _, s in df.iterrows():
+        sid = int(s["id"])
+        with st.container(border=True):
+            st.markdown(f"**{s['nome']}**")
+            if str(s["descricao"] or "").strip():
+                st.write(s["descricao"])
+            if pd.notna(s["preco"]):
+                st.markdown(f"💰 **{kz(s['preco'])} por participante**" + (f" — _{s['nota_preco']}_" if str(s["nota_preco"] or "").strip() else ""))
+            else:
+                st.markdown("💰 **Sob consulta**")
+            rotulo = "Pedir inscrição" if bool(s["contratavel"]) else "Pedir informações"
+            with st.expander(rotulo):
+                with st.form(f"form_pedido_{sid}", clear_on_submit=True):
+                    nome = st.text_input("Nome", key=f"ped_nome_{sid}", max_chars=120)
+                    c1, c2 = st.columns(2)
+                    email = c1.text_input("E-mail", key=f"ped_email_{sid}", max_chars=200)
+                    tel = c2.text_input("Telefone", key=f"ped_tel_{sid}", max_chars=30)
+                    n_part = st.number_input("Número de participantes", min_value=1, max_value=200, value=1, step=1, key=f"ped_n_{sid}")
+                    msg = st.text_area("Mensagem (opcional)", key=f"ped_msg_{sid}", max_chars=1000)
+                    ok = st.checkbox("Autorizo o APPO a usar estes dados apenas para responder a este pedido.", key=f"ped_ok_{sid}")
+                    enviar = st.form_submit_button(rotulo)
+                if enviar:
+                    erro = validar_contacto(nome, email, tel)
+                    if erro:
+                        st.error(erro)
+                    elif not ok:
+                        st.error("É necessário autorizar o uso dos dados para responder ao pedido.")
+                    elif not _pode_enviar("ultimo_pedido_servico"):
+                        st.warning("Aguarde alguns segundos antes de enviar outro pedido.")
+                    else:
+                        try:
+                            registar_pedido_servico(sid, nome, email, tel, int(n_part), msg)
+                            st.success(MSG_INSCRICAO)
+                        except Exception as e:
+                            st.error(f"Não foi possível registar o pedido: {e}")
+    st.caption("Os valores são propostas editáveis e podem mudar. Nenhum pagamento é pedido nesta página.")
+
+
+def pagina_manifestacao_interesse():
+    st.markdown("### 🤝 Manifestação de interesse")
+    st.warning(TEXTO_MANIFESTACAO)
+    st.caption("Nesta fase não pedimos capital, documentos de identificação nem comprovativos, e não há instruções de transferência.")
+    with st.form("form_manifestacao", clear_on_submit=True):
+        nome = st.text_input("Nome", max_chars=120)
+        c1, c2 = st.columns(2)
+        email = c1.text_input("E-mail", max_chars=200)
+        tel = c2.text_input("Telefone", max_chars=30)
+        msg = st.text_area("Mensagem (opcional)", max_chars=1000)
+        ok = st.checkbox("Compreendo que isto não é uma admissão e autorizo o APPO a usar estes dados apenas para me contactar sobre este assunto.")
+        enviar = st.form_submit_button("Enviar manifestação de interesse")
+    if enviar:
+        erro = validar_contacto(nome, email, tel)
+        if erro:
+            st.error(erro)
+        elif not ok:
+            st.error("É necessário confirmar que compreende o âmbito deste pedido.")
+        elif not _pode_enviar("ultima_manifestacao"):
+            st.warning("Aguarde alguns segundos antes de enviar outro pedido.")
+        else:
+            try:
+                registar_manifestacao_interesse(nome, email, tel, msg)
+                st.success("Manifestação de interesse recebida. Entraremos em contacto, se e quando houver novidades.")
+            except Exception as e:
+                st.error(f"Não foi possível registar o pedido: {e}")
+
+
+# ---------------- Administração (sempre protegida no código, não só escondida) ----------------
+def actualizar_estado_pedido(pid: int, novo_estado: str):
+    exigir_admin()
+    if novo_estado not in ESTADOS_SERVICO:
+        raise ValueError("Estado inválido.")
+    antes = consultar_um("SELECT estado_servico FROM pedidos_servicos WHERE id = %s", (int(pid),))
+    if not antes:
+        raise ValueError("Pedido inexistente.")
+    with transaccao() as cur:
+        cur.execute("UPDATE pedidos_servicos SET estado_servico = %s WHERE id = %s", (novo_estado, int(pid)))
+        registar_auditoria("pedido_estado_servico", "pedidos_servicos", pid, antes={"estado_servico": antes[0]}, depois={"estado_servico": novo_estado}, cur=cur)
+
+
+def confirmar_pagamento_pedido(pid: int, nota: str):
+    """O recebimento só é confirmado pelo administrador, com nota, e fica auditado. Um comprovativo recebido não confirma nada por si."""
+    exigir_admin()
+    if not (nota or "").strip():
+        raise ValueError("Indique uma nota (referência, data, forma de recebimento).")
+    antes = consultar_um("SELECT estado_pagamento FROM pedidos_servicos WHERE id = %s", (int(pid),))
+    if not antes:
+        raise ValueError("Pedido inexistente.")
+    if antes[0] == "Confirmado":
+        raise ValueError("O pagamento já está confirmado.")
+    with transaccao() as cur:
+        cur.execute("UPDATE pedidos_servicos SET estado_pagamento = 'Confirmado', pagamento_confirmado_por = %s, pagamento_confirmado_em = NOW(), pagamento_nota = %s "
+                    "WHERE id = %s AND estado_pagamento <> 'Confirmado'", (utilizador_actual(), nota.strip(), int(pid)))
+        registar_auditoria("pagamento_confirmado", "pedidos_servicos", pid, antes={"estado_pagamento": antes[0]}, depois={"estado_pagamento": "Confirmado"}, motivo=nota.strip(), cur=cur)
+
+
+def actualizar_estado_manifestacao(mid: int, novo_estado: str):
+    exigir_admin()
+    if novo_estado not in ESTADOS_MANIFESTACAO:
+        raise ValueError("Estado inválido.")
+    antes = consultar_um("SELECT estado FROM manifestacoes_interesse WHERE id = %s", (int(mid),))
+    if not antes:
+        raise ValueError("Registo inexistente.")
+    with transaccao() as cur:
+        cur.execute("UPDATE manifestacoes_interesse SET estado = %s WHERE id = %s", (novo_estado, int(mid)))
+        registar_auditoria("manifestacao_estado", "manifestacoes_interesse", mid, antes={"estado": antes[0]}, depois={"estado": novo_estado}, cur=cur)
+
+
+def actualizar_servico_catalogo(sid: int, preco, nota_preco: str, activo: bool, visivel: bool, contratavel: bool):
+    exigir_admin()
+    antes = consultar_um("SELECT tipo, preco, nota_preco, activo, visivel_publico, contratavel FROM servicos_catalogo WHERE id = %s", (int(sid),))
+    if not antes:
+        raise ValueError("Serviço inexistente.")
+    if antes[0] != "educativo":
+        raise ValueError("As propostas de consultoria ficam bloqueadas até o enquadramento profissional e regulatório ser validado.")
+    if preco is not None and preco < 0:
+        raise ValueError("O preço não pode ser negativo.")
+    with transaccao() as cur:
+        cur.execute("UPDATE servicos_catalogo SET preco = %s, nota_preco = %s, activo = %s, visivel_publico = %s, contratavel = %s WHERE id = %s",
+                    (preco, (nota_preco or "").strip() or None, bool(activo), bool(visivel), bool(contratavel), int(sid)))
+        registar_auditoria("catalogo_alterado", "servicos_catalogo", sid,
+                           antes={"preco": antes[1], "nota_preco": antes[2], "activo": antes[3], "visivel": antes[4], "contratavel": antes[5]},
+                           depois={"preco": preco, "nota_preco": nota_preco, "activo": activo, "visivel": visivel, "contratavel": contratavel}, cur=cur)
+
+
+def registar_despesa_admin(data, descricao: str, categoria: str, valor, fornecedor: str, nota: str):
+    exigir_admin()
+    v = dec(valor)
+    if v <= 0:
+        raise ValueError("O valor deve ser maior que zero.")
+    if not (descricao or "").strip():
+        raise ValueError("Indique a descrição.")
+    with transaccao() as cur:
+        cur.execute("INSERT INTO despesas_admin (data, descricao, categoria, valor, fornecedor, estado, nota, criado_por) VALUES (%s, %s, %s, %s, %s, 'Proposta', %s, %s) RETURNING id",
+                    (data, descricao.strip(), (categoria or "").strip() or None, v, (fornecedor or "").strip() or None, (nota or "").strip() or None, utilizador_actual()))
+        novo_id = cur.fetchone()[0]
+        registar_auditoria("despesa_proposta", "despesas_admin", novo_id, depois={"descricao": descricao.strip(), "valor": str(v)}, cur=cur)
+
+
+def decidir_despesa_admin(did: int, aprovar: bool, motivo: str):
+    exigir_admin()
+    if not (motivo or "").strip():
+        raise ValueError("Indique o fundamento da decisão (ex.: deliberação dos participantes).")
+    antes = consultar_um("SELECT estado FROM despesas_admin WHERE id = %s", (int(did),))
+    if not antes:
+        raise ValueError("Despesa inexistente.")
+    if antes[0] != "Proposta":
+        raise ValueError("Só se decide sobre despesas em estado «Proposta».")
+    novo = "Aprovada" if aprovar else "Rejeitada"
+    with transaccao() as cur:
+        cur.execute("UPDATE despesas_admin SET estado = %s, aprovada_por = %s, aprovada_em = NOW(), nota = COALESCE(nota || ' | ', '') || %s WHERE id = %s AND estado = 'Proposta'",
+                    (novo, utilizador_actual(), motivo.strip(), int(did)))
+        registar_auditoria("despesa_decisao", "despesas_admin", did, antes={"estado": antes[0]}, depois={"estado": novo}, motivo=motivo.strip(), cur=cur)
+
+
+def painel_educacao_servicos_admin():
+    exigir_admin()
+    sub_ped, sub_man, sub_cat = st.tabs(["Pedidos e inscrições", "Manifestações de interesse", "Catálogo"])
+    with sub_ped:
+        df = consultar_df("SELECT id, criado_em, servico_nome, nome, email, telefone, participantes, mensagem, estado_servico, estado_pagamento, "
+                          "pagamento_confirmado_por, pagamento_confirmado_em, pagamento_nota FROM pedidos_servicos ORDER BY id DESC LIMIT 500")
+        if df.empty:
+            st.info("Ainda não há pedidos.")
+        else:
+            st.dataframe(df, hide_index=True)
+            st.caption("O estado do serviço e o estado do pagamento são independentes. Um pedido ou comprovativo recebido não é pagamento: só o administrador confirma o recebimento, com nota, e fica auditado.")
+            _ids = [int(i) for i in df["id"].tolist()]
+            pid = st.selectbox("Pedido", _ids, key="adm_ped_sel",
+                               format_func=lambda i: f"#{i} · {df.loc[df['id'] == i, 'nome'].iloc[0]} · {df.loc[df['id'] == i, 'servico_nome'].iloc[0]}")
+            lin = df[df["id"] == pid].iloc[0]
+            c1, c2 = st.columns(2)
+            with c1:
+                _idx = ESTADOS_SERVICO.index(lin["estado_servico"]) if lin["estado_servico"] in ESTADOS_SERVICO else 0
+                novo = st.selectbox("Estado do serviço", ESTADOS_SERVICO, index=_idx, key=f"adm_est_{pid}")
+                if st.button("Guardar estado do serviço", key=f"adm_est_btn_{pid}"):
+                    try:
+                        actualizar_estado_pedido(int(pid), novo)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+            with c2:
+                st.markdown(f"Pagamento: **{lin['estado_pagamento']}**")
+                if lin["estado_pagamento"] != "Confirmado":
+                    nota = st.text_input("Nota do recebimento (obrigatória)", key=f"adm_pag_nota_{pid}")
+                    if st.button("Confirmar recebimento do pagamento", key=f"adm_pag_btn_{pid}"):
+                        try:
+                            confirmar_pagamento_pedido(int(pid), nota)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(str(e))
+    with sub_man:
+        dfm = consultar_df("SELECT id, criado_em, nome, email, telefone, mensagem, consentimento, estado FROM manifestacoes_interesse ORDER BY id DESC LIMIT 500")
+        st.caption("Registos de interesse. Não são admissões nem dão direito a cotas. A admissão futura continua desactivada.")
+        if dfm.empty:
+            st.info("Ainda não há manifestações de interesse.")
+        else:
+            st.dataframe(dfm, hide_index=True)
+            _mids = [int(i) for i in dfm["id"].tolist()]
+            mid = st.selectbox("Registo", _mids, key="adm_man_sel", format_func=lambda i: f"#{i} · {dfm.loc[dfm['id'] == i, 'nome'].iloc[0]}")
+            _est = dfm.loc[dfm["id"] == mid, "estado"].iloc[0]
+            nm = st.selectbox("Estado", ESTADOS_MANIFESTACAO, index=ESTADOS_MANIFESTACAO.index(_est) if _est in ESTADOS_MANIFESTACAO else 0, key=f"adm_man_est_{mid}")
+            if st.button("Guardar estado", key=f"adm_man_btn_{mid}"):
+                try:
+                    actualizar_estado_manifestacao(int(mid), nm)
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+    with sub_cat:
+        dfc = consultar_df("SELECT id, nome, tipo, preco, nota_preco, activo, visivel_publico, contratavel FROM servicos_catalogo ORDER BY ordem, id")
+        st.dataframe(dfc, hide_index=True)
+        st.caption("As propostas de consultoria ficam bloqueadas (inactivas e não contratáveis) até validar o enquadramento profissional e regulatório.")
+        _edu = dfc[dfc["tipo"] == "educativo"]
+        if not _edu.empty:
+            _sids = [int(i) for i in _edu["id"].tolist()]
+            sid = st.selectbox("Serviço educativo a editar", _sids, key="adm_cat_sel", format_func=lambda i: str(_edu.loc[_edu["id"] == i, "nome"].iloc[0]))
+            r = _edu[_edu["id"] == sid].iloc[0]
+            with st.form(f"form_cat_{sid}"):
+                sem_preco = st.checkbox("Sob consulta (sem preço)", value=pd.isna(r["preco"]))
+                preco = st.number_input("Preço por participante (Kz)", min_value=0.0, step=500.0, value=0.0 if pd.isna(r["preco"]) else float(r["preco"]))
+                nota_p = st.text_input("Nota do preço", value=str(r["nota_preco"] or ""))
+                a1, a2, a3 = st.columns(3)
+                activo = a1.checkbox("Activo", value=bool(r["activo"]))
+                visivel = a2.checkbox("Visível ao público", value=bool(r["visivel_publico"]))
+                contr = a3.checkbox("Aceita inscrições", value=bool(r["contratavel"]))
+                if st.form_submit_button("Guardar serviço"):
+                    try:
+                        actualizar_servico_catalogo(int(sid), None if sem_preco else preco, nota_p, activo, visivel, contr)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+
+
+def painel_despesas_admin():
+    exigir_admin()
+    st.caption("Despesas aprovadas do grupo (informação especializada, ferramentas, IA, contabilidade, funcionamento). Não servem para pagar aos fundadores nem para recuperar perdas históricas. "
+               "A regra de repartição dos custos deve ser aprovada pelos participantes; a aplicação não a escolhe sozinha.")
+    df = consultar_df("SELECT id, data, descricao, categoria, valor, fornecedor, estado, aprovada_por, aprovada_em, nota FROM despesas_admin ORDER BY data DESC, id DESC LIMIT 500")
+    if not df.empty:
+        st.dataframe(df, hide_index=True)
+        _tot = consultar_um("SELECT COALESCE(SUM(valor), 0) FROM despesas_admin WHERE estado = 'Aprovada'")[0]
+        st.metric("Total de despesas aprovadas", kz(_tot))
+        _pend = [int(i) for i in df.loc[df["estado"] == "Proposta", "id"].tolist()]
+        if _pend:
+            did = st.selectbox("Despesa em proposta", _pend, key="adm_desp_sel", format_func=lambda i: f"#{i} · {df.loc[df['id'] == i, 'descricao'].iloc[0]}")
+            mot = st.text_input("Fundamento da decisão (obrigatório)", key=f"adm_desp_mot_{did}")
+            b1, b2 = st.columns(2)
+            if b1.button("Aprovar", key=f"adm_desp_ok_{did}"):
+                try:
+                    decidir_despesa_admin(int(did), True, mot)
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+            if b2.button("Rejeitar", key=f"adm_desp_no_{did}"):
+                try:
+                    decidir_despesa_admin(int(did), False, mot)
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+    else:
+        st.info("Ainda não há despesas registadas.")
+    with st.expander("Registar despesa (fica como «Proposta»)"):
+        with st.form("form_despesa_admin", clear_on_submit=True):
+            d1, d2 = st.columns(2)
+            _data = d1.date_input("Data", value=datetime.now().date())
+            _valor = d2.number_input("Valor (Kz)", min_value=0.0, step=500.0)
+            _desc = st.text_input("Descrição")
+            e1, e2 = st.columns(2)
+            _cat = e1.text_input("Categoria (ex.: ferramentas, IA, contabilidade)")
+            _forn = e2.text_input("Fornecedor")
+            _nota = st.text_input("Nota / referência do documento comprovativo")
+            if st.form_submit_button("Registar proposta"):
+                try:
+                    registar_despesa_admin(_data, _desc, _cat, _valor, _forn, _nota)
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+
+
 def pagina_login():
     col_esq, col_centro, col_dir = st.columns([1, 1.4, 1])
     with col_centro:
@@ -3860,7 +4213,13 @@ def pagina_login():
 
 
 if not st.session_state["autenticado"]:
-    pagina_login()
+    _aba_entrar, _aba_edu, _aba_int = st.tabs(["🔐 Entrar", "🎓 Educação & Serviços", "🤝 Manifestação de interesse"])
+    with _aba_entrar:
+        pagina_login()
+    with _aba_edu:
+        pagina_educacao_servicos()
+    with _aba_int:
+        pagina_manifestacao_interesse()
     st.stop()
 
 # =========================================================
@@ -3877,7 +4236,7 @@ PAGINAS = [
     "🏠 Início & Análises", "📈 Cotações & Activos", "💰 Contabilidade & Finanças",
     "📊 Histórico & Relatórios", "📐 Avaliação de Activos", "💱 Conversor de Moeda",
     "🧪 Simulador de Investimento", "🧮 Regra 50/30/20",
-    "📚 Biblioteca Educativa", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos",
+    "🎓 Educação & Serviços", "📚 Biblioteca Educativa", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos",
 ]
 if st.session_state["is_admin"]:
     PAGINAS.append("🔐 Painel do Administrador")
@@ -4755,26 +5114,19 @@ elif pagina == "📚 Biblioteca Educativa":
                 st.markdown(artigo["conteudo"])   # conteúdo mantém-se em PT conforme acordado
 
 # =========================================================
-# PÁGINA: ADESÃO DE SÓCIOS
+# PÁGINA: EDUCAÇÃO & SERVIÇOS
+# =========================================================
+elif pagina == "🎓 Educação & Serviços":
+    hero("🎓 Educação & Serviços", "Formação, materiais e ferramentas educativas do APPO", badge="🇦🇴 Educação financeira · Kwanzas (Kz)")
+    pagina_educacao_servicos()
+
+# =========================================================
+# PÁGINA: MANIFESTAÇÃO DE INTERESSE (antiga «Adesão de Sócios»; a chave interna mantém-se)
 # =========================================================
 elif pagina == "🧾 Adesão de Sócios":
     tx = t()
-    hero("🧾 " + tx["nav_map"]["🧾 Adesão de Sócios"].replace("🧾 ", ""), tx["ades_hero_sub"])
-    with st.form("form_adesao", clear_on_submit=True):
-        nome        = st.text_input(tx["ades_nome"])
-        col1, col2  = st.columns(2)
-        email_ad    = col1.text_input(tx["ades_email"])
-        telefone    = col2.text_input(tx["ades_telefone"])
-        bi          = st.text_input(tx["ades_bi"])
-        contribuicao= st.number_input(tx["ades_contribuicao"], min_value=0.0, step=5000.0)
-        aceite      = st.checkbox(tx["ades_aceite"])
-        enviar      = st.form_submit_button(tx["ades_btn"])
-    if enviar:
-        if not nome or not aceite:
-            st.error(tx["ades_erro"])
-        else:
-            inserir_socio(nome, email_ad, telefone, bi, contribuicao)
-            st.success(tx["ades_sucesso"])
+    hero("🧾 " + tx["nav_map"]["🧾 Adesão de Sócios"].replace("🧾 ", ""), "Regista o teu interesse numa futura participação. Não é uma admissão.", badge="🇦🇴 APPO")
+    pagina_manifestacao_interesse()
 
 # =========================================================
 # PÁGINA: SOBRE NÓS & ESTATUTOS
@@ -4802,8 +5154,12 @@ elif pagina == "ℹ️ Sobre Nós & Estatutos":
 elif pagina == "🔐 Painel do Administrador":
     hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
 
-    aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca = st.tabs(
-        ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança"])
+    aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca, aba_edu_serv, aba_despesas = st.tabs(
+        ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança", "Educação & Serviços", "Despesas do grupo"])
+    with aba_edu_serv:
+        painel_educacao_servicos_admin()
+    with aba_despesas:
+        painel_despesas_admin()
 
     with aba_resumo:
         st.subheader("Editar Resumo Patrimonial")
