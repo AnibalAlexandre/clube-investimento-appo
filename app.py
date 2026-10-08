@@ -6,10 +6,13 @@ Aplicação web corporativa privada — Streamlit + PostgreSQL (Neon)
 
 import os
 import secrets
+import html as _html_pub
 import textwrap
 import time
+import traceback
 import urllib.parse
 from datetime import datetime
+from pathlib import Path
 
 import bcrypt
 import pandas as pd
@@ -68,7 +71,7 @@ TRADUCOES = {
             "🔐 Painel do Administrador":   "🔐 Painel do Administrador",
         },
         # ── página início ────────────────────────────────
-        "inicio_hero_sub": "APPO — Educação Financeira e Área Privada de Investimentos",
+        "inicio_hero_sub": "APPO — Capacidade Financeira Prática. Organize o seu dinheiro e tome decisões autónomas.",
         "inicio_capital_subscrito": "Capital Subscrito",
         "inicio_capital_realizado": "Capital Realizado",
         "inicio_pct_subscrito": "% do subscrito",
@@ -177,7 +180,7 @@ TRADUCOES = {
         "sim_chart_cols": {"Saldo Nominal": "Saldo Nominal", "Total Investido": "Total Investido"},
         "sim_caption1": "Saldo final em poder de compra de hoje (descontada a inflação assumida de",
         "sim_caption2": "%/ano):",
-        "sim_disclaimer": "Simulação educativa com juros compostos mensais constantes — os retornos reais dos mercados variam e não são garantidos. Não constitui aconselhamento de investimento.",
+        "sim_disclaimer": "Ambiente de treino pedagógico com dados de mercado de referência. As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.",
         "sim_partilha": "Simulei {vi} + {cm}/mês durante {a} anos a {t}%/ano = {sf} — Clube de Investimento APPO",
         # ── regra 50/30/20 ───────────────────────────────
         "r50_hero_sub": "Princípio nº 8: 50% Consumo · 30% Investimento · 20% Entesouramento",
@@ -240,7 +243,7 @@ TRADUCOES = {
         "pdf_sem_mov": "Sem movimentos registados.",
         "pdf_nome_ficheiro": "relatorio_appo_{data}.pdf",
         # ── barómetro (hero) ─────────────────────────────
-        "bodiva_badge": "🇦🇴 BODIVA · Kwanzas (Kz)",
+        "bodiva_badge": "🇦🇴 Mercado angolano · Kwanzas (Kz)",
     },
 
     # ─────────────────────────────────────────────────────
@@ -423,7 +426,7 @@ TRADUCOES = {
         "pdf_movimentos": "Recent Transactions",
         "pdf_sem_mov": "No transactions recorded.",
         "pdf_nome_ficheiro": "appo_report_{data}.pdf",
-        "bodiva_badge": "🇦🇴 BODIVA · Kwanzas (Kz)",
+        "bodiva_badge": "🇦🇴 Mercado angolano · Kwanzas (Kz)",
     },
 
     # ─────────────────────────────────────────────────────
@@ -606,7 +609,7 @@ TRADUCOES = {
         "pdf_movimentos": "Transactions Récentes",
         "pdf_sem_mov": "Aucune transaction enregistrée.",
         "pdf_nome_ficheiro": "rapport_appo_{data}.pdf",
-        "bodiva_badge": "🇦🇴 BODIVA · Kwanzas (Kz)",
+        "bodiva_badge": "🇦🇴 Mercado angolano · Kwanzas (Kz)",
     },
 
     # ─────────────────────────────────────────────────────
@@ -789,7 +792,7 @@ TRADUCOES = {
         "pdf_movimentos": "Transacciones Recientes",
         "pdf_sem_mov": "Sin transacciones registradas.",
         "pdf_nome_ficheiro": "informe_appo_{data}.pdf",
-        "bodiva_badge": "🇦🇴 BODIVA · Kwanzas (Kz)",
+        "bodiva_badge": "🇦🇴 Mercado angolano · Kwanzas (Kz)",
     },
 
     # ─────────────────────────────────────────────────────
@@ -972,7 +975,7 @@ TRADUCOES = {
         "pdf_movimentos": "近期交易",
         "pdf_sem_mov": "暂无交易记录。",
         "pdf_nome_ficheiro": "appo_报告_{data}.pdf",
-        "bodiva_badge": "🇦🇴 BODIVA · 宽扎（Kz）",
+        "bodiva_badge": "🇦🇴 安哥拉市场 · 宽扎（Kz）",
     },
 }
 
@@ -990,50 +993,90 @@ def t() -> dict:
 # =========================================================
 COR_MARCA = "#7C1F3E"
 
-CSS_APPO = f"""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Baloo+2:wght@600;700&display=swap');
-[data-testid="stAppViewContainer"] {{ background: #FBF8F6; }}
-button[kind="primary"], button[data-testid="stBaseButton-primary"] {{ background: {COR_MARCA}; border-color: {COR_MARCA}; color: #FFFFFF; }}
-button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover {{ background: #5E1830; border-color: #5E1830; color: #FFFFFF; }}
-button[data-baseweb="tab"][aria-selected="true"] {{ color: {COR_MARCA}; }}
-div[data-baseweb="tab-highlight"] {{ background-color: {COR_MARCA}; }}
-div[data-testid="stMetric"] {{ background: linear-gradient(135deg, #ffffff 0%, #F6EFF2 100%); border: 1px solid #ECDEE3; border-left: 4px solid {COR_MARCA}; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(124,31,62,0.08); }}
-.appo-hero {{ position: relative; overflow: hidden; background: linear-gradient(120deg, #4A1226 0%, {COR_MARCA} 55%, #A6486A 100%); color: #FFFFFF; border-radius: 14px; padding: 24px 30px; margin-bottom: 18px; display: flex; align-items: center; gap: 16px; }}
-.appo-hero::before {{ content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 2px, transparent 2px, transparent 16px); pointer-events: none; }}
-.appo-hero > * {{ position: relative; z-index: 1; }}
-.appo-hero h1 {{ margin: 0; font-size: 1.6rem; line-height: 1.2; }}
-.appo-hero p {{ margin: 4px 0 0 0; opacity: 0.9; font-size: 0.9rem; }}
-.appo-badge {{ display: inline-block; background: rgba(255,255,255,0.18); padding: 3px 11px; border-radius: 999px; font-size: 0.72rem; margin-top: 10px; letter-spacing: 0.3px; }}
-.appo-sidebar-header {{ display:flex; align-items:center; gap:12px; margin-bottom: 4px; }}
-.appo-sidebar-sub {{ font-size: 0.66rem; color:#9a8a90; letter-spacing:1.5px; text-transform:uppercase; margin:0; }}
-.appo-sidebar-word {{ font-family: 'Luckiest Guy', cursive; font-weight: 400; font-size: 1.7rem; color: {COR_MARCA}; line-height: 1; margin-top: 2px; }}
-.appo-premium-lock {{ background: #FBF4F0; border: 1px dashed {COR_MARCA}; border-radius: 10px; padding: 18px 20px; text-align: center; }}
-.appo-wordmark {{ font-family: 'Luckiest Guy', cursive; font-weight: 400; letter-spacing: 1px; font-size: 3.4rem; color: {COR_MARCA}; text-align: center; margin-top: 4px; line-height: 1; text-shadow: 1px 2px 0 rgba(124,31,62,0.18); }}
-.appo-indicador-nota {{ background: #F6EFF2; border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; color: #4A3038; margin: 6px 0 4px 0; }}
-.appo-categoria-banner {{ border-radius: 10px 10px 0 0; padding: 12px 18px; display: flex; align-items: center; gap: 12px; margin: -1rem -1rem 12px -1rem; }}
-.appo-categoria-banner span {{ color: #fff; font-weight: 700; letter-spacing: 0.6px; font-size: 0.78rem; text-transform: uppercase; }}
-.appo-capa {{ position: relative; border-radius: 14px; overflow: hidden; margin-bottom: 18px; background-size: cover; background-position: center; display: flex; align-items: flex-end; }}
-.appo-capa-overlay {{ position: absolute; inset: 0; }}
-.appo-capa span {{ position: relative; z-index: 1; color: #fff; font-weight: 700; padding: 16px 22px; font-size: 1.05rem; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }}
-.appo-categoria-foto {{ position: relative; border-radius: 10px 10px 0 0; margin: -1rem -1rem 12px -1rem; height: 140px; background-size: cover; background-position: center; display: flex; align-items: flex-end; }}
-.appo-categoria-foto-overlay {{ position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%); border-radius: 10px 10px 0 0; }}
-.appo-categoria-foto span {{ position: relative; z-index: 1; color: #fff; font-weight: 700; padding: 12px 18px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; }}
-.appo-ticker-wrap {{ overflow: hidden; white-space: nowrap; background: transparent; border-bottom: 1px solid #ECDEE3; padding: 8px 0; margin-bottom: 16px; }}
-.appo-ticker-move {{ display: inline-block; padding-left: 100%; animation: appo-scroll 135s linear infinite; font-family: monospace; font-size: 0.82rem; }}
-@keyframes appo-scroll {{ 0% {{ transform: translate(0,0); }} 100% {{ transform: translate(-100%,0); }} }}
-.appo-share a {{ text-decoration:none; color:#fff; padding:6px 14px; border-radius:8px; font-size:0.82rem; font-weight:600; }}
-</style>
+CSS_APPO_BASE = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --appo-vinho: #7C1F3E;
+  --appo-vinho-esc: #5E1830;
+  --appo-navy: #1E293B;
+  --appo-cinza: #F8FAFC;
+  --appo-borda: #E2E8F0;
+  --appo-suave: #64748B;
+}
+
+/* Tipografia corporativa (sem tocar nos ícones do Streamlit) */
+.stApp, .stApp p, .stApp li, .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
+.stApp button, .stApp input, .stApp textarea, .stApp [data-baseweb="tab"], .stApp [data-testid="stMetricValue"],
+.stApp [data-testid="stMetricLabel"], .stApp [data-testid="stCaptionContainer"] {
+  font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+.stApp h1, .stApp h2, .stApp h3, .stApp h4 { color: var(--appo-navy); letter-spacing: -0.01em; font-weight: 700; }
+
+[data-testid="stAppViewContainer"] { background: var(--appo-cinza); }
+[data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid var(--appo-borda); }
+[data-testid="stHeader"] { background: transparent; }
+
+/* Botões e separadores */
+button[kind="primary"], button[data-testid="stBaseButton-primary"] { background: var(--appo-vinho); border-color: var(--appo-vinho); color: #FFFFFF; font-weight: 600; }
+button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover { background: var(--appo-vinho-esc); border-color: var(--appo-vinho-esc); color: #FFFFFF; }
+button[data-baseweb="tab"][aria-selected="true"] { color: var(--appo-vinho); }
+div[data-baseweb="tab-highlight"] { background-color: var(--appo-vinho); }
+
+/* Indicadores: cartões limpos, sem gradientes nem sombras */
+div[data-testid="stMetric"] { background: #FFFFFF; border: 1px solid var(--appo-borda); border-radius: 10px; padding: 14px 16px; }
+div[data-testid="stMetricLabel"] { color: var(--appo-suave); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+div[data-testid="stMetricValue"] { color: var(--appo-navy); font-weight: 700; font-variant-numeric: tabular-nums; }
+div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
+
+/* Cabeçalho de página */
+.appo-hero { background: var(--appo-navy); color: #FFFFFF; border-left: 5px solid var(--appo-vinho); border-radius: 12px; padding: 22px 28px; margin-bottom: 18px; display: flex; align-items: center; gap: 18px; }
+.appo-hero h1 { margin: 0; font-size: 1.55rem; line-height: 1.25; color: #FFFFFF; font-weight: 700; }
+.appo-hero p { margin: 4px 0 0 0; color: #CBD5E1; font-size: 0.92rem; }
+.appo-badge { display: inline-block; border: 1px solid #475569; color: #E2E8F0; padding: 2px 10px; border-radius: 999px; font-size: 0.72rem; margin-top: 10px; letter-spacing: 0.02em; }
+
+/* Marca */
+.appo-sidebar-header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.appo-sidebar-sub { font-size: 0.66rem; color: var(--appo-suave); letter-spacing: 0.12em; text-transform: uppercase; margin: 0; }
+.appo-sidebar-word { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 1.4rem; letter-spacing: 0.18em; color: var(--appo-vinho); line-height: 1.1; margin-top: 2px; }
+.appo-wordmark { font-family: 'Inter', sans-serif; font-weight: 800; letter-spacing: 0.22em; font-size: 2.6rem; color: var(--appo-vinho); text-align: center; margin-top: 4px; line-height: 1.1; }
+
+/* Blocos de apoio */
+.appo-premium-lock { background: #FFFFFF; border: 1px dashed var(--appo-vinho); border-radius: 10px; padding: 18px 20px; text-align: center; }
+.appo-indicador-nota { background: #F1F5F9; border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; color: #334155; margin: 6px 0 4px 0; }
+.appo-categoria-banner { border-radius: 10px 10px 0 0; padding: 10px 18px; display: flex; align-items: center; gap: 12px; margin: -1rem -1rem 12px -1rem; }
+.appo-categoria-banner span { color: #FFFFFF; font-weight: 700; letter-spacing: 0.06em; font-size: 0.74rem; text-transform: uppercase; }
+.appo-capa { background: var(--appo-navy); border-left: 5px solid var(--appo-vinho); border-radius: 12px; margin-bottom: 18px; display: flex; align-items: center; }
+.appo-capa span { color: #FFFFFF; font-weight: 600; padding: 16px 24px; font-size: 1.05rem; }
+.appo-card { background: #FFFFFF; border: 1px solid var(--appo-borda); border-radius: 12px; padding: 16px 18px; }
+.appo-kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--appo-suave); font-weight: 600; }
+
+/* Cotações em fita */
+.appo-ticker-wrap { overflow: hidden; white-space: nowrap; background: #FFFFFF; border-top: 1px solid var(--appo-borda); border-bottom: 1px solid var(--appo-borda); padding: 8px 0; margin-bottom: 16px; }
+.appo-ticker-move { display: inline-block; padding-left: 100%; animation: appo-scroll 135s linear infinite; font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; font-size: 0.8rem; }
+@keyframes appo-scroll { 0% { transform: translate(0,0); } 100% { transform: translate(-100%,0); } }
+
+.appo-share a { text-decoration: none; color: #FFFFFF; padding: 6px 14px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; }
 """
-st.markdown(CSS_APPO, unsafe_allow_html=True)
+
+
+def _carregar_css() -> str:
+    """Usa appo.css (ao lado do app.py) se existir; caso contrário, o CSS incluído acima."""
+    try:
+        f = Path(__file__).with_name("appo.css")
+        if f.exists():
+            return f.read_text(encoding="utf-8")
+    except Exception:
+        pass
+    return CSS_APPO_BASE
+
+
+st.markdown(f"<style>{_carregar_css()}</style>", unsafe_allow_html=True)
 
 
 def logo_svg(tamanho: int = 46, cor: str = COR_MARCA) -> str:
     return (
-        f'<svg width="{tamanho}" height="{tamanho}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
-        f'<defs><filter id="sombraAPPO" x="-30%" y="-30%" width="160%" height="160%">'
-        f'<feDropShadow dx="0" dy="1.5" stdDeviation="1.6" flood-color="#000000" flood-opacity="0.28"/></filter></defs>'
-        f'<g filter="url(#sombraAPPO)">'
+        f'<svg width="{tamanho}" height="{tamanho}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g>'
         f'<circle cx="50" cy="40" r="31" fill="none" stroke="{cor}" stroke-width="7.5"/>'
         f'<line x1="50" y1="40" x2="50" y2="19" stroke="{cor}" stroke-width="6.5" stroke-linecap="round"/>'
         f'<line x1="50" y1="40" x2="65" y2="51" stroke="{cor}" stroke-width="6.5" stroke-linecap="round"/>'
@@ -1050,35 +1093,30 @@ def logo_com_texto(tamanho: int = 130, cor: str = COR_MARCA):
     render_html(f'<div style="text-align:center; margin-top:10px;">{logo_svg(tamanho, cor)}<div class="appo-wordmark">APPO</div></div>')
 
 
+def _esc(v) -> str:
+    """Escapa texto antes de o inserir em HTML."""
+    return _html_pub.escape(str(v if v is not None else ""))
+
+
 def hero(titulo: str, subtitulo: str, badge: str = None):
     if badge is None:
-        badge = t().get("bodiva_badge", "🇦🇴 BODIVA · Kwanzas (Kz)")
-    render_html(f'<div class="appo-hero">{logo_svg(58, "#FFFFFF")}<div><h1>{titulo}</h1><p>{subtitulo}</p><span class="appo-badge">{badge}</span></div></div>')
+        badge = t().get("bodiva_badge", "🇦🇴 Kwanzas (Kz)")
+    render_html(f'<div class="appo-hero">{logo_svg(48, "#FFFFFF")}<div><h1>{_esc(titulo)}</h1><p>{_esc(subtitulo)}</p><span class="appo-badge">{_esc(badge)}</span></div></div>')
 
 
 def banner_capa(imagem_url: str, texto: str, altura: int = 170, escurecimento: float = 0.5):
-    render_html(
-        f"""
-        <div class="appo-capa" style="height:{altura}px; background-image:url('{imagem_url}');">
-            <div class="appo-capa-overlay" style="background:linear-gradient(180deg, rgba(20,5,12,0.05) 0%, rgba(20,5,12,{escurecimento}) 100%);"></div>
-            <span>{texto}</span>
-        </div>
-        """
-    )
+    """Faixa institucional sem imagem de fundo (os parâmetros de imagem mantêm-se por compatibilidade)."""
+    render_html(f'<div class="appo-capa" style="min-height:{max(56, int(altura * 0.45))}px;"><span>{_esc(texto)}</span></div>')
 
 
-CORES_CATEGORIA = {"Institucional": COR_MARCA, "Educação": "#1F6F5C", "Análise de Mercado": "#0B3D91", "Referência": "#8A6A26"}
+CORES_CATEGORIA = {"Institucional": COR_MARCA, "Educação": "#1F6F5C", "Análise de Mercado": "#1E293B", "Referência": "#8A6A26"}
 ICONES_CATEGORIA = {"Institucional": "🏛️", "Educação": "📖", "Análise de Mercado": "📊", "Referência": "📎"}
 
 
 def banner_categoria(categoria: str):
     icone = ICONES_CATEGORIA.get(categoria, "📄")
-    imagem = IMAGENS_CATEGORIA.get(categoria)
-    if imagem:
-        render_html(f'<div class="appo-categoria-foto" style="background-image:url(\'{imagem}\');"><div class="appo-categoria-foto-overlay"></div><span>{icone} {categoria}</span></div>')
-    else:
-        cor = CORES_CATEGORIA.get(categoria, COR_MARCA)
-        render_html(f'<div class="appo-categoria-banner" style="background:linear-gradient(120deg, {cor}cc, {cor});"><span style="font-size:1.3rem;">{icone}</span><span>{categoria}</span></div>')
+    cor = CORES_CATEGORIA.get(categoria, COR_MARCA)
+    render_html(f'<div class="appo-categoria-banner" style="background:{cor};"><span style="font-size:1.1rem;">{icone}</span><span>{_esc(categoria)}</span></div>')
 
 
 def nota_indicador(texto: str):
@@ -1092,7 +1130,7 @@ def ticker_tape(df_activos: pd.DataFrame):
     for _, a in df_activos.iterrows():
         v = float(a["variacao"])
         cor = "#16A34A" if v > 0 else ("#DC2626" if v < 0 else "#6B7280")
-        itens.append(f'<span style="color:{cor}; margin-right:36px;">{a["ticker"] or a["nome"]} &nbsp;{kz(a["preco"])} &nbsp;({pct_bruto(v)})</span>')
+        itens.append(f'<span style="color:{cor}; margin-right:36px;">{_esc(a["ticker"] or a["nome"])} &nbsp;{kz(a["preco"])} &nbsp;({pct_bruto(v)})</span>')
     conteudo = "".join(itens) * 3
     render_html(f'<div class="appo-ticker-wrap"><div class="appo-ticker-move"><span>{conteudo}</span></div></div>')
 
@@ -1288,11 +1326,13 @@ def obter_opv(ticker: str):
 
 
 def guardar_opv(ticker: str, preco: float, data=None):
+    exigir_admin()
     executar("INSERT INTO opv_activos (ticker, preco, data) VALUES (%s, %s, %s) "
              "ON CONFLICT (ticker) DO UPDATE SET preco = EXCLUDED.preco, data = EXCLUDED.data", (ticker.strip().upper(), preco, data))
 
 
 def eliminar_opv(ticker: str):
+    exigir_admin()
     executar("DELETE FROM opv_activos WHERE ticker = %s", (ticker,))
 
 
@@ -1315,6 +1355,7 @@ def obter_serie_cotacao(ticker: str, periodo: str) -> pd.DataFrame:
 
 def importar_historico_cotacoes(df_ficheiro: pd.DataFrame, ticker_forcado: str = "") -> tuple:
     """Importa linhas (data, ticker, preço) de um CSV/Excel. Devolve (linhas_importadas, linhas_ignoradas)."""
+    exigir_admin()
     import unicodedata
 
     def norm(c):
@@ -1801,6 +1842,7 @@ def inicializar_bd():
         ("demonstracoes_financeiras", "Leitura de demonstrações financeiras", "Como ler o balanço, a demonstração de resultados e os principais indicadores, com exercícios.", None, "Sob consulta", "educativo", True, True, False, 2),
         ("valuation_educativo", "Métodos de valuation (educativo)", "Os métodos explicados com exercícios e pressupostos. Não inclui recomendações de compra ou venda.", None, "Sob consulta", "educativo", True, True, False, 3),
         ("sessoes_instituicoes", "Sessões para empresas, escolas e associações", "Sessões educativas à medida do público, incluindo planeamento financeiro e a regra 50/30/20.", None, "Sob consulta", "educativo", True, True, False, 4),
+        ("programa_capacidade_financeira", "Programa de Capacidade Financeira", "Percurso com diagnóstico, treino prático e acompanhamento da evolução, baseado no modelo de Kempson et al. (conhecimento, atitude e comportamento em cinco domínios).", None, "Sob consulta", "educativo", True, True, False, 5),
         ("priv_analise_accao", "Análise de uma acção (proposta privada)", "Proposta interna; não activa até validar o enquadramento profissional e regulatório.", 60000, "Proposta privada", "consultoria", False, False, False, 10),
         ("priv_relatorio_completo", "Relatório de valuation completo (proposta privada)", "Proposta interna; não activa até validar o enquadramento profissional e regulatório.", 180000, "Proposta privada", "consultoria", False, False, False, 11),
         ("priv_consultoria_mensal", "Consultoria contínua mensal (proposta privada)", "Proposta interna; não activa até validar o enquadramento profissional e regulatório.", 120000, "Proposta privada (por mês)", "consultoria", False, False, False, 12),
@@ -1829,6 +1871,8 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS historico_cambio_aoa (registado_em DATE PRIMARY KEY, usd NUMERIC, eur NUMERIC, gbp NUMERIC, zar NUMERIC, cny NUMERIC, brl NUMERIC)""")
     executar("""CREATE TABLE IF NOT EXISTS historico_indice_mercado (registado_em DATE PRIMARY KEY, indice_variacao NUMERIC NOT NULL)""")
 
+    executar("""CREATE TABLE IF NOT EXISTS capacidade_diagnosticos (id SERIAL PRIMARY KEY, conta_email TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), versao TEXT, respostas TEXT, resultados TEXT)""")
+    executar("CREATE INDEX IF NOT EXISTS ix_cap_diag_conta ON capacidade_diagnosticos (conta_email, criado_em)")
     if consultar_um("SELECT COUNT(*) FROM contas")[0] == 0:
         executar("INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)",
                  ("Administrador", ADMIN_EMAIL_INICIAL, hash_password(ADMIN_PASSWORD_INICIAL), True))
@@ -1953,9 +1997,11 @@ def obter_conta_por_email(email: str):
     return consultar_um("SELECT id, nome, email, password_hash, is_admin, is_premium, is_participante FROM contas WHERE email = %s", (email,))
 
 def inserir_conta(nome, email, password, is_admin):
+    exigir_admin()
     executar("INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)", (nome, email, hash_password(password), is_admin))
 
 def listar_contas() -> pd.DataFrame:
+    exigir_admin()
     return consultar_df("SELECT id, nome, email, is_admin, is_premium, is_participante, criado_em FROM contas ORDER BY criado_em DESC")
 
 def contar_admins() -> int:
@@ -1976,17 +2022,20 @@ def definir_participante(conta_id: int, valor: bool):
                        antes={"is_participante": bool(antes[0]) if antes else None}, depois={"is_participante": valor})
 
 def repor_password(conta_id: int) -> str:
+    exigir_admin()
     nova_password = secrets.token_urlsafe(9)
     executar("UPDATE contas SET password_hash = %s WHERE id = %s", (hash_password(nova_password), conta_id))
     return nova_password
 
 def eliminar_conta(conta_id: int):
+    exigir_admin()
     executar("DELETE FROM contas WHERE id = %s", (conta_id,))
 
 def registar_acesso(email: str, sucesso: bool):
     executar("INSERT INTO log_acessos (email, sucesso) VALUES (%s, %s)", (email, sucesso))
 
 def obter_log_acessos() -> pd.DataFrame:
+    exigir_admin()
     return consultar_df("SELECT email, sucesso, criado_em FROM log_acessos ORDER BY criado_em DESC LIMIT 50")
 
 
@@ -2013,11 +2062,13 @@ def obter_historico_patrimonio() -> pd.DataFrame:
 
 
 def obter_historico_patrimonio_admin(limite: int = 40) -> pd.DataFrame:
+    exigir_admin()
     return consultar_df("SELECT id, registado_em, capital_social, investimentos, reservas FROM historico_patrimonio "
                         "ORDER BY registado_em DESC LIMIT %s", (int(limite),))
 
 
 def eliminar_registo_historico(registo_id: int):
+    exigir_admin()
     executar("DELETE FROM historico_patrimonio WHERE id = %s", (int(registo_id),))
 
 
@@ -2493,6 +2544,7 @@ def _pdf_kpis_vup(pdf, info):
 
 # ---------------- Movimentos ----------------
 def inserir_movimento(tipo, descricao, montante, data_movimento):
+    exigir_admin()
     executar("INSERT INTO movimentos (tipo, descricao, montante, data_movimento) VALUES (%s, %s, %s, %s)", (tipo, descricao, montante, data_movimento))
 
 def obter_movimentos() -> pd.DataFrame:
@@ -2934,6 +2986,7 @@ def substituir_carteira_real(df: pd.DataFrame):
     valor TOTAL pago na aquisição (não o preço unitário — o relatório divide
     por qtd para obter o preço médio, tal como fazia o dicionário fixo antigo).
     """
+    exigir_admin()
     executar("DELETE FROM carteira_real")
     for _, linha in df.iterrows():
         nome = str(linha.get("nome", "")).strip()
@@ -3002,6 +3055,7 @@ def substituir_activos(df: pd.DataFrame):
       - Variações acima de ±500% num só dia geram aviso visível (tipicamente
         um erro de dígitos no preço introduzido).
     """
+    exigir_admin()
     df_anterior = obter_activos()
     hoje = datetime.now().date()
 
@@ -3120,9 +3174,11 @@ def obter_artigos(categoria: str = None) -> pd.DataFrame:
     return consultar_df("SELECT id, titulo, categoria, conteudo, criado_em FROM artigos ORDER BY criado_em DESC")
 
 def inserir_artigo(titulo, categoria, conteudo):
+    exigir_admin()
     executar("INSERT INTO artigos (titulo, categoria, conteudo) VALUES (%s, %s, %s)", (titulo, categoria, conteudo))
 
 def eliminar_artigo(artigo_id: int):
+    exigir_admin()
     executar("DELETE FROM artigos WHERE id = %s", (artigo_id,))
 
 
@@ -3131,6 +3187,7 @@ PDF_TAMANHO_MAX = 15 * 1024 * 1024  # 15 MB
 
 
 def inserir_documento(titulo, categoria, descricao, nome_ficheiro, conteudo: bytes, tipo="biblioteca"):
+    exigir_admin()
     executar(
         "INSERT INTO documentos_pdf (titulo, categoria, descricao, nome_ficheiro, tipo, tamanho, conteudo) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s)",
@@ -3144,6 +3201,7 @@ def obter_documentos(tipo="biblioteca") -> pd.DataFrame:
 
 
 def eliminar_documento(doc_id: int):
+    exigir_admin()
     executar("DELETE FROM documentos_pdf WHERE id = %s", (int(doc_id),))
 
 
@@ -3211,6 +3269,7 @@ def inserir_socio(nome, email, telefone, bi, contribuicao_inicial):
     executar("INSERT INTO socios (nome, email, telefone, bi, contribuicao_inicial) VALUES (%s, %s, %s, %s, %s)", (nome, email, telefone, bi, contribuicao_inicial))
 
 def obter_socios() -> pd.DataFrame:
+    exigir_admin()
     return consultar_df("SELECT nome, email, telefone, bi, contribuicao_inicial, criado_em FROM socios ORDER BY criado_em DESC")
 
 def extrair_texto_pdf(ficheiro) -> str:
@@ -3752,6 +3811,7 @@ def obter_premissas_macro() -> dict:
             "beta_banca": float(linha[3]), "beta_telecom": float(linha[4]), "beta_outros": float(linha[5])}
 
 def actualizar_premissas_macro(inflacao, rf, erp, beta_banca, beta_telecom, beta_outros):
+    exigir_admin()
     executar("UPDATE premissas_macro SET inflacao=%s, taxa_livre_risco=%s, premio_risco=%s, beta_banca=%s, beta_telecom=%s, beta_outros=%s, actualizado_em=NOW() WHERE id = 1",
              (inflacao, rf, erp, beta_banca, beta_telecom, beta_outros))
 
@@ -3759,6 +3819,7 @@ def obter_avaliacoes() -> pd.DataFrame:
     return consultar_df("SELECT id, empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, crescimento_g, actualizado_em FROM avaliacoes ORDER BY empresa")
 
 def substituir_avaliacoes(df: pd.DataFrame):
+    exigir_admin()
     executar("DELETE FROM avaliacoes")
     for _, linha in df.iterrows():
         empresa = str(linha.get("empresa", "")).strip()
@@ -3837,11 +3898,9 @@ import re as _re_pub
 TEXTO_MANIFESTACAO = ("Manifestação de interesse — este pedido não constitui admissão, atribuição de cotas nem autorização para transferir dinheiro. "
                       "As novas admissões dependem da definição e validação da estrutura aplicável.")
 MSG_INSCRICAO = "Inscrição recebida. A confirmação e as instruções de pagamento serão comunicadas posteriormente."
-AVISO_EDUCACAO = ("**Aviso importante.** As actividades do APPO são educativas e informativas. Não prestamos recomendações personalizadas de compra ou venda, "
-                  "não gerimos carteiras, não executamos operações em nome dos alunos, não pedimos palavras-passe de homebrokers e não recebemos dinheiro para comprar activos por ninguém. "
-                  "O APPO não é uma entidade autorizada, registada ou supervisionada pela CMC, nem parceiro oficial da BODIVA ou de qualquer correctora. "
-                  "Comprar uma formação ou pagar uma mensalidade educativa **não** atribui cotas, dividendos, direitos de voto nem participação no património de investimento. "
-                  "Nada aqui garante rendimentos ou resultados.")
+AVISO_EDUCACAO = ("Conteúdo educativo e informativo, sem recomendações personalizadas de compra ou venda. "
+                  "A inscrição num serviço educativo não representa subscrição de valores mobiliários nem atribuição de participação patrimonial. "
+                  "O APPO é uma iniciativa independente de educação financeira, sem vínculo com a BODIVA, a CMC ou correctoras.")
 ESTADOS_SERVICO = ["Recebido", "Confirmado", "Cancelado", "Concluído"]
 ESTADOS_MANIFESTACAO = ["Recebida", "Em análise", "Arquivada"]
 ESTADOS_DESPESA = ["Proposta", "Aprovada", "Rejeitada"]
@@ -3894,7 +3953,7 @@ def pagina_educacao_servicos():
     st.markdown("### 🎓 APPO — Educação Financeira")
     st.write("O APPO nasceu em Benguela, em 2024, como um grupo de estudo e prática de investimento. Aqui encontra formação, guias e ferramentas educativas "
              "sobre o mercado angolano: BODIVA, acções, dividendos, riscos e comissões, leitura de demonstrações financeiras, valuation com exercícios e planeamento financeiro (regra 50/30/20).")
-    st.info(AVISO_EDUCACAO)
+    st.caption(AVISO_EDUCACAO)
     st.markdown("#### Formação e workshops")
     try:
         df = obter_servicos_publicos()
@@ -3944,8 +4003,8 @@ def pagina_educacao_servicos():
 
 def pagina_manifestacao_interesse():
     st.markdown("### 🤝 Manifestação de interesse")
-    st.warning(TEXTO_MANIFESTACAO)
-    st.caption("Nesta fase não pedimos capital, documentos de identificação nem comprovativos, e não há instruções de transferência.")
+    st.info(TEXTO_MANIFESTACAO)
+    st.caption("Nesta fase não pedimos capital, documentos de identificação nem comprovativos.")
     with st.form("form_manifestacao", clear_on_submit=True):
         nome = st.text_input("Nome", max_chars=120)
         c1, c2 = st.columns(2)
@@ -4181,6 +4240,515 @@ def painel_despesas_admin():
                     st.error(str(e))
 
 
+# =========================================================
+# CAPACIDADE FINANCEIRA — diagnóstico, treino e ferramentas
+# Modelo de Kempson et al. (2005): 3 componentes (conhecimento, atitude, comportamento) × 5 domínios.
+# Instrumento educativo; não é uma escala psicometricamente validada.
+# =========================================================
+DOMINIOS_CF = {
+    "D1": "Fazer face às despesas",
+    "D2": "Manter o controlo",
+    "D3": "Planear o futuro",
+    "D4": "Escolher produtos",
+    "D5": "Manter-se informado e obter ajuda",
+}
+COMPONENTES_CF = {"K": "Conhecimento", "A": "Atitude e confiança", "B": "Comportamento"}
+ESCALA_FREQ = ["Nunca", "Raramente", "Às vezes", "Frequentemente", "Sempre"]
+ESCALA_CONC = ["Discordo totalmente", "Discordo", "Neutro", "Concordo", "Concordo totalmente"]
+_NAO_SEI = "Não sei"
+
+ITENS_CF = [
+    # ---- Conhecimento (resposta certa/errada) ----
+    {"id": "k1", "dom": "D2", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Depositou 500.000 Kz numa conta com juro de 5% ao ano. Ao fim de 2 anos, sem levantamentos, o saldo será:",
+     "opcoes": ["Exactamente 550.000 Kz", "Mais de 550.000 Kz", "Menos de 550.000 Kz", _NAO_SEI]},
+    {"id": "k2", "dom": "D1", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Se a inflação anual for 10% e o juro da sua poupança for 6%, ao fim de um ano o poder de compra do dinheiro depositado:",
+     "opcoes": ["Aumenta", "Diminui", "Permanece igual", _NAO_SEI]},
+    {"id": "k3", "dom": "D3", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Diversificar uma carteira de investimentos significa:",
+     "opcoes": ["Aplicar todo o capital num único activo de baixo risco", "Distribuir o capital por diferentes activos para reduzir o risco total",
+                "Aplicar apenas em activos de elevada rentabilidade esperada", _NAO_SEI]},
+    {"id": "k4", "dom": "D3", "comp": "K", "tipo": "mc", "correcta": 0,
+     "texto": "Em geral, a relação entre risco e retorno esperado de um investimento é:",
+     "opcoes": ["Maior risco tende a acompanhar maior retorno esperado", "Menor risco tende a acompanhar maior retorno esperado",
+                "Não existe qualquer relação", _NAO_SEI]},
+    {"id": "k5", "dom": "D4", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "O que é um dividendo?",
+     "opcoes": ["Uma taxa cobrada pelo banco pela manutenção da conta", "Uma parte dos lucros de uma empresa distribuída aos seus accionistas",
+                "O valor nominal de uma obrigação do tesouro", _NAO_SEI]},
+    {"id": "k6", "dom": "D4", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Os Bilhetes do Tesouro (BT) emitidos pelo Estado angolano são:",
+     "opcoes": ["Acções de empresas públicas cotadas na BODIVA",
+                "Títulos de dívida pública de curto prazo (menos de 1 ano), remunerados por desconto",
+                "Depósitos a prazo garantidos pelo Banco Nacional de Angola", _NAO_SEI]},
+    {"id": "k7", "dom": "D5", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Qual é a entidade reguladora e supervisora do mercado de capitais angolano?",
+     "opcoes": ["Banco Nacional de Angola (BNA)", "Comissão do Mercado de Capitais (CMC)", "Ministério das Finanças (MINFIN)", _NAO_SEI]},
+    {"id": "k8", "dom": "D5", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Para um investidor individual comprar e vender títulos na BODIVA é necessário, em regra:",
+     "opcoes": ["Ter conta directamente na BODIVA, sem intermediários", "Recorrer a uma sociedade correctora autorizada pela CMC",
+                "Ser funcionário de uma instituição financeira", _NAO_SEI]},
+    # ---- Atitude e confiança (concordância 1–5) ----
+    {"id": "a1", "dom": "D1", "comp": "A", "tipo": "conc", "texto": "Sinto-me confiante para equilibrar o meu orçamento mesmo quando o rendimento varia."},
+    {"id": "a2", "dom": "D2", "comp": "A", "tipo": "conc", "texto": "Sei, em cada momento, quanto gasto e para onde vai o meu dinheiro."},
+    {"id": "a3", "dom": "D3", "comp": "A", "tipo": "conc", "texto": "Sinto-me capaz de planear o meu futuro financeiro (reserva, objectivos, investimento)."},
+    {"id": "a4", "dom": "D4", "comp": "A", "tipo": "conc", "texto": "Sei escolher produtos financeiros adequados ao meu perfil e aos meus objectivos."},
+    {"id": "a5", "dom": "D5", "comp": "A", "tipo": "conc", "texto": "Sei como proceder, na prática, para começar a investir hoje."},
+    {"id": "a6", "dom": "D4", "comp": "A", "tipo": "conc", "meta": True, "texto": "Considero que compreendo bem o que são os Bilhetes do Tesouro."},
+    # ---- Comportamento (frequência / concordância 1–5) ----
+    {"id": "b1", "dom": "D1", "comp": "B", "tipo": "freq", "texto": "Consigo cobrir as despesas do mês sem recorrer a empréstimos ou dívidas."},
+    {"id": "b2", "dom": "D2", "comp": "B", "tipo": "freq", "texto": "Registo as minhas receitas e despesas (caderno, folha de cálculo ou aplicação)."},
+    {"id": "b3", "dom": "D2", "comp": "B", "tipo": "freq", "texto": "Pago as contas e as dívidas dentro do prazo."},
+    {"id": "b4", "dom": "D3", "comp": "B", "tipo": "conc", "texto": "Tenho uma reserva de emergência para pelo menos 3 meses de despesas essenciais."},
+    {"id": "b5", "dom": "D3", "comp": "B", "tipo": "freq", "texto": "Poupo uma parte do meu rendimento todos os meses."},
+    {"id": "b6", "dom": "D4", "comp": "B", "tipo": "freq", "texto": "Antes de contratar um produto financeiro, comparo custos (comissões, taxas) e condições."},
+    {"id": "b7", "dom": "D5", "comp": "B", "tipo": "freq", "texto": "Procuro informação em fontes fiáveis antes de tomar uma decisão financeira importante."},
+]
+_ITEM_CF = {i["id"]: i for i in ITENS_CF}
+
+ACOES_CF = {
+    ("D1", "K"): ("Perceba como a inflação corrói o poder de compra e porque é que o rendimento real é o que conta.", "Reserva de emergência e inflação"),
+    ("D1", "A"): ("Treine com números: calcule o seu rendimento prudente e veja que o essencial fica coberto mesmo no pior mês.", "Orçamento com rendimento variável"),
+    ("D1", "B"): ("Defina um «ordenado» mensal estável a partir do rendimento prudente e guarde o excedente dos meses melhores.", "Orçamento com rendimento variável"),
+    ("D2", "K"): ("Reveja juros simples e compostos e veja o efeito do tempo no simulador de juros compostos.", "Simulador de Investimento"),
+    ("D2", "A"): ("Faça 30 dias de registo de todas as despesas: a confiança vem de conhecer os números.", "Regra 50/30/20 (orçamento mensal)"),
+    ("D2", "B"): ("Dedique 10 minutos por semana a registar receitas e despesas e pague as contas no dia em que recebe.", "Regra 50/30/20 (orçamento mensal)"),
+    ("D3", "K"): ("Estude diversificação e a relação risco–retorno e aplique-as na carteira virtual.", "Simulador de Investimento"),
+    ("D3", "A"): ("Defina um objectivo concreto (valor e prazo) e divida-o em metas mensais.", "Reserva de emergência e inflação"),
+    ("D3", "B"): ("Construa a reserva de emergência por etapas e automatize a poupança no dia do recebimento.", "Reserva de emergência e inflação"),
+    ("D4", "K"): ("Distinga depósito a prazo, bilhete do Tesouro, obrigação e acção: liquidez, risco, prazo e rendimento real.", "Comparador de instrumentos"),
+    ("D4", "A"): ("Compare instrumentos pelo rendimento real antes de decidir; a confiança constrói-se com prática simulada.", "Comparador de instrumentos"),
+    ("D4", "B"): ("Antes de contratar, compare sempre custos (comissões, taxas), prazo e liquidez numa tabela.", "Comparador de instrumentos"),
+    ("D5", "K"): ("Conheça o circuito: quem regula, onde se negoceia e porque é necessária uma correctora autorizada.", "Primeiro investimento guiado"),
+    ("D5", "A"): ("Siga o percurso guiado do primeiro investimento, passo a passo, e treine no Home Broker virtual.", "Primeiro investimento guiado"),
+    ("D5", "B"): ("Escolha 2 ou 3 fontes fiáveis e reserve 30 minutos por semana para as ler antes de decidir.", "Biblioteca Educativa"),
+}
+
+LICOES_CF = {
+    "D1": ("Fazer face às despesas com rendimento irregular",
+           "Quando o rendimento varia, planeie pelo mês fraco, não pelo mês bom. O «rendimento prudente» (média dos 3 meses mais baixos) é a base do orçamento; "
+           "o que sobra nos meses melhores alimenta um fundo de alisamento. Em Kwanzas, a inflação faz com que dinheiro parado perca poder de compra.",
+           "Introduza os últimos 6 meses de rendimento na ferramenta de orçamento variável e veja se o essencial fica coberto no pior cenário."),
+    "D2": ("Manter o controlo",
+           "Controlo é saber quanto entra, quanto sai e para onde vai. Um registo simples e regular vale mais do que uma folha complicada. "
+           "Pagar a tempo evita juros e multas; os juros compostos funcionam a favor de quem poupa e contra quem deve.",
+           "Durante 30 dias registe todas as despesas no orçamento mensal e compare com a regra 50/30/20."),
+    "D3": ("Planear o futuro",
+           "Planear é transformar objectivos em metas mensais. A reserva de emergência (3 a 6 meses de despesas essenciais, mais se o rendimento for variável) vem antes de investir. "
+           "Diversificar reduz o risco; maior retorno esperado costuma exigir maior risco.",
+           "Calcule a sua reserva-alvo ajustada à inflação e defina quanto poupar por mês para a atingir."),
+    "D4": ("Escolher produtos",
+           "Escolher bem é comparar o rendimento REAL (depois de inflação e impostos), a liquidez, o risco e os custos. Um Bilhete do Tesouro é dívida pública de curto prazo "
+           "emitida ao desconto; não é um depósito bancário. Dividendos não são garantidos.",
+           "Preencha o comparador com as taxas actuais que encontrar e compare o rendimento real de cada instrumento."),
+    "D5": ("Manter-se informado e obter ajuda",
+           "Informar-se é saber quem regula (CMC), onde se negoceia (BODIVA) e por que via se acede (sociedade correctora autorizada). "
+           "Saber onde procurar ajuda fiável é parte da capacidade financeira; pedir informação não é fraqueza.",
+           "Siga o percurso guiado do primeiro investimento e anote as dúvidas que precisa de esclarecer com a correctora."),
+}
+
+PASSOS_PRIMEIRO_INVESTIMENTO = [
+    ("Reserva de emergência", "Antes de investir, tenha 3 a 6 meses de despesas essenciais em liquidez (mais se o rendimento for variável)."),
+    ("Objectivo e prazo", "Defina para quê e para quando: um objectivo a 1 ano e um a 10 anos pedem instrumentos diferentes."),
+    ("Quanto pode investir", "Use o orçamento para saber quanto sobra de forma regular, sem comprometer o essencial. A regra 50/30/20 é uma referência, não uma obrigação."),
+    ("Perceber os instrumentos", "Compare depósito a prazo, Bilhetes do Tesouro, Obrigações do Tesouro e acções: liquidez, risco, prazo e rendimento real."),
+    ("Escolher o intermediário", "Para negociar na BODIVA é necessária uma sociedade correctora autorizada pela CMC. Confirme a autorização junto da CMC e peça a tabela de comissões por escrito."),
+    ("Custos e prazos", "Pergunte pelas comissões de corretagem, custódia e impostos, e pelo prazo de liquidação. Os custos percepcionados são uma das maiores barreiras na evidência da UKB."),
+    ("Treinar sem risco", "Pratique no Home Broker virtual (dinheiro fictício) para perder o medo do procedimento."),
+    ("Primeira operação pequena", "Comece com um montante que não afecte o essencial, registe a tese e reveja ao fim de um período definido."),
+]
+
+
+def nivel_capacidade(score):
+    if score is None:
+        return "—"
+    if score < 40:
+        return "Inicial"
+    if score < 60:
+        return "Em desenvolvimento"
+    if score < 80:
+        return "Sólida"
+    return "Avançada"
+
+
+def pontuar_diagnostico(respostas: dict) -> dict:
+    """Pontua (0–100) cada célula domínio×componente, os totais por domínio e componente e o índice geral. Itens sem resposta não contam."""
+    celulas_pts = {}
+    for it in ITENS_CF:
+        if it.get("meta"):
+            continue
+        r = respostas.get(it["id"])
+        if r is None:
+            continue
+        pts = 100.0 if (it["tipo"] == "mc" and int(r) == it["correcta"]) else (0.0 if it["tipo"] == "mc" else (int(r) - 1) / 4 * 100)
+        celulas_pts.setdefault((it["dom"], it["comp"]), []).append(pts)
+    celulas = {k: sum(v) / len(v) for k, v in celulas_pts.items()}
+
+    def media(vals):
+        vals = [v for v in vals if v is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    por_dom = {d: media([celulas.get((d, c)) for c in COMPONENTES_CF]) for d in DOMINIOS_CF}
+    por_comp = {c: media([celulas.get((d, c)) for d in DOMINIOS_CF]) for c in COMPONENTES_CF}
+    geral = media(list(por_comp.values()))
+    lacuna = (por_comp["K"] - por_comp["B"]) if (por_comp["K"] is not None and por_comp["B"] is not None) else None
+    auto_bt, k6 = respostas.get("a6"), respostas.get("k6")
+    incompetencia = bool(auto_bt is not None and k6 is not None and int(auto_bt) >= 4 and int(k6) != _ITEM_CF["k6"]["correcta"])
+    return {"celulas": celulas, "dominios": por_dom, "componentes": por_comp, "geral": geral, "lacuna_kb": lacuna,
+            "incompetencia_bt": incompetencia, "nivel": nivel_capacidade(geral)}
+
+
+def plano_de_accao(resultado: dict, maximo: int = 3) -> list:
+    """Até `maximo` acções, para as células com pontuação mais baixa (< 70)."""
+    fracas = sorted([(v, k) for k, v in resultado["celulas"].items() if v < 70])[:maximo]
+    return [{"dominio": DOMINIOS_CF[d], "componente": COMPONENTES_CF[c], "pontos": v, "accao": ACOES_CF[(d, c)][0], "ferramenta": ACOES_CF[(d, c)][1]}
+            for v, (d, c) in fracas]
+
+
+def orcamento_variavel(rendimentos: list, essenciais: float) -> dict:
+    """Rendimento prudente = média dos 3 meses mais baixos. «Ordenado» alisado = rendimento prudente; o excedente vai para um fundo de alisamento."""
+    r = [float(x) for x in rendimentos if x is not None and float(x) > 0]
+    if len(r) < 3:
+        raise ValueError("Indique o rendimento de pelo menos 3 meses.")
+    if essenciais < 0:
+        raise ValueError("As despesas essenciais não podem ser negativas.")
+    baixos = sorted(r)[:3]
+    prudente = sum(baixos) / 3
+    media = sum(r) / len(r)
+    desvio = (sum((x - media) ** 2 for x in r) / len(r)) ** 0.5
+    fundo, linhas, fundo_min = 0.0, [], 0.0
+    for i, x in enumerate(r, start=1):
+        fundo += x - prudente
+        fundo_min = min(fundo_min, fundo)
+        linhas.append({"Mês": i, "Rendimento": x, "«Ordenado» alisado": prudente, "Fundo de alisamento": fundo})
+    return {"prudente": prudente, "media": media, "minimo": min(r), "maximo": max(r), "variabilidade": (desvio / media) if media else 0.0,
+            "cobre_essencial": prudente >= essenciais, "essenciais_pct": (essenciais / prudente) if prudente else None,
+            "folga": prudente - essenciais, "fundo_final": fundo, "fundo_min": fundo_min,
+            "consumo_50": prudente * 0.5, "investimento_30": prudente * 0.3, "entesouramento_20": prudente * 0.2, "linhas": linhas}
+
+
+def reserva_emergencia(despesas_essenciais: float, meses_alvo: float, inflacao_anual: float, meses_para_construir: int,
+                       poupanca_actual: float = 0.0, taxa_anual: float = 0.0) -> dict:
+    """Reserva-alvo a preços de hoje e a preços futuros (inflação), poupança mensal necessária e perda de poder de compra do dinheiro parado."""
+    if despesas_essenciais <= 0 or meses_alvo <= 0:
+        raise ValueError("Indique despesas essenciais e meses-alvo superiores a zero.")
+    n = int(meses_para_construir)
+    if n < 1:
+        raise ValueError("O prazo para construir a reserva deve ser de pelo menos 1 mês.")
+    alvo_hoje = despesas_essenciais * meses_alvo
+    alvo_futuro = alvo_hoje * (1 + inflacao_anual) ** (n / 12)
+    r_m = (1 + taxa_anual) ** (1 / 12) - 1
+    fv_actual = poupanca_actual * (1 + r_m) ** n
+    falta = max(0.0, alvo_futuro - fv_actual)
+    contribuicao = (falta * r_m / ((1 + r_m) ** n - 1)) if r_m > 0 else falta / n
+    return {"alvo_hoje": alvo_hoje, "alvo_futuro": alvo_futuro, "falta": falta, "contribuicao_mensal": contribuicao,
+            "poder_compra_parado": poupanca_actual / (1 + inflacao_anual) ** (n / 12), "n": n}
+
+
+def comparar_instrumentos(inflacao: float, imposto: float, taxas: dict) -> list:
+    """Rendimento nominal → líquido de imposto → real (descontada a inflação). Valores ilustrativos escolhidos pelo utilizador."""
+    out = []
+    for nome, nominal in taxas.items():
+        liquido = nominal * (1 - imposto)
+        real = (1 + liquido) / (1 + inflacao) - 1
+        out.append({"Instrumento": nome, "Nominal (% ao ano)": nominal * 100, "Líquido de imposto (%)": liquido * 100, "Real (%)": real * 100})
+    return out
+
+
+CARACTERISTICAS_INSTRUMENTOS = pd.DataFrame([
+    {"Instrumento": "Depósito a prazo", "Liquidez": "Baixa a média (levantamento antecipado conforme o contrato)", "Risco": "Baixo: risco do banco",
+     "Rendimento": "Taxa contratada para o prazo", "Prazo": "Definido no contrato", "Custos": "Confirme com o banco", "Acesso": "Balcão do banco"},
+    {"Instrumento": "Bilhete do Tesouro (BT)", "Liquidez": "Média: mercado secundário com liquidez limitada", "Risco": "Soberano (Estado emissor). Não é um depósito bancário",
+     "Rendimento": "Emitido ao desconto: ganho = valor nominal − preço pago", "Prazo": "91 a 364 dias", "Custos": "Comissões do intermediário", "Acesso": "Correctora ou banco autorizado"},
+    {"Instrumento": "Obrigação do Tesouro (OT)", "Liquidez": "Média: mercado secundário com liquidez limitada", "Risco": "Soberano; o preço varia com as taxas de juro até ao vencimento",
+     "Rendimento": "Cupões periódicos + devolução do capital", "Prazo": "2 anos ou mais", "Custos": "Comissões do intermediário", "Acesso": "Correctora ou banco autorizado"},
+    {"Instrumento": "Acção cotada na BODIVA", "Liquidez": "Variável: mercado com liquidez limitada", "Risco": "Elevado: preço e dividendos variam",
+     "Rendimento": "Dividendos (não garantidos) + variação do preço", "Prazo": "Sem prazo; horizonte longo", "Custos": "Comissões de corretagem", "Acesso": "Sociedade correctora autorizada pela CMC"},
+])
+
+
+# ---------------- Persistência (cada conta só vê os seus próprios resultados) ----------------
+def guardar_diagnostico_cf(resultado: dict, respostas: dict):
+    import json as _json
+    if not st.session_state.get("autenticado"):
+        return
+    executar("INSERT INTO capacidade_diagnosticos (conta_email, versao, respostas, resultados) VALUES (%s, %s, %s, %s)",
+             (utilizador_actual(), "1", _json.dumps(respostas), _json.dumps({"geral": resultado["geral"], "componentes": resultado["componentes"],
+                                                                            "dominios": resultado["dominios"]}, default=float)))
+
+
+def obter_diagnosticos_cf() -> pd.DataFrame:
+    if not st.session_state.get("autenticado"):
+        return pd.DataFrame()
+    return consultar_df("SELECT id, criado_em, resultados FROM capacidade_diagnosticos WHERE conta_email = %s ORDER BY criado_em", (utilizador_actual(),))
+
+
+def _ir_para(destino: str):
+    st.session_state["nav_pagina"] = destino
+
+
+# ---------------- Interface ----------------
+def _mostrar_resultado_cf(res: dict):
+    st.markdown("#### Resultado")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Índice geral", f"{res['geral']:.0f}/100" if res["geral"] is not None else "—", help=f"Nível: {res['nivel']}")
+    for col, c in zip((c2, c3, c4), COMPONENTES_CF):
+        v = res["componentes"][c]
+        col.metric(COMPONENTES_CF[c], f"{v:.0f}/100" if v is not None else "—")
+    st.caption(f"Nível global: **{res['nivel']}**. Cada componente é a média dos cinco domínios; o índice geral é a média dos três componentes.")
+    linhas = {DOMINIOS_CF[d]: {COMPONENTES_CF[c]: res["celulas"].get((d, c)) for c in COMPONENTES_CF} for d in DOMINIOS_CF}
+    df = pd.DataFrame(linhas).T
+    st.bar_chart(df.fillna(0), height=300)
+    st.dataframe(df.round(0).fillna("—"), use_container_width=True)
+    if res["lacuna_kb"] is not None and res["lacuna_kb"] >= 15:
+        st.info(f"O seu conhecimento ({res['componentes']['K']:.0f}) está acima do seu comportamento ({res['componentes']['B']:.0f}). "
+                "É um padrão comum: saber não basta, é preciso transformar o conhecimento em hábitos e em passos práticos. O plano abaixo vai nessa direcção.")
+    if res["incompetencia_bt"]:
+        st.warning("Disse compreender bem os Bilhetes do Tesouro, mas a resposta sobre o que são não coincidiu. É frequente confundi-los com depósitos a prazo: "
+                   "reveja a ficha «Comparador de instrumentos» na aba Ferramentas.")
+    st.markdown("#### O seu plano de acção")
+    plano = plano_de_accao(res)
+    if not plano:
+        st.success("Todas as áreas estão acima de 70/100. Mantenha os hábitos e avance para o percurso do primeiro investimento.")
+    for i, p in enumerate(plano, start=1):
+        with st.container(border=True):
+            st.markdown(f"**{i}. {p['dominio']} · {p['componente']}** ({p['pontos']:.0f}/100)")
+            st.write(p["accao"])
+            st.caption(f"Ferramenta sugerida: {p['ferramenta']}")
+
+
+def diagnostico_cf(prefixo: str, guardar: bool):
+    st.markdown("Responda com sinceridade: não há respostas «más», só um ponto de partida. Demora cerca de 5 minutos.")
+    with st.form(f"form_diag_{prefixo}"):
+        respostas = {}
+        for comp, titulo in (("K", "Parte 1 · Conhecimento"), ("A", "Parte 2 · Atitude e confiança"), ("B", "Parte 3 · Comportamento")):
+            st.markdown(f"##### {titulo}")
+            for it in [x for x in ITENS_CF if x["comp"] == comp]:
+                escala = it.get("opcoes") or (ESCALA_FREQ if it["tipo"] == "freq" else ESCALA_CONC)
+                escolha = st.radio(it["texto"], escala, index=None, key=f"diag_{prefixo}_{it['id']}", horizontal=(it["tipo"] != "mc"))
+                respostas[it["id"]] = escala.index(escolha) if (escolha is not None and it["tipo"] == "mc") else (escala.index(escolha) + 1 if escolha is not None else None)
+        enviar = st.form_submit_button("Ver o meu resultado", type="primary")
+    if enviar:
+        em_falta = [k for k, v in respostas.items() if v is None]
+        if em_falta:
+            st.error(f"Faltam {len(em_falta)} resposta(s). Responda a todas as perguntas para ver o resultado.")
+        else:
+            res = pontuar_diagnostico(respostas)
+            st.session_state[f"diag_res_{prefixo}"] = res
+            if guardar:
+                try:
+                    guardar_diagnostico_cf(res, respostas)
+                    st.session_state[f"diag_gravado_{prefixo}"] = True
+                except Exception:
+                    st.session_state[f"diag_gravado_{prefixo}"] = False
+    res = st.session_state.get(f"diag_res_{prefixo}")
+    if res:
+        _mostrar_resultado_cf(res)
+        if guardar and st.session_state.get(f"diag_gravado_{prefixo}"):
+            st.caption("Resultado guardado na sua conta. Repita o diagnóstico daqui a algumas semanas para medir a evolução.")
+        elif not guardar:
+            st.caption("Este resultado não fica guardado. Crie ou use uma conta para acompanhar a evolução ao longo do tempo.")
+
+
+def ferramenta_orcamento_variavel(prefixo: str):
+    st.markdown("**Orçamento com rendimento variável.** Indique o que recebeu nos últimos meses e as suas despesas essenciais mensais (renda, alimentação, transporte, saúde, dívidas).")
+    cols = st.columns(3)
+    vals = []
+    for i in range(6):
+        vals.append(cols[i % 3].number_input(f"Mês {i + 1} (Kz)", min_value=0.0, step=5000.0, value=0.0, key=f"ov_{prefixo}_{i}"))
+    ess = st.number_input("Despesas essenciais por mês (Kz)", min_value=0.0, step=5000.0, value=0.0, key=f"ov_ess_{prefixo}")
+    if sum(1 for v in vals if v > 0) < 3:
+        st.info("Preencha pelo menos 3 meses para ver o resultado.")
+        return
+    try:
+        r = orcamento_variavel(vals, ess)
+    except ValueError as e:
+        st.warning(str(e))
+        return
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Rendimento prudente", kz(r["prudente"]), help="Média dos 3 meses mais baixos")
+    m2.metric("Rendimento médio", kz(r["media"]))
+    m3.metric("Variabilidade", f"{r['variabilidade'] * 100:.0f}%", help="Desvio-padrão em % da média")
+    if r["cobre_essencial"]:
+        st.success(f"O rendimento prudente cobre o essencial, com folga de {kz(r['folga'])} por mês.")
+    else:
+        st.warning(f"O rendimento prudente não cobre o essencial: faltam {kz(-r['folga'])} por mês. Reveja despesas ou procure estabilizar parte do rendimento.")
+    if r["essenciais_pct"] is not None and r["essenciais_pct"] > 0.5:
+        st.caption(f"Os essenciais pesam {r['essenciais_pct'] * 100:.0f}% do rendimento prudente, acima dos 50% que a regra 50/30/20 reserva ao consumo.")
+    st.markdown("**Como distribuir o «ordenado» alisado (regra 50/30/20 sobre o rendimento prudente)**")
+    a1, a2, a3 = st.columns(3)
+    a1.metric("Consumo (50%)", kz(r["consumo_50"]))
+    a2.metric("Investimento (30%)", kz(r["investimento_30"]))
+    a3.metric("Entesouramento (20%)", kz(r["entesouramento_20"]))
+    df = pd.DataFrame(r["linhas"]).set_index("Mês")
+    st.line_chart(df[["Rendimento", "«Ordenado» alisado"]], height=240)
+    st.caption(f"Fundo de alisamento ao fim de {len(df)} meses: {kz(r['fundo_final'])}. Os meses acima do rendimento prudente enchem o fundo; os abaixo, esvaziam-no.")
+
+
+def ferramenta_reserva(prefixo: str):
+    st.markdown("**Reserva de emergência ajustada à inflação.** A reserva-alvo cresce com a inflação até ao dia em que a terminar de a construir.")
+    try:
+        infl_def = float(obter_premissas_macro()["inflacao"]) * 100
+    except Exception:
+        infl_def = 13.5
+    c1, c2 = st.columns(2)
+    ess = c1.number_input("Despesas essenciais por mês (Kz)", min_value=0.0, step=5000.0, value=0.0, key=f"re_ess_{prefixo}")
+    meses = c2.slider("Meses de cobertura", 1, 12, 6, key=f"re_meses_{prefixo}", help="3 meses para rendimento estável; 6 ou mais se for variável")
+    c3, c4, c5 = st.columns(3)
+    infl = c3.number_input("Inflação anual assumida (%)", min_value=0.0, max_value=100.0, value=round(infl_def, 1), step=0.5, key=f"re_infl_{prefixo}")
+    prazo = c4.slider("Meses para construir", 1, 60, 12, key=f"re_prazo_{prefixo}")
+    actual = c5.number_input("Já tenho guardado (Kz)", min_value=0.0, step=5000.0, value=0.0, key=f"re_act_{prefixo}")
+    taxa = st.number_input("Rendimento anual do local onde a guarda (%, 0 se for dinheiro parado)", min_value=0.0, max_value=100.0, value=0.0, step=0.5, key=f"re_tx_{prefixo}")
+    if ess <= 0:
+        st.info("Indique as despesas essenciais mensais.")
+        return
+    try:
+        r = reserva_emergencia(ess, meses, infl / 100, prazo, actual, taxa / 100)
+    except ValueError as e:
+        st.warning(str(e))
+        return
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Reserva-alvo a preços de hoje", kz(r["alvo_hoje"]))
+    m2.metric(f"Reserva-alvo daqui a {r['n']} meses", kz(r["alvo_futuro"]), help="Com a inflação assumida")
+    m3.metric("Poupar por mês", kz(r["contribuicao_mensal"]))
+    if actual > 0:
+        st.caption(f"Se o que já tem ({kz(actual)}) ficar parado, daqui a {r['n']} meses terá o poder de compra de {kz(r['poder_compra_parado'])} de hoje.")
+    if r["falta"] <= 0:
+        st.success("Com o que já tem, e com o rendimento indicado, a reserva-alvo fica coberta no prazo.")
+
+
+def ferramenta_comparador(prefixo: str):
+    st.markdown("**Comparador de instrumentos.** Introduza taxas actuais que encontrar (os valores abaixo são apenas exemplos, não cotações). O que conta é o rendimento REAL.")
+    st.caption("Confirme sempre as taxas, os impostos e as comissões aplicáveis junto da instituição.")
+    c1, c2 = st.columns(2)
+    infl = c1.number_input("Inflação anual (%)", min_value=0.0, max_value=100.0, value=13.5, step=0.5, key=f"cp_infl_{prefixo}")
+    imp = c2.number_input("Imposto sobre o rendimento (%) — confirme a taxa aplicável", min_value=0.0, max_value=100.0, value=0.0, step=0.5, key=f"cp_imp_{prefixo}")
+    d1, d2, d3, d4 = st.columns(4)
+    dp = d1.number_input("Depósito a prazo (% ao ano)", min_value=0.0, value=10.0, step=0.5, key=f"cp_dp_{prefixo}")
+    bt = d2.number_input("Bilhete do Tesouro (% ao ano)", min_value=0.0, value=14.0, step=0.5, key=f"cp_bt_{prefixo}")
+    ot = d3.number_input("Obrigação do Tesouro (% ao ano)", min_value=0.0, value=17.0, step=0.5, key=f"cp_ot_{prefixo}")
+    ac = d4.number_input("Acção: dividendo + crescimento esperado (% ao ano)", min_value=0.0, value=15.0, step=0.5, key=f"cp_ac_{prefixo}",
+                         help="Hipótese do utilizador; dividendos e preços não são garantidos")
+    linhas = comparar_instrumentos(infl / 100, imp / 100, {"Depósito a prazo": dp / 100, "Bilhete do Tesouro": bt / 100, "Obrigação do Tesouro": ot / 100, "Acção BODIVA": ac / 100})
+    df = pd.DataFrame(linhas)
+    st.bar_chart(df.set_index("Instrumento")[["Real (%)"]], height=240)
+    st.dataframe(df.round(2), hide_index=True, use_container_width=True)
+    pior = df.loc[df["Real (%)"] < 0, "Instrumento"].tolist()
+    if pior:
+        st.warning("Com estes pressupostos, o rendimento real é negativo em: " + ", ".join(pior) + ". O dinheiro perde poder de compra.")
+    st.markdown("**Características qualitativas**")
+    st.dataframe(CARACTERISTICAS_INSTRUMENTOS, hide_index=True, use_container_width=True)
+    st.caption("Uma acção tem risco de preço e os dividendos não são garantidos; o rendimento mostrado é uma hipótese, não uma previsão.")
+
+
+def pagina_capacidade_financeira(autenticado: bool):
+    pref = "app" if autenticado else "pub"
+    st.markdown("### 🧠 Capacidade financeira prática")
+    st.write("Capacidade financeira é mais do que saber: é conseguir aplicar o que se sabe, com confiança, nas decisões do dia-a-dia. "
+             "Aqui mede o seu ponto de partida em 5 domínios e treina o que mais precisa.")
+    nomes = ["🔎 Diagnóstico", "🏋️ Treino", "🧰 Ferramentas", "🚀 Primeiro investimento"] + (["📈 A minha evolução"] if autenticado else []) + ["📚 Fundamentos"]
+    abas = st.tabs(nomes)
+    with abas[0]:
+        diagnostico_cf(pref, guardar=autenticado)
+    with abas[1]:
+        st.write("Cinco domínios, um exercício prático em cada. Comece pelo domínio com a pontuação mais baixa no diagnóstico.")
+        for d, (titulo, ideia, exercicio) in LICOES_CF.items():
+            with st.expander(f"{d[1]}. {titulo}"):
+                st.write(ideia)
+                st.markdown(f"**Exercício:** {exercicio}")
+    with abas[2]:
+        ferr = st.radio("Ferramenta", ["Orçamento com rendimento variável", "Reserva de emergência e inflação", "Comparador de instrumentos"],
+                        horizontal=True, key=f"cf_ferr_{pref}")
+        if ferr.startswith("Orçamento"):
+            ferramenta_orcamento_variavel(pref)
+        elif ferr.startswith("Reserva"):
+            ferramenta_reserva(pref)
+        else:
+            ferramenta_comparador(pref)
+        if autenticado:
+            st.divider()
+            b1, b2, b3 = st.columns(3)
+            b1.button("Orçamento mensal 50/30/20", on_click=_ir_para, args=("🧮 Regra 50/30/20",), key=f"go_r50_{pref}")
+            b2.button("Simulador e Home Broker virtual", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key=f"go_sim_{pref}")
+            b3.button("Cotações da BODIVA", on_click=_ir_para, args=("📈 Cotações & Activos",), key=f"go_cot_{pref}")
+    with abas[3]:
+        st.write("Um percurso em 8 passos para o primeiro investimento. É educativo: não recomenda nenhum produto nem substitui o aconselhamento do intermediário.")
+        for i, (titulo, texto) in enumerate(PASSOS_PRIMEIRO_INVESTIMENTO, start=1):
+            with st.container(border=True):
+                st.markdown(f"**{i}. {titulo}**")
+                st.write(texto)
+    if autenticado:
+        with abas[4]:
+            try:
+                dfd = obter_diagnosticos_cf()
+            except Exception:
+                dfd = pd.DataFrame()
+            if dfd.empty:
+                st.info("Ainda não guardou nenhum diagnóstico. Faça o primeiro na aba Diagnóstico.")
+            else:
+                import json as _json
+                linhas = []
+                for _, r in dfd.iterrows():
+                    res = _json.loads(r["resultados"]) if isinstance(r["resultados"], str) else r["resultados"]
+                    linhas.append({"Data": pd.to_datetime(r["criado_em"]), "Geral": res.get("geral"),
+                                   **{COMPONENTES_CF[c]: (res.get("componentes") or {}).get(c) for c in COMPONENTES_CF}})
+                dv = pd.DataFrame(linhas).set_index("Data")
+                st.line_chart(dv, height=280)
+                if len(dv) >= 2 and dv["Geral"].iloc[0] is not None and dv["Geral"].iloc[-1] is not None:
+                    st.metric("Evolução do índice geral", f"{dv['Geral'].iloc[-1]:.0f}/100", delta=f"{dv['Geral'].iloc[-1] - dv['Geral'].iloc[0]:+.0f} desde o primeiro diagnóstico")
+                st.dataframe(dv.round(0), use_container_width=True)
+    with abas[-1]:
+        st.markdown("##### O modelo")
+        st.write("Kempson, Collard e Moore (2005) propuseram a capacidade financeira como a combinação de três componentes (conhecimento, atitude e comportamento) "
+                 "em cinco domínios da vida financeira. O diagnóstico desta página usa essa matriz.")
+        matriz = pd.DataFrame({DOMINIOS_CF[d]: {COMPONENTES_CF[c]: ACOES_CF[(d, c)][0] for c in COMPONENTES_CF} for d in DOMINIOS_CF}).T
+        st.dataframe(matriz, use_container_width=True)
+        st.markdown("##### Porque se treina o comportamento, e não só o conhecimento")
+        st.write("Em dois estudos na Faculdade de Economia da UKB (86 e 100 estudantes), o conhecimento teórico era sólido, mas só 9% identificou correctamente os Bilhetes do Tesouro, "
+                 "a auto-confiança era mais baixa no «como fazer na prática» e as barreiras mais citadas foram os custos de corretagem e a falta de tempo. "
+                 "Por isso o treino desta app insiste em procedimentos, comparação de custos e prática simulada.")
+        st.markdown("##### Fontes")
+        st.markdown(
+            "- Kempson, E., Collard, S., & Moore, N. (2005). *Measuring financial capability: An exploratory study*. Financial Services Authority (Reino Unido).\n"
+            "- Johnson, E., & Sherraden, M. S. (2007). From financial literacy to financial capability among youth. *Journal of Sociology & Social Welfare*, 34(3).\n"
+            "- Kempson, E., Perotti, V., & Scott, K. (2013). *Measuring financial capability: A new instrument and results from low- and middle-income countries*. World Bank (Russia Financial Literacy and Education Trust Fund; 12 países).\n"
+            "- OECD/INFE (2023). *OECD/INFE 2023 International Survey of Adult Financial Literacy* (39 países; conhecimento, comportamento e atitudes).\n"
+            "- Money and Pensions Service (2020). *UK Strategy for Financial Wellbeing 2020–2030*; Money Advice Service (2015). *Financial Capability Strategy for the UK*.\n"
+            "- Casaco (2023), Molossande (2026) e Costa (2026): estudos e síntese na FE-UKB sobre capacidade financeira e mercado de capitais angolano.")
+        st.caption("O diagnóstico é um instrumento educativo inspirado nestes modelos; não é uma escala psicometricamente validada nem substitui aconselhamento financeiro.")
+
+
+def _painel_inicio_aluno():
+    """Início para contas sem acesso ao módulo patrimonial: progresso de capacidade financeira, atalhos e mercado."""
+    nome = str(st.session_state.get("conta_nome") or "").split(" ")[0]
+    st.markdown(f"### Bem-vindo, {_html_pub.escape(nome)}" if nome else "### Bem-vindo")
+    try:
+        dfd = obter_diagnosticos_cf()
+    except Exception:
+        dfd = pd.DataFrame()
+    c1, c2, c3 = st.columns(3)
+    if dfd.empty:
+        c1.metric("Capacidade financeira", "—", help="Ainda sem diagnóstico")
+    else:
+        import json as _json
+        ult = dfd.iloc[-1]["resultados"]
+        ult = _json.loads(ult) if isinstance(ult, str) else ult
+        c1.metric("Capacidade financeira", f"{ult.get('geral', 0):.0f}/100")
+        c2.metric("Diagnósticos feitos", len(dfd))
+    c3.metric("Índice APPO (hoje)", pct_bruto(calcular_indice_mercado(_df_activos_ticker)))
+    st.markdown("##### Por onde começar")
+    b1, b2, b3 = st.columns(3)
+    b1.button("🔎 Fazer o diagnóstico", on_click=_ir_para, args=("🧠 Capacidade Financeira",), key="ini_cf", type="primary")
+    b2.button("🧮 Montar o meu orçamento", on_click=_ir_para, args=("🧮 Regra 50/30/20",), key="ini_r50")
+    b3.button("🧪 Treinar no Home Broker virtual", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key="ini_sim")
+    st.markdown("##### Mercado")
+    if not _df_activos_ticker.empty:
+        st.dataframe(tabela_cotacoes_estilizada(_df_activos_ticker), hide_index=True)
+    st.caption("Dados de mercado de referência actualizados pelo administrador; não são cotações em tempo real.")
+
+
+
 def pagina_login():
     col_esq, col_centro, col_dir = st.columns([1, 1.4, 1])
     with col_centro:
@@ -4213,9 +4781,11 @@ def pagina_login():
 
 
 if not st.session_state["autenticado"]:
-    _aba_entrar, _aba_edu, _aba_int = st.tabs(["🔐 Entrar", "🎓 Educação & Serviços", "🤝 Manifestação de interesse"])
+    _aba_entrar, _aba_cf, _aba_edu, _aba_int = st.tabs(["🔐 Entrar", "🧠 Capacidade Financeira", "🎓 Educação & Serviços", "🤝 Manifestação de interesse"])
     with _aba_entrar:
         pagina_login()
+    with _aba_cf:
+        pagina_capacidade_financeira(False)
     with _aba_edu:
         pagina_educacao_servicos()
     with _aba_int:
@@ -4232,16 +4802,17 @@ selo_premium = " · ⭐ Premium" if st.session_state["is_premium"] else ""
 st.sidebar.caption(f"{tx['sessao']}: {st.session_state['conta_nome']} ({st.session_state['conta_email']}){selo_premium}")
 st.sidebar.divider()
 
-PAGINAS = [
-    "🏠 Início & Análises", "📈 Cotações & Activos", "💰 Contabilidade & Finanças",
-    "📊 Histórico & Relatórios", "📐 Avaliação de Activos", "💱 Conversor de Moeda",
-    "🧪 Simulador de Investimento", "🧮 Regra 50/30/20",
-    "🎓 Educação & Serviços", "📚 Biblioteca Educativa", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos",
-]
+PAGINAS = ["🏠 Início & Análises", "🧠 Capacidade Financeira"]
+if eh_participante():
+    PAGINAS += ["💰 Contabilidade & Finanças", "📊 Histórico & Relatórios"]   # área patrimonial restrita
+PAGINAS += ["📈 Cotações & Activos", "📐 Avaliação de Activos", "🧪 Simulador de Investimento", "🧮 Regra 50/30/20", "💱 Conversor de Moeda",
+            "📚 Biblioteca Educativa", "🎓 Educação & Serviços", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos"]
 if st.session_state["is_admin"]:
     PAGINAS.append("🔐 Painel do Administrador")
+if st.session_state.get("nav_pagina") not in PAGINAS:
+    st.session_state["nav_pagina"] = PAGINAS[0]
 
-pagina = st.sidebar.radio("Navegação", PAGINAS, label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
+pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
 st.sidebar.divider()
 if st.sidebar.button(tx["terminar_sessao"]):
@@ -4257,277 +4828,284 @@ ticker_tape(_df_activos_ticker)
 # =========================================================
 # PÁGINA: INÍCIO & ANÁLISES
 # =========================================================
-if pagina == "🏠 Início & Análises":
-    tx = t()
-    hero("Clube de Investimento APPO", tx["inicio_hero_sub"])
+try:
+    if pagina == "🏠 Início & Análises":
+        tx = t()
+        hero("Clube de Investimento APPO", tx["inicio_hero_sub"])
 
-    resumo = obter_resumo_patrimonial()
-    total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são parte do realizado
+        if not eh_participante():
+            _painel_inicio_aluno()
+            st.stop()
 
-    col1, col2 = st.columns(2)
-    col1.metric(tx["inicio_capital_subscrito"], kz(resumo["capital_subscrito"]))
-    col2.metric(tx["inicio_capital_realizado"],  kz(resumo["capital_realizado"]),
-                delta=(f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}{tx['inicio_pct_subscrito']}" if resumo["capital_subscrito"] else None),
-                delta_color="off")
-    col3, col4, col5 = st.columns(3)
-    col3.metric(tx["inicio_investimentos"],   kz(resumo["investimentos"]))
-    col4.metric(tx["inicio_reservas"],        kz(resumo["reservas"]))
-    col5.metric(tx["inicio_patrimonio_total"], kz(total_patrimonio))
+        resumo = obter_resumo_patrimonial()
+        total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são parte do realizado
 
-    indice = calcular_indice_mercado(_df_activos_ticker)
-    st.metric(tx["inicio_indice_label"], pct_bruto(indice), delta=pct_bruto(indice))
-    st.caption(tx["inicio_indice_caption"])
-    st.divider()
+        col1, col2 = st.columns(2)
+        col1.metric(tx["inicio_capital_subscrito"], kz(resumo["capital_subscrito"]))
+        col2.metric(tx["inicio_capital_realizado"],  kz(resumo["capital_realizado"]),
+                    delta=(f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}{tx['inicio_pct_subscrito']}" if resumo["capital_subscrito"] else None),
+                    delta_color="off")
+        col3, col4, col5 = st.columns(3)
+        col3.metric(tx["inicio_investimentos"],   kz(resumo["investimentos"]))
+        col4.metric(tx["inicio_reservas"],        kz(resumo["reservas"]))
+        col5.metric(tx["inicio_patrimonio_total"], kz(total_patrimonio))
 
-    st.subheader(tx["inicio_distribuicao"])
-    cats = tx["inicio_distribuicao_cats"]
-    st.bar_chart(pd.DataFrame({"Categoria": cats,
-                               "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]]}).set_index("Categoria"))
+        indice = calcular_indice_mercado(_df_activos_ticker)
+        st.metric(tx["inicio_indice_label"], pct_bruto(indice), delta=pct_bruto(indice))
+        st.caption(tx["inicio_indice_caption"])
+        st.divider()
 
-    st.divider()
-    banner_capa(IMG_GRAFICO, tx["inicio_capa_texto"], altura=130, escurecimento=0.48)
+        st.subheader(tx["inicio_distribuicao"])
+        cats = tx["inicio_distribuicao_cats"]
+        st.bar_chart(pd.DataFrame({"Categoria": cats,
+                                   "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]]}).set_index("Categoria"))
 
-    st.subheader(tx["inicio_cotacoes_destaque"])
-    if not _df_activos_ticker.empty:
-        st.dataframe(tabela_cotacoes_estilizada(_df_activos_ticker), hide_index=True)
+        st.divider()
+        banner_capa(IMG_GRAFICO, tx["inicio_capa_texto"], altura=130, escurecimento=0.48)
 
-    secao_vup_inicio()
+        st.subheader(tx["inicio_cotacoes_destaque"])
+        if not _df_activos_ticker.empty:
+            st.dataframe(tabela_cotacoes_estilizada(_df_activos_ticker), hide_index=True)
 
-# =========================================================
-# PÁGINA: COTAÇÕES & ACTIVOS
-# =========================================================
-elif pagina == "📈 Cotações & Activos":
-    tx = t()
-    hero("📈 " + tx["nav_map"]["📈 Cotações & Activos"].replace("📈 ", ""), tx["cot_hero_sub"], "🇦🇴 BODIVA DIRECTA")
+        secao_vup_inicio()
 
-    df_activos = _df_activos_ticker
-    if df_activos.empty:
-        st.info(tx["cot_fav_info"])
-    else:
-        st.subheader(tx["cot_indice_titulo"])
-        indice = calcular_indice_mercado(df_activos)
-        col_i1, col_i2 = st.columns([1, 2])
-        col_i1.metric(tx["cot_indice_metric"], pct_bruto(indice), delta=pct_bruto(indice))
-        col_i1.caption(tx["cot_indice_caption"])
-        df_hist_indice = obter_historico_indice()
-        with col_i2:
+    # =========================================================
+    # PÁGINA: COTAÇÕES & ACTIVOS
+    # =========================================================
+    elif pagina == "📈 Cotações & Activos":
+        tx = t()
+        hero("📈 " + tx["nav_map"]["📈 Cotações & Activos"].replace("📈 ", ""), tx["cot_hero_sub"], "🇦🇴 Dados BODIVA")
+
+        df_activos = _df_activos_ticker
+        if df_activos.empty:
+            st.info(tx["cot_fav_info"])
+        else:
+            st.subheader(tx["cot_indice_titulo"])
+            indice = calcular_indice_mercado(df_activos)
+            col_i1, col_i2 = st.columns([1, 2])
+            col_i1.metric(tx["cot_indice_metric"], pct_bruto(indice), delta=pct_bruto(indice))
+            col_i1.caption(tx["cot_indice_caption"])
+            df_hist_indice = obter_historico_indice()
+            with col_i2:
+                if len(df_hist_indice) >= 2:
+                    df_hist_indice["registado_em"] = pd.to_datetime(df_hist_indice["registado_em"])
+                    st.line_chart(df_hist_indice.set_index("registado_em")[["indice_variacao"]].rename(columns={"indice_variacao": tx["cot_indice_hist_label"]}))
+                else:
+                    st.info(tx["cot_indice_hist_info"])
+            st.markdown(tx["cot_tendencia_semanal"])
             if len(df_hist_indice) >= 2:
-                df_hist_indice["registado_em"] = pd.to_datetime(df_hist_indice["registado_em"])
-                st.line_chart(df_hist_indice.set_index("registado_em")[["indice_variacao"]].rename(columns={"indice_variacao": tx["cot_indice_hist_label"]}))
+                df_semanal = df_hist_indice.set_index("registado_em").resample("W")[["indice_variacao"]].mean().rename(columns={"indice_variacao": tx["cot_indice_hist_label"]})
+                if len(df_semanal) >= 2:
+                    st.line_chart(df_semanal)
+                else:
+                    st.caption(tx["cot_tendencia_sem_caption1"])
             else:
-                st.info(tx["cot_indice_hist_info"])
-        st.markdown(tx["cot_tendencia_semanal"])
-        if len(df_hist_indice) >= 2:
-            df_semanal = df_hist_indice.set_index("registado_em").resample("W")[["indice_variacao"]].mean().rename(columns={"indice_variacao": tx["cot_indice_hist_label"]})
-            if len(df_semanal) >= 2:
-                st.line_chart(df_semanal)
-            else:
-                st.caption(tx["cot_tendencia_sem_caption1"])
-        else:
-            st.caption(tx["cot_tendencia_sem_caption2"])
-        st.divider()
-
-        aba_fav, aba_todos, aba_graf = st.tabs([tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos"])
-        conta_id          = st.session_state["conta_id"]
-        favoritos_actuais = obter_favoritos(conta_id)
-
-        with aba_fav:
-            opcoes           = dict(zip(df_activos["nome"], df_activos["id"]))
-            seleccionados_nomes = [nome for nome, aid in opcoes.items() if aid in favoritos_actuais]
-            novos_nomes      = st.multiselect(tx["cot_fav_escolher"], options=list(opcoes.keys()), default=seleccionados_nomes)
-            if set(novos_nomes) != set(seleccionados_nomes):
-                definir_favoritos(conta_id, [opcoes[n] for n in novos_nomes])
-                st.rerun()
-            if novos_nomes:
-                st.dataframe(tabela_cotacoes_estilizada(df_activos[df_activos["nome"].isin(novos_nomes)]), hide_index=True)
-            else:
-                st.info(tx["cot_fav_info"])
-
-        with aba_todos:
-            tipos        = [tx["cot_filtrar_todos"]] + sorted(df_activos["tipo"].unique().tolist())
-            filtro_tipo  = st.selectbox(tx["cot_filtrar_tipo"], tipos)
-            df_filtrado  = df_activos if filtro_tipo == tx["cot_filtrar_todos"] else df_activos[df_activos["tipo"] == filtro_tipo]
-            st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
-            st.caption(f"{tx['cot_ultima_actualizacao']} {df_filtrado['actualizado_em'].max()}")
-            _xl_cot = _xlsx_seguro(lambda: gerar_xlsx_cotacoes(df_filtrado))
-            if _xl_cot:
-                st.download_button("⬇️ Descarregar Excel (formatado)", data=_xl_cot, file_name="cotacoes_appo.xlsx",
-                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_cot_xlsx")
-            st.download_button(tx["cot_descarregar_csv"],
-                               data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
-                               file_name="cotacoes_appo.csv", mime="text/csv")
+                st.caption(tx["cot_tendencia_sem_caption2"])
             st.divider()
-            st.subheader(tx["cot_comparacao"])
-            cols_tb = tx["cot_tabela_cols"]
-            st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": tx["cot_preco_kz"]}))
 
-        with aba_graf:
-            registar_cotacoes_hoje(df_activos)
-            try:
-                _tk_cart = {str(x).strip().upper() for x in obter_carteira_real()["ticker"]}
-            except Exception:
-                _tk_cart = set()
-            _ops = []
-            for _, _a in df_activos.iterrows():
-                _t = str(_a.get("ticker") or "").strip().upper()
-                if _t:
-                    _ops.append((("★ " if _t in _tk_cart else "") + str(_a["nome"]), _t, str(_a["nome"])))
-            _ops.sort(key=lambda x: (not x[0].startswith("★"), x[0]))
-            if not _ops:
-                st.info("Registe os tickers dos activos em Painel do Administrador → Cotações & Activos.")
-            else:
-                gc1, gc2 = st.columns([2, 3])
-                _rot = gc1.selectbox("Título (★ = em carteira do Clube)", [o[0] for o in _ops], key="graf_titulo")
-                _periodo = gc2.radio("Período", PERIODOS_GRAFICO, index=2, horizontal=True, key="graf_periodo")
-                _sel = next(o for o in _ops if o[0] == _rot)
-                _opv = obter_opv(_sel[1])
-                _ref = ((f"Preço da OPV: {_opv[0]:,.0f} Kz".replace(",", " ") + (f" ({_opv[1]:%d/%m/%Y})" if _opv[1] else "")), _opv[0]) if _opv else None
-                painel_grafico(_sel[2].upper(), f"{_sel[1]}  |  BODIVA  |  AOA", obter_serie_cotacao(_sel[1], _periodo), "Kz", _periodo, referencia=_ref,
-                               nota=("O histórico do Clube é gravado de cada vez que as cotações são actualizadas (um valor por dia, "
-                                     "o último desse dia). Quanto mais actualizações, mais completo o gráfico. "
-                                     "Não há valores dentro do dia (intraday)."))
+            aba_fav, aba_todos, aba_graf = st.tabs([tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos"])
+            conta_id          = st.session_state["conta_id"]
+            favoritos_actuais = obter_favoritos(conta_id)
 
-# =========================================================
-# PÁGINA: CONTABILIDADE & FINANÇAS
-# =========================================================
-elif pagina == "💰 Contabilidade & Finanças":
-    tx = t()
-    hero("💰 " + tx["nav_map"]["💰 Contabilidade & Finanças"].replace("💰 ", ""), tx["cont_hero_sub"])
-    resumo   = obter_resumo_patrimonial()
-    cols_df  = tx["cont_df_cols"]
-    rows_df  = tx["cont_df_rows"]
-    montantes= [kz(resumo["capital_subscrito"]), kz(resumo["capital_realizado"]), kz(resumo["investimentos"]), kz(resumo["reservas"])]
-    df_resumo = pd.DataFrame([{cols_df[0]: r[0], cols_df[1]: r[1], cols_df[2]: m, cols_df[3]: r[2]}
-                               for r, m in zip(rows_df, montantes)])
-    st.dataframe(df_resumo, hide_index=True)
-    total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são subdivisões do realizado
-    st.metric(tx["cont_patrimonio_metric"], kz(total_patrimonio))
-    st.caption(f"{tx['cont_ultima_actualizacao']} {resumo['actualizado_em']}")
+            with aba_fav:
+                opcoes           = dict(zip(df_activos["nome"], df_activos["id"]))
+                seleccionados_nomes = [nome for nome, aid in opcoes.items() if aid in favoritos_actuais]
+                novos_nomes      = st.multiselect(tx["cot_fav_escolher"], options=list(opcoes.keys()), default=seleccionados_nomes)
+                if set(novos_nomes) != set(seleccionados_nomes):
+                    definir_favoritos(conta_id, [opcoes[n] for n in novos_nomes])
+                    st.rerun()
+                if novos_nomes:
+                    st.dataframe(tabela_cotacoes_estilizada(df_activos[df_activos["nome"].isin(novos_nomes)]), hide_index=True)
+                else:
+                    st.info(tx["cot_fav_info"])
 
-# =========================================================
-# PÁGINA: HISTÓRICO & RELATÓRIOS
-# =========================================================
-elif pagina == "📊 Histórico & Relatórios":
-    tx = t()
-    hero("📊 " + tx["nav_map"]["📊 Histórico & Relatórios"].replace("📊 ", ""), tx["hist_hero_sub"])
-    df_historico = obter_historico_patrimonio()
-    if df_historico.empty or len(df_historico) < 2:
-        st.info(tx["hist_poucos_pontos"])
-    else:
-        st.caption(tx["hist_caption"])
-        st.line_chart(df_historico.set_index("registado_em")[["total"]].rename(columns={"total": tx["hist_patrimonio_label"]}))
+            with aba_todos:
+                tipos        = [tx["cot_filtrar_todos"]] + sorted(df_activos["tipo"].unique().tolist())
+                filtro_tipo  = st.selectbox(tx["cot_filtrar_tipo"], tipos)
+                df_filtrado  = df_activos if filtro_tipo == tx["cot_filtrar_todos"] else df_activos[df_activos["tipo"] == filtro_tipo]
+                st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
+                st.caption(f"{tx['cot_ultima_actualizacao']} {df_filtrado['actualizado_em'].max()}")
+                _xl_cot = _xlsx_seguro(lambda: gerar_xlsx_cotacoes(df_filtrado))
+                if _xl_cot:
+                    st.download_button("⬇️ Descarregar Excel (formatado)", data=_xl_cot, file_name="cotacoes_appo.xlsx",
+                                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_cot_xlsx")
+                st.download_button(tx["cot_descarregar_csv"],
+                                   data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                                   file_name="cotacoes_appo.csv", mime="text/csv")
+                st.divider()
+                st.subheader(tx["cot_comparacao"])
+                cols_tb = tx["cot_tabela_cols"]
+                st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": tx["cot_preco_kz"]}))
 
-    st.divider()
-    st.subheader(tx["hist_movimentos"])
-    df_movimentos = obter_movimentos()
-    if df_movimentos.empty:
-        st.info(tx["hist_sem_movimentos"])
-    else:
-        df_exibir = df_movimentos.copy()
-        df_exibir["montante_fmt"] = df_exibir["montante"].apply(kz)
-        cols_h = tx["hist_cols"]
-        st.dataframe(df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "criado_em"]].rename(columns=cols_h), hide_index=True)
-        st.download_button(tx["hist_descarregar_mov"],
-                           data=df_movimentos.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
-                           file_name="movimentos_appo.csv", mime="text/csv")
+            with aba_graf:
+                registar_cotacoes_hoje(df_activos)
+                try:
+                    _tk_cart = {str(x).strip().upper() for x in obter_carteira_real()["ticker"]}
+                except Exception:
+                    _tk_cart = set()
+                _ops = []
+                for _, _a in df_activos.iterrows():
+                    _t = str(_a.get("ticker") or "").strip().upper()
+                    if _t:
+                        _ops.append((("★ " if _t in _tk_cart else "") + str(_a["nome"]), _t, str(_a["nome"])))
+                _ops.sort(key=lambda x: (not x[0].startswith("★"), x[0]))
+                if not _ops:
+                    st.info("Registe os tickers dos activos em Painel do Administrador → Cotações & Activos.")
+                else:
+                    gc1, gc2 = st.columns([2, 3])
+                    _rot = gc1.selectbox("Título (★ = em carteira do Clube)", [o[0] for o in _ops], key="graf_titulo")
+                    _periodo = gc2.radio("Período", PERIODOS_GRAFICO, index=2, horizontal=True, key="graf_periodo")
+                    _sel = next(o for o in _ops if o[0] == _rot)
+                    _opv = obter_opv(_sel[1])
+                    _ref = ((f"Preço da OPV: {_opv[0]:,.0f} Kz".replace(",", " ") + (f" ({_opv[1]:%d/%m/%Y})" if _opv[1] else "")), _opv[0]) if _opv else None
+                    painel_grafico(_sel[2].upper(), f"{_sel[1]}  |  BODIVA  |  AOA", obter_serie_cotacao(_sel[1], _periodo), "Kz", _periodo, referencia=_ref,
+                                   nota=("O histórico do Clube é gravado de cada vez que as cotações são actualizadas (um valor por dia, "
+                                         "o último desse dia). Quanto mais actualizações, mais completo o gráfico. "
+                                         "Não há valores dentro do dia (intraday)."))
 
-    st.divider()
-    st.subheader(tx["hist_exportar"])
-    if st.button(tx["hist_gerar_pdf"]):
-        resumo    = obter_resumo_patrimonial()
-        pdf_bytes = gerar_relatorio_pdf(resumo, obter_activos(), df_movimentos)
-        nome_pdf  = tx["pdf_nome_ficheiro"].format(data=datetime.now().strftime("%Y%m%d"))
-        st.download_button(tx["hist_descarregar_pdf"], data=pdf_bytes, file_name=nome_pdf, mime="application/pdf")
+    # =========================================================
+    # PÁGINA: CONTABILIDADE & FINANÇAS
+    # =========================================================
+    elif pagina == "💰 Contabilidade & Finanças":
+        tx = t()
+        hero("💰 " + tx["nav_map"]["💰 Contabilidade & Finanças"].replace("💰 ", ""), tx["cont_hero_sub"])
+        resumo   = obter_resumo_patrimonial()
+        cols_df  = tx["cont_df_cols"]
+        rows_df  = tx["cont_df_rows"]
+        montantes= [kz(resumo["capital_subscrito"]), kz(resumo["capital_realizado"]), kz(resumo["investimentos"]), kz(resumo["reservas"])]
+        df_resumo = pd.DataFrame([{cols_df[0]: r[0], cols_df[1]: r[1], cols_df[2]: m, cols_df[3]: r[2]}
+                                   for r, m in zip(rows_df, montantes)])
+        st.dataframe(df_resumo, hide_index=True)
+        total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são subdivisões do realizado
+        st.metric(tx["cont_patrimonio_metric"], kz(total_patrimonio))
+        st.caption(f"{tx['cont_ultima_actualizacao']} {resumo['actualizado_em']}")
 
-# =========================================================
-# PÁGINA: AVALIAÇÃO DE ACTIVOS
-# =========================================================
-elif pagina == "📐 Avaliação de Activos":
-    tx = t()
-    hero("📐 " + tx["nav_map"]["📐 Avaliação de Activos"].replace("📐 ", ""), tx["aval_hero_sub"])
-    premissas = obter_premissas_macro()
-    df_aval   = obter_avaliacoes()
-
-    if df_aval.empty:
-        st.info(tx["aval_sem_dados"])
-    else:
-        empresa_sel = st.selectbox(tx["aval_empresa"], df_aval["empresa"].tolist())
-        av_linha    = df_aval[df_aval["empresa"] == empresa_sel].iloc[0]
-        av = {"sector": av_linha["sector"], "preco": float(av_linha["preco"]),
-              "acoes_circulacao": float(av_linha["acoes_circulacao"]), "lucro_liquido": float(av_linha["lucro_liquido"]),
-              "ganho_pontual": float(av_linha["ganho_pontual"]), "capital_proprio": float(av_linha["capital_proprio"]),
-              "dividendo_total": float(av_linha["dividendo_total"]), "crescimento_g": float(av_linha["crescimento_g"])}
-        m = calcular_metricas_avaliacao(av, premissas)
-
-        st.caption(f"{tx['aval_sector']}: {av['sector']} · {tx['aval_cap_mercado']} {kz(m['cap_mercado'])}")
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric(tx["aval_preco"], kz(av["preco"]))
-        col2.metric(tx["aval_pe"],    multiplo(m["pe"]))
-        col3.metric(tx["aval_pbv"],   multiplo(m["pbv"]))
-        col4.metric(tx["aval_dy"],    pct(m["dy_nominal"]))
-        nota_indicador(tx["aval_nota1"])
-
-        col5, col6, col7 = st.columns(3)
-        col5.metric(tx["aval_vj"],     kz(m["valor_justo"]) if m["valor_justo"] is not None else "n/d")
-        col6.metric(tx["aval_upside"], pct(m["upside"])     if m["upside"]      is not None else "n/d")
-        col7.metric(tx["aval_ke"],     pct(m["ke"]))
-        nota_indicador(tx["aval_nota2"])
-
-        if m["upside"] is not None:
-            if m["upside"] > 0.15:
-                st.success(tx["aval_subvalorizado"])
-            elif m["upside"] < -0.15:
-                st.warning(tx["aval_sobrevalorizado"])
-            else:
-                st.info(tx["aval_justo"])
-
-        st.caption(tx["aval_ddm_caption"])
-        st.divider()
-        st.subheader(tx["aval_premium_titulo"])
-
-        if not st.session_state["is_premium"]:
-            render_html(tx["aval_premium_lock"])
+    # =========================================================
+    # PÁGINA: HISTÓRICO & RELATÓRIOS
+    # =========================================================
+    elif pagina == "📊 Histórico & Relatórios":
+        tx = t()
+        hero("📊 " + tx["nav_map"]["📊 Histórico & Relatórios"].replace("📊 ", ""), tx["hist_hero_sub"])
+        df_historico = obter_historico_patrimonio()
+        if df_historico.empty or len(df_historico) < 2:
+            st.info(tx["hist_poucos_pontos"])
         else:
-            col_a, col_b, col_c = st.columns(3)
-            col_a.metric(tx["aval_roe"],    pct(m["roe"])    if m["roe"]    is not None else "n/d")
-            col_b.metric(tx["aval_payout"], pct(m["payout"]) if m["payout"] is not None else "n/d")
-            col_c.metric(tx["aval_dy_real"], pct(m["dy_real"]))
-            nota_indicador(tx["aval_nota3"])
+            st.caption(tx["hist_caption"])
+            st.line_chart(df_historico.set_index("registado_em")[["total"]].rename(columns={"total": tx["hist_patrimonio_label"]}))
 
-            st.markdown(tx["aval_sensibilidade"])
-            ke_base, g_base = m["ke"], av["crescimento_g"]
-            cenarios_g  = [max(0.0, g_base - 0.02), g_base, g_base + 0.02]
-            cenarios_ke = [ke_base - 0.02, ke_base, ke_base + 0.02]
-            linhas = []
-            for ke_c in cenarios_ke:
-                linha = {}
-                for g_c in cenarios_g:
-                    linha[f"g={g_c*100:.1f}%"] = kz((m["dps"] * (1 + g_c)) / (ke_c - g_c)) if ke_c > g_c else "—"
-                linhas.append(linha)
-            st.dataframe(pd.DataFrame(linhas, index=[f"Ke={ke_c*100:.1f}%" for ke_c in cenarios_ke]))
+        st.divider()
+        st.subheader(tx["hist_movimentos"])
+        df_movimentos = obter_movimentos()
+        if df_movimentos.empty:
+            st.info(tx["hist_sem_movimentos"])
+        else:
+            df_exibir = df_movimentos.copy()
+            df_exibir["montante_fmt"] = df_exibir["montante"].apply(kz)
+            cols_h = tx["hist_cols"]
+            st.dataframe(df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "criado_em"]].rename(columns=cols_h), hide_index=True)
+            st.download_button(tx["hist_descarregar_mov"],
+                               data=df_movimentos.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                               file_name="movimentos_appo.csv", mime="text/csv")
 
-            st.markdown(tx["aval_comparacao"])
-            cols_comp = tx["aval_comp_cols"]
-            linhas_comp = []
-            linhas_xlsx_comp = []
-            for _, l in df_aval.iterrows():
-                av_l = {"sector": l["sector"], "preco": float(l["preco"]), "acoes_circulacao": float(l["acoes_circulacao"]),
-                        "lucro_liquido": float(l["lucro_liquido"]), "ganho_pontual": float(l["ganho_pontual"]),
-                        "capital_proprio": float(l["capital_proprio"]), "dividendo_total": float(l["dividendo_total"]),
-                        "crescimento_g": float(l["crescimento_g"])}
-                m_l = calcular_metricas_avaliacao(av_l, premissas)
-                linhas_comp.append({cols_comp["Empresa"]: l["empresa"], cols_comp["Sector"]: l["sector"],
-                                     cols_comp["P/E"]: multiplo(m_l["pe"]), cols_comp["P/BV"]: multiplo(m_l["pbv"]),
-                                     cols_comp["ROE"]: pct(m_l["roe"]) if m_l["roe"] is not None else "n/d",
-                                     cols_comp["DY Nominal"]: pct(m_l["dy_nominal"]),
-                                     cols_comp["Upside DDM"]: pct(m_l["upside"]) if m_l["upside"] is not None else "n/d"})
-                linhas_xlsx_comp.append([l["empresa"], l["sector"], m_l["pe"], m_l["pbv"], m_l["roe"], m_l["dy_nominal"], m_l["upside"]])
-            df_comp = pd.DataFrame(linhas_comp)
-            st.dataframe(df_comp, hide_index=True)
+        st.divider()
+        st.subheader(tx["hist_exportar"])
+        if st.button(tx["hist_gerar_pdf"]):
+            resumo    = obter_resumo_patrimonial()
+            pdf_bytes = gerar_relatorio_pdf(resumo, obter_activos(), df_movimentos)
+            nome_pdf  = tx["pdf_nome_ficheiro"].format(data=datetime.now().strftime("%Y%m%d"))
+            st.download_button(tx["hist_descarregar_pdf"], data=pdf_bytes, file_name=nome_pdf, mime="application/pdf")
 
-            # Interpretação automática da tabela comparativa
-            with st.expander("💡 Como interpretar esta tabela?"):
-                st.markdown("""
+    # =========================================================
+    # PÁGINA: AVALIAÇÃO DE ACTIVOS
+    # =========================================================
+    elif pagina == "📐 Avaliação de Activos":
+        tx = t()
+        hero("📐 " + tx["nav_map"]["📐 Avaliação de Activos"].replace("📐 ", ""), tx["aval_hero_sub"])
+        premissas = obter_premissas_macro()
+        df_aval   = obter_avaliacoes()
+
+        if df_aval.empty:
+            st.info(tx["aval_sem_dados"])
+        else:
+            empresa_sel = st.selectbox(tx["aval_empresa"], df_aval["empresa"].tolist())
+            av_linha    = df_aval[df_aval["empresa"] == empresa_sel].iloc[0]
+            av = {"sector": av_linha["sector"], "preco": float(av_linha["preco"]),
+                  "acoes_circulacao": float(av_linha["acoes_circulacao"]), "lucro_liquido": float(av_linha["lucro_liquido"]),
+                  "ganho_pontual": float(av_linha["ganho_pontual"]), "capital_proprio": float(av_linha["capital_proprio"]),
+                  "dividendo_total": float(av_linha["dividendo_total"]), "crescimento_g": float(av_linha["crescimento_g"])}
+            m = calcular_metricas_avaliacao(av, premissas)
+
+            st.caption(f"{tx['aval_sector']}: {av['sector']} · {tx['aval_cap_mercado']} {kz(m['cap_mercado'])}")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric(tx["aval_preco"], kz(av["preco"]))
+            col2.metric(tx["aval_pe"],    multiplo(m["pe"]))
+            col3.metric(tx["aval_pbv"],   multiplo(m["pbv"]))
+            col4.metric(tx["aval_dy"],    pct(m["dy_nominal"]))
+            nota_indicador(tx["aval_nota1"])
+
+            col5, col6, col7 = st.columns(3)
+            col5.metric(tx["aval_vj"],     kz(m["valor_justo"]) if m["valor_justo"] is not None else "n/d")
+            col6.metric(tx["aval_upside"], pct(m["upside"])     if m["upside"]      is not None else "n/d")
+            col7.metric(tx["aval_ke"],     pct(m["ke"]))
+            nota_indicador(tx["aval_nota2"])
+
+            if m["valor_justo"] is None:
+                st.warning("Premissas inválidas para o modelo: o crescimento assumido (g) tem de ser inferior ao custo de capital (Ke). Ajuste as premissas no painel do administrador.")
+            if m["upside"] is not None:
+                if m["upside"] > 0.15:
+                    st.success(tx["aval_subvalorizado"])
+                elif m["upside"] < -0.15:
+                    st.warning(tx["aval_sobrevalorizado"])
+                else:
+                    st.info(tx["aval_justo"])
+
+            st.caption(tx["aval_ddm_caption"])
+            st.divider()
+            st.subheader(tx["aval_premium_titulo"])
+
+            if not st.session_state["is_premium"]:
+                render_html(tx["aval_premium_lock"])
+            else:
+                col_a, col_b, col_c = st.columns(3)
+                col_a.metric(tx["aval_roe"],    pct(m["roe"])    if m["roe"]    is not None else "n/d")
+                col_b.metric(tx["aval_payout"], pct(m["payout"]) if m["payout"] is not None else "n/d")
+                col_c.metric(tx["aval_dy_real"], pct(m["dy_real"]))
+                nota_indicador(tx["aval_nota3"])
+
+                st.markdown(tx["aval_sensibilidade"])
+                ke_base, g_base = m["ke"], av["crescimento_g"]
+                cenarios_g  = [max(0.0, g_base - 0.02), g_base, g_base + 0.02]
+                cenarios_ke = [ke_base - 0.02, ke_base, ke_base + 0.02]
+                linhas = []
+                for ke_c in cenarios_ke:
+                    linha = {}
+                    for g_c in cenarios_g:
+                        linha[f"g={g_c*100:.1f}%"] = kz((m["dps"] * (1 + g_c)) / (ke_c - g_c)) if ke_c > g_c else "—"
+                    linhas.append(linha)
+                st.dataframe(pd.DataFrame(linhas, index=[f"Ke={ke_c*100:.1f}%" for ke_c in cenarios_ke]))
+
+                st.markdown(tx["aval_comparacao"])
+                cols_comp = tx["aval_comp_cols"]
+                linhas_comp = []
+                linhas_xlsx_comp = []
+                for _, l in df_aval.iterrows():
+                    av_l = {"sector": l["sector"], "preco": float(l["preco"]), "acoes_circulacao": float(l["acoes_circulacao"]),
+                            "lucro_liquido": float(l["lucro_liquido"]), "ganho_pontual": float(l["ganho_pontual"]),
+                            "capital_proprio": float(l["capital_proprio"]), "dividendo_total": float(l["dividendo_total"]),
+                            "crescimento_g": float(l["crescimento_g"])}
+                    m_l = calcular_metricas_avaliacao(av_l, premissas)
+                    linhas_comp.append({cols_comp["Empresa"]: l["empresa"], cols_comp["Sector"]: l["sector"],
+                                         cols_comp["P/E"]: multiplo(m_l["pe"]), cols_comp["P/BV"]: multiplo(m_l["pbv"]),
+                                         cols_comp["ROE"]: pct(m_l["roe"]) if m_l["roe"] is not None else "n/d",
+                                         cols_comp["DY Nominal"]: pct(m_l["dy_nominal"]),
+                                         cols_comp["Upside DDM"]: pct(m_l["upside"]) if m_l["upside"] is not None else "n/d"})
+                    linhas_xlsx_comp.append([l["empresa"], l["sector"], m_l["pe"], m_l["pbv"], m_l["roe"], m_l["dy_nominal"], m_l["upside"]])
+                df_comp = pd.DataFrame(linhas_comp)
+                st.dataframe(df_comp, hide_index=True)
+
+                # Interpretação automática da tabela comparativa
+                with st.expander("💡 Como interpretar esta tabela?"):
+                    st.markdown("""
 **P/E (Price-to-Earnings):** Quantos anos de lucro estás a pagar pelo preço actual.
 - P/E < 8x → potencialmente barato para o contexto angolano
 - P/E 8–15x → zona de fair value
@@ -4550,105 +5128,105 @@ elif pagina == "📐 Avaliação de Activos":
 - ⚠️ O DDM é sensível às premissas de crescimento (g) e custo de capital (Ke) — usar sempre como uma referência, não como verdade absoluta.
                 """)
 
-            _xl_comp = _xlsx_seguro(lambda: gerar_xlsx_comparacao(linhas_xlsx_comp))
-            if _xl_comp:
-                st.download_button("⬇️ Descarregar Excel (formatado)", data=_xl_comp, file_name="comparacao_sectorial_appo.xlsx",
-                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_comp_xlsx")
-            st.download_button(tx["aval_descarregar_comp"],
-                               data=df_comp.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
-                               file_name="comparacao_sectorial_appo.csv", mime="text/csv")
+                _xl_comp = _xlsx_seguro(lambda: gerar_xlsx_comparacao(linhas_xlsx_comp))
+                if _xl_comp:
+                    st.download_button("⬇️ Descarregar Excel (formatado)", data=_xl_comp, file_name="comparacao_sectorial_appo.xlsx",
+                                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_comp_xlsx")
+                st.download_button(tx["aval_descarregar_comp"],
+                                   data=df_comp.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                                   file_name="comparacao_sectorial_appo.csv", mime="text/csv")
 
-# =========================================================
-# PÁGINA: CONVERSOR DE MOEDA
-# =========================================================
-elif pagina == "💱 Conversor de Moeda":
-    tx = t()
-    hero("💱 " + tx["nav_map"]["💱 Conversor de Moeda"].replace("💱 ", ""), tx["conv_hero_sub"], "💱 exchangerate-api.com (aberta)")
+    # =========================================================
+    # PÁGINA: CONVERSOR DE MOEDA
+    # =========================================================
+    elif pagina == "💱 Conversor de Moeda":
+        tx = t()
+        hero("💱 " + tx["nav_map"]["💱 Conversor de Moeda"].replace("💱 ", ""), tx["conv_hero_sub"], "💱 exchangerate-api.com (aberta)")
 
-    MOEDAS = ["AOA", "USD", "EUR", "GBP", "ZAR", "CNY", "BRL"]
-    col1, col2, col3 = st.columns(3)
-    moeda_de  = col1.selectbox(tx["conv_de"],   MOEDAS, index=0)
-    moeda_para= col2.selectbox(tx["conv_para"], MOEDAS, index=1)
-    valor     = col3.number_input(tx["conv_valor"], min_value=0.0, value=1000.0, step=100.0)
+        MOEDAS = ["AOA", "USD", "EUR", "GBP", "ZAR", "CNY", "BRL"]
+        col1, col2, col3 = st.columns(3)
+        moeda_de  = col1.selectbox(tx["conv_de"],   MOEDAS, index=0)
+        moeda_para= col2.selectbox(tx["conv_para"], MOEDAS, index=1)
+        valor     = col3.number_input(tx["conv_valor"], min_value=0.0, value=1000.0, step=100.0)
 
-    try:
-        dados_cambio = obter_taxas_cambio(moeda_de)
-        if moeda_de == "AOA":
-            registar_historico_cambio(dados_cambio["rates"])
-        taxa = dados_cambio["rates"].get(moeda_para)
-        if taxa is None:
-            st.error(tx["conv_erro"])
+        try:
+            dados_cambio = obter_taxas_cambio(moeda_de)
+            if moeda_de == "AOA":
+                registar_historico_cambio(dados_cambio["rates"])
+            taxa = dados_cambio["rates"].get(moeda_para)
+            if taxa is None:
+                st.error(tx["conv_erro"])
+            else:
+                resultado = valor * taxa
+                st.metric(f"{valor:,.2f} {moeda_de} {tx['conv_equivale']}", f"{resultado:,.2f} {moeda_para}")
+                st.caption(f"{tx['conv_taxa']} 1 {moeda_de} = {taxa:.6f} {moeda_para}. {tx['conv_actualizado']} {dados_cambio['actualizado']}.")
+                texto_partilha = tx["conv_partilha"].format(v=f"{valor:,.2f}", de=moeda_de, r=f"{resultado:,.2f}", para=moeda_para)
+                botoes_partilha(texto_partilha)
+        except Exception:
+            st.warning(tx["conv_aviso"])
+
+        st.divider()
+        st.subheader(tx["conv_tabela_titulo"])
+        try:
+            dados_kz = obter_taxas_cambio("AOA")
+            registar_historico_cambio(dados_kz["rates"])
+            col_eq = tx["conv_tabela_col"]
+            linhas = [{"Moeda": m, col_eq: f"{dados_kz['rates'].get(m, 0):.6f} {m}"} for m in MOEDAS if m != "AOA"]
+            st.dataframe(pd.DataFrame(linhas), hide_index=True)
+        except Exception:
+            st.caption(tx["conv_tabela_indisponivel"])
+
+        st.divider()
+        st.subheader("📈 Evolução do câmbio do Kwanza")
+        cg_a, cg_b = st.columns([1, 3])
+        moeda_graf = cg_a.selectbox("Moeda", ["USD", "EUR", "GBP", "ZAR", "CNY", "BRL"], key="conv_graf_moeda")
+        periodo_cambio = cg_b.radio("Período", PERIODOS_GRAFICO, index=2, horizontal=True, key="conv_graf_periodo")
+        try:
+            serie_cambio = obter_serie_cambio_aoa(moeda_graf, periodo_cambio)
+        except Exception:
+            serie_cambio = pd.DataFrame(columns=["Data", "Valor"])
+        painel_grafico(f"{moeda_graf} / AOA", f"Kz por 1 {moeda_graf}", serie_cambio, "Kz", periodo_cambio,
+                       nota=("Taxas indicativas de mercado (fonte aberta: fawazahmed0/exchange-api), uma por dia; "
+                             f"os dados existem desde {CAMBIO_DADOS_DESDE[8:]}/{CAMBIO_DADOS_DESDE[5:7]}/{CAMBIO_DADOS_DESDE[:4]}, "
+                             "por isso o período de 5 anos mostra só o que há desde essa data. Não há valores dentro do dia (intraday). "
+                             "Podem diferir da taxa oficial do BNA e das praticadas pelos bancos."))
+
+    # =========================================================
+    # PÁGINA: SIMULADOR — HOME BROKER APPO + JUROS COMPOSTOS
+    # =========================================================
+    elif pagina == "🧪 Simulador de Investimento":
+        tx = t()
+        hero("🧪 Home Broker APPO — BODIVA Virtual",
+             "Opera a bolsa angolana sem risco real · Dotação inicial: 3 000 000 Kz",
+             "🎮 BODIVA Virtual · Dinheiro fictício")
+
+        # ── carregar estado persistido deste sócio (uma vez por sessão) ─
+        _email_sim = st.session_state.get("conta_email", "")
+        if st.session_state.get("sim_carregado_para") != _email_sim:
+            _saldo0, _cart0, _hist0 = obter_estado_simulador(_email_sim)
+            st.session_state["sim_carteira"]    = _cart0
+            st.session_state["sim_saldo_caixa"] = _saldo0
+            st.session_state["sim_historico"]   = _hist0
+            st.session_state["sim_carregado_para"] = _email_sim
+        if "sim_qtd_sel" not in st.session_state:
+            st.session_state["sim_qtd_sel"] = {}
+
+        df_activos_sim = _df_activos_ticker.copy()
+        # Filtro robusto: aceita Ação, ACÇÃO, Acao, etc.
+        if not df_activos_sim.empty:
+            acoes_sim = df_activos_sim[
+                df_activos_sim["tipo"].str.upper().str.replace("Ç","C").str.replace("Ã","A").str.contains("A", na=False)
+            ].copy()
         else:
-            resultado = valor * taxa
-            st.metric(f"{valor:,.2f} {moeda_de} {tx['conv_equivale']}", f"{resultado:,.2f} {moeda_para}")
-            st.caption(f"{tx['conv_taxa']} 1 {moeda_de} = {taxa:.6f} {moeda_para}. {tx['conv_actualizado']} {dados_cambio['actualizado']}.")
-            texto_partilha = tx["conv_partilha"].format(v=f"{valor:,.2f}", de=moeda_de, r=f"{resultado:,.2f}", para=moeda_para)
-            botoes_partilha(texto_partilha)
-    except Exception:
-        st.warning(tx["conv_aviso"])
+            acoes_sim = pd.DataFrame()
 
-    st.divider()
-    st.subheader(tx["conv_tabela_titulo"])
-    try:
-        dados_kz = obter_taxas_cambio("AOA")
-        registar_historico_cambio(dados_kz["rates"])
-        col_eq = tx["conv_tabela_col"]
-        linhas = [{"Moeda": m, col_eq: f"{dados_kz['rates'].get(m, 0):.6f} {m}"} for m in MOEDAS if m != "AOA"]
-        st.dataframe(pd.DataFrame(linhas), hide_index=True)
-    except Exception:
-        st.caption(tx["conv_tabela_indisponivel"])
+        aba_broker, aba_carteira, aba_ordens, aba_compostos = st.tabs(
+            ["📊 Mercado", "💼 Carteira", "🧾 Ordens", "📈 Juros Compostos"])
 
-    st.divider()
-    st.subheader("📈 Evolução do câmbio do Kwanza")
-    cg_a, cg_b = st.columns([1, 3])
-    moeda_graf = cg_a.selectbox("Moeda", ["USD", "EUR", "GBP", "ZAR", "CNY", "BRL"], key="conv_graf_moeda")
-    periodo_cambio = cg_b.radio("Período", PERIODOS_GRAFICO, index=2, horizontal=True, key="conv_graf_periodo")
-    try:
-        serie_cambio = obter_serie_cambio_aoa(moeda_graf, periodo_cambio)
-    except Exception:
-        serie_cambio = pd.DataFrame(columns=["Data", "Valor"])
-    painel_grafico(f"{moeda_graf} / AOA", f"Kz por 1 {moeda_graf}", serie_cambio, "Kz", periodo_cambio,
-                   nota=("Taxas indicativas de mercado (fonte aberta: fawazahmed0/exchange-api), uma por dia; "
-                         f"os dados existem desde {CAMBIO_DADOS_DESDE[8:]}/{CAMBIO_DADOS_DESDE[5:7]}/{CAMBIO_DADOS_DESDE[:4]}, "
-                         "por isso o período de 5 anos mostra só o que há desde essa data. Não há valores dentro do dia (intraday). "
-                         "Podem diferir da taxa oficial do BNA e das praticadas pelos bancos."))
+        import html as _html
 
-# =========================================================
-# PÁGINA: SIMULADOR — HOME BROKER APPO + JUROS COMPOSTOS
-# =========================================================
-elif pagina == "🧪 Simulador de Investimento":
-    tx = t()
-    hero("🧪 Home Broker APPO — BODIVA Virtual",
-         "Opera a bolsa angolana sem risco real · Dotação inicial: 3 000 000 Kz",
-         "🎮 BODIVA Virtual · Dinheiro fictício")
-
-    # ── carregar estado persistido deste sócio (uma vez por sessão) ─
-    _email_sim = st.session_state.get("conta_email", "")
-    if st.session_state.get("sim_carregado_para") != _email_sim:
-        _saldo0, _cart0, _hist0 = obter_estado_simulador(_email_sim)
-        st.session_state["sim_carteira"]    = _cart0
-        st.session_state["sim_saldo_caixa"] = _saldo0
-        st.session_state["sim_historico"]   = _hist0
-        st.session_state["sim_carregado_para"] = _email_sim
-    if "sim_qtd_sel" not in st.session_state:
-        st.session_state["sim_qtd_sel"] = {}
-
-    df_activos_sim = _df_activos_ticker.copy()
-    # Filtro robusto: aceita Ação, ACÇÃO, Acao, etc.
-    if not df_activos_sim.empty:
-        acoes_sim = df_activos_sim[
-            df_activos_sim["tipo"].str.upper().str.replace("Ç","C").str.replace("Ã","A").str.contains("A", na=False)
-        ].copy()
-    else:
-        acoes_sim = pd.DataFrame()
-
-    aba_broker, aba_carteira, aba_ordens, aba_compostos = st.tabs(
-        ["📊 Mercado", "💼 Carteira", "🧾 Ordens", "📈 Juros Compostos"])
-
-    import html as _html
-
-    # Estilo "home broker" claro, nas cores do Clube (bordeaux / cinzento avermelhado) — só nesta página
-    render_html("""<style>
+        # Estilo "home broker" claro, nas cores do Clube (bordeaux / cinzento avermelhado) — só nesta página
+        render_html("""<style>
     .bfa-wrap{background:#FFFFFF;border:1px solid #ECDEE3;border-radius:8px;overflow-x:auto;margin-bottom:12px;}
     .bfa-tbl{width:100%;border-collapse:collapse;font-size:0.8rem;color:#1A1A2E;}
     .bfa-tbl th{color:#7C1F3E;font-weight:700;text-align:right;padding:9px 10px;background:#F4ECEF;border-bottom:2px solid #7C1F3E;font-size:0.7rem;white-space:nowrap;text-transform:uppercase;letter-spacing:0.4px;}
@@ -4673,26 +5251,26 @@ elif pagina == "🧪 Simulador de Investimento":
     button[kind="secondary"]:hover,button[data-testid="stBaseButton-secondary"]:hover{background:#DEC4CB !important;}
     </style>""")
 
-    # título → preço / variação actuais (chave = ticker, ou nome se não houver ticker)
-    _mapa_preco, _mapa_var = {}, {}
-    if not df_activos_sim.empty:
-        for _, _r in df_activos_sim.iterrows():
-            _k = str(_r.get("ticker") or "").strip().upper() or str(_r["nome"])
-            _mapa_preco[_k] = float(_r["preco"])
-            _mapa_var[_k]   = float(_r["variacao"])
+        # título → preço / variação actuais (chave = ticker, ou nome se não houver ticker)
+        _mapa_preco, _mapa_var = {}, {}
+        if not df_activos_sim.empty:
+            for _, _r in df_activos_sim.iterrows():
+                _k = str(_r.get("ticker") or "").strip().upper() or str(_r["nome"])
+                _mapa_preco[_k] = float(_r["preco"])
+                _mapa_var[_k]   = float(_r["variacao"])
 
-    # ══════════════════════════════════════════════════════════════
-    # ABA 1 — MERCADO + PAINEL DE NEGOCIAÇÃO (estilo BFA Capital Markets)
-    # ══════════════════════════════════════════════════════════════
-    with aba_broker:
-        saldo_caixa = st.session_state["sim_saldo_caixa"]
-        cart        = st.session_state["sim_carteira"]
-        valor_acoes = sum(d["qtd"] * _mapa_preco.get(k, d["preco_medio"]) for k, d in cart.items())
-        patrimonio  = saldo_caixa + valor_acoes
-        var_total   = patrimonio - 3_000_000
-        cls_vt      = "bfa-up" if var_total >= 0 else "bfa-dn"
+        # ══════════════════════════════════════════════════════════════
+        # ABA 1 — MERCADO + PAINEL DE NEGOCIAÇÃO (estilo BFA Capital Markets)
+        # ══════════════════════════════════════════════════════════════
+        with aba_broker:
+            saldo_caixa = st.session_state["sim_saldo_caixa"]
+            cart        = st.session_state["sim_carteira"]
+            valor_acoes = sum(d["qtd"] * _mapa_preco.get(k, d["preco_medio"]) for k, d in cart.items())
+            patrimonio  = saldo_caixa + valor_acoes
+            var_total   = patrimonio - 3_000_000
+            cls_vt      = "bfa-up" if var_total >= 0 else "bfa-dn"
 
-        render_html(f"""<div class="bfa-bar">
+            render_html(f"""<div class="bfa-bar">
         <div><span class="k">Conta</span><span class="v">Virtual APPO</span></div>
         <div><span class="k">Titular</span><span class="v">{_html.escape(str(st.session_state.get('conta_nome', '')).upper())}</span></div>
         <div><span class="k">Saldo negociação</span><span class="v">{kz2(saldo_caixa)}</span></div>
@@ -4701,51 +5279,51 @@ elif pagina == "🧪 Simulador de Investimento":
         <div><span class="k">Ganho / perda</span><span class="v {cls_vt}">{kz2(var_total)} ({var_total/3_000_000*100:+.2f}%)</span></div>
         </div>""")
 
-        _msg = st.session_state.pop("sim_msg", None)
-        if _msg:
-            st.success(_msg)
+            _msg = st.session_state.pop("sim_msg", None)
+            if _msg:
+                st.success(_msg)
 
-        if acoes_sim.empty:
-            st.info("Ainda não existem acções cotadas para negociar.")
-        else:
-            _lista = []
-            for _, row in acoes_sim.iterrows():
-                _tk = str(row.get("ticker") or "").strip().upper()
-                _lista.append({
-                    "chave": _tk or str(row["nome"]), "nome": str(row["nome"]), "tk": _tk,
-                    "preco": float(row["preco"]), "var": float(row["variacao"]),
-                    "act": row.get("actualizado_em"),
-                })
-            _rotulos = [x["nome"] + (f"  ({x['tk']})" if x["tk"] else "") for x in _lista]
-            if st.session_state.get("sim_sel") not in _rotulos:
-                st.session_state["sim_sel"] = _rotulos[0]
-            _sel = st.session_state["sim_sel"]
+            if acoes_sim.empty:
+                st.info("Ainda não existem acções cotadas para negociar.")
+            else:
+                _lista = []
+                for _, row in acoes_sim.iterrows():
+                    _tk = str(row.get("ticker") or "").strip().upper()
+                    _lista.append({
+                        "chave": _tk or str(row["nome"]), "nome": str(row["nome"]), "tk": _tk,
+                        "preco": float(row["preco"]), "var": float(row["variacao"]),
+                        "act": row.get("actualizado_em"),
+                    })
+                _rotulos = [x["nome"] + (f"  ({x['tk']})" if x["tk"] else "") for x in _lista]
+                if st.session_state.get("sim_sel") not in _rotulos:
+                    st.session_state["sim_sel"] = _rotulos[0]
+                _sel = st.session_state["sim_sel"]
 
-            _linhas_html = []
-            for x, rot in zip(_lista, _rotulos):
-                v    = x["var"]
-                cls  = "bfa-up" if v > 0 else ("bfa-dn" if v < 0 else "bfa-fl")
-                seta = "↑" if v > 0 else ("↓" if v < 0 else "—")
-                qc   = cart.get(x["chave"], {}).get("qtd", 0)
-                sel  = " class='sel'" if rot == _sel else ""
-                _linhas_html.append(
-                    f"<tr{sel}><td class='l'><b>{_html.escape(x['nome'].upper())}</b></td>"
-                    f"<td class='l'>{_html.escape(x['tk'] or '—')}</td><td class='l'>BODIVA ACÇÕES</td>"
-                    f"<td><b>{kz2(x['preco'])}</b></td><td>AOA</td><td>{_fmt_dt(x['act'])}</td>"
-                    f"<td class='{cls}'>{pct_bruto(v)} {seta}</td><td>{qc:g}</td></tr>")
-            render_html(
-                "<div class='bfa-wrap'><table class='bfa-tbl'><thead><tr>"
-                "<th class='l'>título</th><th class='l'>ticker</th><th class='l'>mercado</th>"
-                "<th>cotação</th><th>moeda</th><th>últ. cotação</th><th>% var. diária</th><th>em carteira</th>"
-                "</tr></thead><tbody>" + "".join(_linhas_html) + "</tbody></table></div>")
+                _linhas_html = []
+                for x, rot in zip(_lista, _rotulos):
+                    v    = x["var"]
+                    cls  = "bfa-up" if v > 0 else ("bfa-dn" if v < 0 else "bfa-fl")
+                    seta = "↑" if v > 0 else ("↓" if v < 0 else "—")
+                    qc   = cart.get(x["chave"], {}).get("qtd", 0)
+                    sel  = " class='sel'" if rot == _sel else ""
+                    _linhas_html.append(
+                        f"<tr{sel}><td class='l'><b>{_html.escape(x['nome'].upper())}</b></td>"
+                        f"<td class='l'>{_html.escape(x['tk'] or '—')}</td><td class='l'>BODIVA ACÇÕES</td>"
+                        f"<td><b>{kz2(x['preco'])}</b></td><td>AOA</td><td>{_fmt_dt(x['act'])}</td>"
+                        f"<td class='{cls}'>{pct_bruto(v)} {seta}</td><td>{qc:g}</td></tr>")
+                render_html(
+                    "<div class='bfa-wrap'><table class='bfa-tbl'><thead><tr>"
+                    "<th class='l'>título</th><th class='l'>ticker</th><th class='l'>mercado</th>"
+                    "<th>cotação</th><th>moeda</th><th>últ. cotação</th><th>% var. diária</th><th>em carteira</th>"
+                    "</tr></thead><tbody>" + "".join(_linhas_html) + "</tbody></table></div>")
 
-            st.selectbox("Título a negociar", _rotulos, key="sim_sel")
-            a        = _lista[_rotulos.index(st.session_state["sim_sel"])]
-            ent      = cart.get(a["chave"], {})
-            qtd_cart = ent.get("qtd", 0)
-            cls_a    = "bfa-up" if a["var"] > 0 else ("bfa-dn" if a["var"] < 0 else "bfa-fl")
-            pm_txt   = kz2(ent["preco_medio"]) if ent else "—"
-            render_html(f"""<div class="bfa-ticket">
+                st.selectbox("Título a negociar", _rotulos, key="sim_sel")
+                a        = _lista[_rotulos.index(st.session_state["sim_sel"])]
+                ent      = cart.get(a["chave"], {})
+                qtd_cart = ent.get("qtd", 0)
+                cls_a    = "bfa-up" if a["var"] > 0 else ("bfa-dn" if a["var"] < 0 else "bfa-fl")
+                pm_txt   = kz2(ent["preco_medio"]) if ent else "—"
+                render_html(f"""<div class="bfa-ticket">
             <div><div class="nome">{_html.escape(a['nome'].upper())}</div>
             <div class="sub">{_html.escape(a['tk'] or '—')} &nbsp;|&nbsp; BODIVA ACÇÕES &nbsp;|&nbsp; AOA</div></div>
             <div><span class="k">Cotação</span><span class="big">{kz2(a['preco'])}</span></div>
@@ -4754,1161 +5332,1178 @@ elif pagina == "🧪 Simulador de Investimento":
             <div><span class="k">Preço médio</span><span class="m">{pm_txt}</span></div>
             </div>""")
 
-            # confirmação de ordem pendente
-            pend = st.session_state.get("sim_ordem_pend")
-            if pend:
-                _tp = pend["qtd"] * pend["preco"]
-                st.info(f"**Confirmar ordem de {'COMPRA' if pend['op'] == 'C' else 'VENDA'}** — "
-                        f"{pend['qtd']:g} × {pend['nome']} a {kz2(pend['preco'])} = **{kz2(_tp)} Kz**")
-                cc1, cc2, _ = st.columns([1, 1, 2])
-                if cc1.button("✅ Confirmar ordem", key="sim_conf", type="primary", use_container_width=True):
-                    ch, nm, tkp, q, p = pend["chave"], pend["nome"], pend["tk"], pend["qtd"], pend["preco"]
-                    valor = q * p
-                    oper  = None
-                    if pend["op"] == "C":
-                        if st.session_state["sim_saldo_caixa"] >= valor:
-                            st.session_state["sim_saldo_caixa"] -= valor
-                            if ch in cart:
-                                tq = cart[ch]["qtd"] + q
-                                tc = cart[ch]["qtd"] * cart[ch]["preco_medio"] + valor
-                                cart[ch] = {"qtd": tq, "preco_medio": tc / tq, "nome": nm}
-                            else:
-                                cart[ch] = {"qtd": q, "preco_medio": p, "nome": nm}
-                            oper = "✅ COMPRA"
-                    else:
-                        if cart.get(ch, {}).get("qtd", 0) >= q:
-                            st.session_state["sim_saldo_caixa"] += valor
-                            cart[ch]["qtd"] -= q
-                            if cart[ch]["qtd"] <= 0:
-                                del cart[ch]
-                            oper = "🔴 VENDA"
-                    if oper is None:
-                        st.session_state.pop("sim_ordem_pend", None)
-                        st.session_state["sim_msg"] = "Ordem não executada: saldo ou quantidade insuficiente."
-                        st.rerun()
-                    else:
-                        st.session_state["sim_historico"].insert(0, {
-                            "Operação": oper, "Ticker": tkp or nm, "Qtd": q, "Preço Unit.": p, "Total": valor})
-                        guardar_saldo_simulador(_email_sim, st.session_state["sim_saldo_caixa"])
-                        guardar_posicao_simulador(_email_sim, ch, cart.get(ch))
-                        registar_operacao_simulador(_email_sim, oper, tkp or nm, q, p, valor)
-                        st.session_state.pop("sim_ordem_pend", None)
-                        st.session_state["sim_msg"] = f"{oper} executada: {q:g} × {nm} a {kz2(p)} Kz."
-                        st.rerun()
-                if cc2.button("✖ Cancelar", key="sim_canc", use_container_width=True):
-                    st.session_state.pop("sim_ordem_pend", None)
-                    st.rerun()
-
-            c1, c2, c3 = st.columns(3)
-            qtd_op = int(c1.number_input("Quantidade", min_value=1, value=1, step=1, key="sim_qtd_op"))
-            total  = qtd_op * a["preco"]
-            c2.metric("Preço (cotação de mercado)", kz2(a["preco"]))
-            c3.metric("Valor da ordem", kz2(total))
-            b1, b2, _ = st.columns([1, 1, 2])
-            comprar = b1.button("＋ Comprar", key="sim_btn_buy", type="primary", use_container_width=True)
-            vender  = b2.button("－ Vender", key="sim_btn_sell", type="secondary", use_container_width=True,
-                                disabled=(qtd_cart < qtd_op))
-            if comprar or vender:
-                if comprar and saldo_caixa < total:
-                    st.warning(f"Saldo insuficiente — necessitas {kz2(total)} Kz, tens {kz2(saldo_caixa)} Kz.")
-                else:
-                    st.session_state["sim_ordem_pend"] = {
-                        "op": "C" if comprar else "V", "chave": a["chave"], "nome": a["nome"],
-                        "tk": a["tk"], "qtd": qtd_op, "preco": a["preco"]}
-                    st.rerun()
-
-            st.caption("⚠️ Preços da BODIVA actualizados pelo administrador — não são cotações em tempo real. "
-                       "Dinheiro virtual, só para treino.")
-
-    # ══════════════════════════════════════════════════════════════
-    # ABA 2 — CARTEIRA (estilo BFA Capital Markets)
-    # ══════════════════════════════════════════════════════════════
-    with aba_carteira:
-        cart        = st.session_state["sim_carteira"]
-        saldo_caixa = st.session_state["sim_saldo_caixa"]
-        if not cart:
-            st.info("A tua carteira virtual está vazia. Vai ao Mercado e compra as tuas primeiras acções!")
-        else:
-            _vals      = {k: d["qtd"] * _mapa_preco.get(k, d["preco_medio"]) for k, d in cart.items()}
-            _tot_acoes = sum(_vals.values())
-            _tot_aq    = sum(d["qtd"] * d["preco_medio"] for d in cart.values())
-            _linhas_c  = []
-            for k, d in cart.items():
-                p_act  = _mapa_preco.get(k, d["preco_medio"])
-                var_d  = _mapa_var.get(k, 0.0)
-                v_act  = _vals[k]
-                v_aq   = d["qtd"] * d["preco_medio"]
-                pl     = v_act - v_aq
-                cls_pl = "bfa-up" if pl > 0 else ("bfa-dn" if pl < 0 else "bfa-fl")
-                cls_vd = "bfa-up" if var_d > 0 else ("bfa-dn" if var_d < 0 else "bfa-fl")
-                peso   = (v_act / _tot_acoes * 100) if _tot_acoes else 0
-                _linhas_c.append(
-                    f"<tr><td class='l'><b>{_html.escape(str(d['nome']).upper())}</b></td><td class='l'>{_html.escape(k)}</td>"
-                    f"<td class='l'>BODIVA ACÇÕES</td><td>{d['qtd']:g}</td><td>{kz2(p_act)}</td><td>AOA</td>"
-                    f"<td>{kz2(v_act)}</td><td>{kz2(v_aq)}</td><td class='{cls_pl}'>{kz2(pl)}</td>"
-                    f"<td class='{cls_vd}'>{pct_bruto(var_d)}</td><td>{peso:.2f}%</td></tr>")
-            _pl_t   = _tot_acoes - _tot_aq
-            cls_plt = "bfa-up" if _pl_t > 0 else ("bfa-dn" if _pl_t < 0 else "bfa-fl")
-            _linhas_c.append(
-                f"<tr class='tot'><td class='l' colspan='6'>TOTAL</td><td>{kz2(_tot_acoes)}</td>"
-                f"<td>{kz2(_tot_aq)}</td><td class='{cls_plt}'>{kz2(_pl_t)}</td><td></td><td>100,00%</td></tr>")
-            render_html(
-                "<div class='bfa-wrap'><table class='bfa-tbl'><thead><tr>"
-                "<th class='l'>título</th><th class='l'>ticker</th><th class='l'>mercado</th>"
-                "<th>quantidade</th><th>cotação</th><th>moeda</th><th>valor actual</th><th>aquisição</th>"
-                "<th>valias potenciais</th><th>var. diária</th><th>% carteira</th>"
-                "</tr></thead><tbody>" + "".join(_linhas_c) + "</tbody></table></div>")
-
-            col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-            col_r1.metric("Saldo negociação", kz2(saldo_caixa))
-            col_r2.metric("Valor em acções", kz2(_tot_acoes))
-            col_r3.metric("Património total", kz2(saldo_caixa + _tot_acoes))
-            var_t = saldo_caixa + _tot_acoes - 3_000_000
-            col_r4.metric("Ganho/Perda total", kz2(var_t), delta=f"{var_t/3_000_000*100:+.2f}%")
-            nota_indicador("<b>Valias potenciais</b> = diferença entre o valor actual e o que pagaste (ganho/perda ainda não realizado).")
-
-    # ══════════════════════════════════════════════════════════════
-    # ABA 3 — ORDENS (histórico) + reiniciar
-    # ══════════════════════════════════════════════════════════════
-    with aba_ordens:
-        st.subheader("📜 Histórico de Ordens")
-        if st.session_state["sim_historico"]:
-            df_h = pd.DataFrame(st.session_state["sim_historico"])
-            for _c in ("Preço Unit.", "Total"):
-                if _c in df_h.columns:
-                    df_h[_c] = df_h[_c].apply(lambda v: kz2(v) if isinstance(v, (int, float)) else v)
-            st.dataframe(df_h, hide_index=True)
-        else:
-            st.info("Ainda não executaste nenhuma ordem.")
-
-        if st.button("🔄 Reiniciar carteira virtual (voltar a 3 000 000 Kz)", type="secondary"):
-            reiniciar_simulador_db(_email_sim)
-            st.session_state["sim_carteira"] = {}
-            st.session_state["sim_saldo_caixa"] = 3_000_000.0
-            st.session_state["sim_historico"] = []
-            st.session_state.pop("sim_ordem_pend", None)
-            for k in list(st.session_state.keys()):
-                if k.startswith("sim_qtd_") and k != "sim_qtd_op":
-                    del st.session_state[k]
-            st.rerun()
-
-    # ══════════════════════════════════════════════════════════════
-    # ABA 4 — JUROS COMPOSTOS
-    # ══════════════════════════════════════════════════════════════
-    with aba_compostos:
-        st.subheader("📈 Simulador de Juros Compostos")
-        col1, col2 = st.columns(2)
-        valor_inicial  = col1.number_input("Valor inicial (Kz)", min_value=0.0, value=100000.0, step=10000.0)
-        contrib_mensal = col2.number_input("Contribuição mensal (Kz)", min_value=0.0, value=20000.0, step=5000.0)
-        col3, col4, col5 = st.columns(3)
-        taxa_anual   = col3.slider("Taxa de retorno anual esperada (%)", 0.0, 40.0, 12.0, 0.5)
-        anos         = col4.slider("Prazo (anos)", 1, 30, 10)
-        inflacao_sim = col5.slider("Inflação anual assumida (%)", 0.0, 40.0, 13.5, 0.5)
-
-        taxa_m   = (1 + taxa_anual   / 100) ** (1 / 12) - 1
-        infl_m   = (1 + inflacao_sim / 100) ** (1 / 12) - 1
-        saldo_c  = valor_inicial
-        total_inv= valor_inicial
-        pontos   = []
-        for mes in range(1, anos * 12 + 1):
-            saldo_c   = saldo_c * (1 + taxa_m) + contrib_mensal
-            total_inv += contrib_mensal
-            if mes % 12 == 0:
-                pontos.append({
-                    "Ano": mes // 12,
-                    "Saldo Nominal": saldo_c,
-                    "Total Investido": total_inv,
-                    "Saldo Real": saldo_c / ((1 + infl_m) ** mes),
-                })
-
-        df_sim = pd.DataFrame(pontos).set_index("Ano")
-        col_a, col_b, col_c = st.columns(3)
-        col_a.metric("Saldo Final (nominal)", kz(saldo_c))
-        col_b.metric("Total Investido",       kz(total_inv))
-        col_c.metric("Juros Compostos",       kz(saldo_c - total_inv))
-        st.bar_chart(df_sim[["Saldo Nominal", "Total Investido"]])
-        saldo_real_f = df_sim["Saldo Real"].iloc[-1]
-        st.caption(f"Saldo final em poder de compra de hoje (inflação {inflacao_sim:.1f}%/ano): {kz(saldo_real_f)}")
-        nota_indicador(f"Com inflação de {inflacao_sim:.1f}%/ano, o teu saldo nominal de {kz(saldo_c)} equivale apenas a {kz(saldo_real_f)} em poder de compra actual.")
-        st.caption("Simulação educativa. Não constitui aconselhamento de investimento.")
-        botoes_partilha(f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo_c)} — Clube de Investimento APPO")
-
-# =========================================================
-# PÁGINA: REGRA 50/30/20
-# =========================================================
-elif pagina == "🧮 Regra 50/30/20":
-    tx = t()
-    hero("🧮 " + tx["nav_map"]["🧮 Regra 50/30/20"].replace("🧮 ", ""), tx["r50_hero_sub"], "📐 " + tx["r50_rendimento"])
-    tab_regra, tab_orc = st.tabs(["🧮 Regra 50/30/20", "📒 Meu Orçamento Mensal"])
-
-    with tab_regra:
-        rendimento = st.number_input(tx["r50_rendimento"], min_value=0.0, step=5000.0, value=250000.0, format="%.2f")
-        alvo_consumo, alvo_inv, alvo_entes = rendimento * 0.50, rendimento * 0.30, rendimento * 0.20
-
-        st.subheader(tx["r50_alocacao"])
-        col1, col2, col3 = st.columns(3)
-        col1.metric(tx["r50_consumo"],       kz(alvo_consumo))
-        col2.metric(tx["r50_investimento"],  kz(alvo_inv))
-        col3.metric(tx["r50_entesouramento"],kz(alvo_entes))
-        st.bar_chart(pd.DataFrame({"Categoria": [tx["r50_consumo"], tx["r50_investimento"], tx["r50_entesouramento"]],
-                                   "Valor recomendado (Kz)": [alvo_consumo, alvo_inv, alvo_entes]}).set_index("Categoria"))
-
-        st.divider()
-        st.subheader(tx["r50_comparar_titulo"])
-        with st.form("form_orcamento_real"):
-            col_a, col_b, col_c = st.columns(3)
-            real_consumo      = col_a.number_input(tx["r50_real_consumo"],       min_value=0.0, step=1000.0)
-            real_investimento = col_b.number_input(tx["r50_real_investimento"],  min_value=0.0, step=1000.0)
-            real_entes        = col_c.number_input(tx["r50_real_entesouramento"],min_value=0.0, step=1000.0)
-            comparar = st.form_submit_button(tx["r50_comparar_btn"])
-        if comparar:
-            st.markdown(tx["r50_resultado"])
-            col1, col2, col3 = st.columns(3)
-            col1.metric(tx["r50_consumo"],       kz(real_consumo),      delta=kz(real_consumo      - alvo_consumo), delta_color="inverse")
-            col2.metric(tx["r50_investimento"],  kz(real_investimento), delta=kz(real_investimento - alvo_inv),     delta_color="normal")
-            col3.metric(tx["r50_entesouramento"],kz(real_entes),        delta=kz(real_entes        - alvo_entes),   delta_color="normal")
-            if real_entes < alvo_entes:
-                st.warning(tx["r50_aviso"])
-            else:
-                st.success(tx["r50_sucesso"])
-
-    with tab_orc:
-        _email_orc = st.session_state.get("conta_email", "")
-        st.subheader("📒 Orçamento mensal pessoal ou familiar")
-        st.caption("Preencha as receitas e os gastos do mês (em kwanzas inteiros). A app compara automaticamente "
-                   "com a Regra 50/30/20 e mostra quanto está a poupar e a investir. O orçamento fica gravado na sua conta.")
-
-        if st.session_state.get("orc_carregado_para") != _email_orc:
-            _d0 = obter_orcamento(_email_orc)
-            st.session_state["orc_rec_base"]  = pd.DataFrame(_d0["receitas"], columns=["Descrição", "Valor (Kz)"])
-            st.session_state["orc_desp_base"] = pd.DataFrame(_d0["despesas"], columns=["Categoria", "Descrição", "Valor (Kz)"])
-            st.session_state["orc_carregado_para"] = _email_orc
-        _ver = st.session_state.get("orc_versao", 0)
-
-        _cfg_valor = st.column_config.NumberColumn("Valor (Kz)", min_value=0, step=100, format="%d")
-        st.markdown("**1. Receitas do mês**")
-        df_rec = st.data_editor(
-            st.session_state["orc_rec_base"], num_rows="dynamic", key=f"orc_rec_{_ver}", hide_index=True,
-            column_config={"Descrição": st.column_config.TextColumn("Descrição"), "Valor (Kz)": _cfg_valor})
-        st.markdown("**2. Despesas e poupança do mês** — escolha a categoria de cada linha")
-        df_desp = st.data_editor(
-            st.session_state["orc_desp_base"], num_rows="dynamic", key=f"orc_desp_{_ver}", hide_index=True,
-            column_config={
-                "Categoria": st.column_config.SelectboxColumn("Categoria", options=ORC_CATEGORIAS, required=True),
-                "Descrição": st.column_config.TextColumn("Descrição"),
-                "Valor (Kz)": _cfg_valor})
-
-        rec_total = float(sum(_num_seguro(v) for v in df_rec["Valor (Kz)"]))
-        _dd = df_desp.copy()
-        _dd["_v"] = _dd["Valor (Kz)"].apply(_num_seguro)
-        tot_cat = {c: float(_dd.loc[_dd["Categoria"] == c, "_v"].sum()) for c in ORC_CATEGORIAS}
-        sem_cat = int(((_dd["Categoria"].isna()) & (_dd["_v"] > 0)).sum())
-        desp_total = sum(tot_cat.values())
-        saldo_livre = rec_total - desp_total
-        poup_total = tot_cat[ORC_CATEGORIAS[1]] + tot_cat[ORC_CATEGORIAS[2]]
-
-        st.divider()
-        st.markdown("**3. Resultado**")
-        if sem_cat:
-            st.warning(f"{sem_cat} linha(s) com valor mas sem categoria foram ignoradas no cálculo.")
-        if rec_total <= 0:
-            st.info("Introduza as suas receitas para ver a comparação com a Regra 50/30/20.")
-        else:
-            alvos = {ORC_CATEGORIAS[0]: rec_total * 0.50, ORC_CATEGORIAS[1]: rec_total * 0.30, ORC_CATEGORIAS[2]: rec_total * 0.20}
-            k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Receitas", kz(rec_total))
-            k2.metric("Despesas + poupança planeadas", kz(desp_total))
-            k3.metric("Saldo por alocar", kz(saldo_livre))
-            k4.metric("Poupado + investido", f"{poup_total / rec_total * 100:.0f}%", help="Investimento + Entesouramento, em % das receitas (meta: 50%)")
-
-            c1, c2, c3 = st.columns(3)
-            for col, cat, inv in ((c1, ORC_CATEGORIAS[0], "inverse"), (c2, ORC_CATEGORIAS[1], "normal"), (c3, ORC_CATEGORIAS[2], "normal")):
-                col.metric(f"{cat}", kz(tot_cat[cat]), delta=f"{kz(tot_cat[cat] - alvos[cat])} face à meta ({kz(alvos[cat])})", delta_color=inv)
-            st.bar_chart(pd.DataFrame(
-                {"O seu orçamento (Kz)": [tot_cat[c] for c in ORC_CATEGORIAS], "Recomendado 50/30/20 (Kz)": [alvos[c] for c in ORC_CATEGORIAS]},
-                index=ORC_CATEGORIAS))
-
-            if desp_total > rec_total:
-                st.error(f"Os gastos e a poupança planeados superam as receitas em {kz(-saldo_livre)}. Reduza o consumo antes de pensar em investir.")
-            else:
-                if tot_cat[ORC_CATEGORIAS[0]] > alvos[ORC_CATEGORIAS[0]]:
-                    st.warning(f"O consumo ({tot_cat[ORC_CATEGORIAS[0]] / rec_total * 100:.0f}% das receitas) está acima dos 50% recomendados — "
-                               f"tente reduzir cerca de {kz(tot_cat[ORC_CATEGORIAS[0]] - alvos[ORC_CATEGORIAS[0]])}.")
-                if tot_cat[ORC_CATEGORIAS[1]] < alvos[ORC_CATEGORIAS[1]]:
-                    st.info(f"Para chegar aos 30% de investimento faltam {kz(alvos[ORC_CATEGORIAS[1]] - tot_cat[ORC_CATEGORIAS[1]])} por mês.")
-                if tot_cat[ORC_CATEGORIAS[2]] < alvos[ORC_CATEGORIAS[2]]:
-                    st.info(f"Para chegar aos 20% de entesouramento (reserva) faltam {kz(alvos[ORC_CATEGORIAS[2]] - tot_cat[ORC_CATEGORIAS[2]])} por mês.")
-                if (tot_cat[ORC_CATEGORIAS[0]] <= alvos[ORC_CATEGORIAS[0]] and tot_cat[ORC_CATEGORIAS[1]] >= alvos[ORC_CATEGORIAS[1]]
-                        and tot_cat[ORC_CATEGORIAS[2]] >= alvos[ORC_CATEGORIAS[2]]):
-                    st.success("Parabéns — o seu orçamento cumpre a Regra 50/30/20.")
-                if saldo_livre > 0:
-                    st.info(f"Tem {kz(saldo_livre)} ainda por alocar: distribua-os pelas linhas de investimento e entesouramento.")
-            if poup_total > 0:
-                st.caption(f"Ao ritmo actual, poupa e investe {kz(poup_total)} por mês: cerca de {kz(poup_total * 12)} em 12 meses "
-                           "(sem juros). Veja o efeito dos juros compostos no Simulador de Investimento.")
-
-        b1, b2, b3 = st.columns(3)
-        if b1.button("💾 Guardar orçamento", type="primary", key="orc_guardar", use_container_width=True):
-            def _recs(df):
-                return df.astype(object).where(df.notna(), None).to_dict("records")
-            guardar_orcamento(_email_orc, {"receitas": _recs(df_rec), "despesas": _recs(df_desp)})
-            # a base da sessão passa a ser o que ficou gravado; assim, ao sair da página e voltar,
-            # os dados continuam lá. O editor recomeça com uma chave nova a partir dessa base.
-            st.session_state["orc_rec_base"]  = df_rec.reset_index(drop=True).copy()
-            st.session_state["orc_desp_base"] = df_desp.reset_index(drop=True).copy()
-            st.session_state["orc_versao"] = _ver + 1
-            st.session_state["orc_msg"] = "Orçamento guardado na sua conta."
-            st.rerun()
-        if b2.button("↺ Repor modelo inicial", key="orc_repor", use_container_width=True):
-            _m = orcamento_modelo_inicial()
-            st.session_state["orc_rec_base"]  = pd.DataFrame(_m["receitas"], columns=["Descrição", "Valor (Kz)"])
-            st.session_state["orc_desp_base"] = pd.DataFrame(_m["despesas"], columns=["Categoria", "Descrição", "Valor (Kz)"])
-            st.session_state["orc_versao"] = _ver + 1
-            st.rerun()
-        _xl_orc = _xlsx_seguro(lambda: gerar_xlsx_orcamento(df_rec, df_desp, ORC_CATEGORIAS))
-        if _xl_orc:
-            b3.download_button("⬇️ Descarregar Excel", data=_xl_orc, file_name="orcamento_mensal_appo.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                               use_container_width=True, key="dl_orc_xlsx")
-        else:
-            _csv = pd.concat([
-                df_rec.assign(Tipo="Receita", Categoria=""),
-                df_desp.assign(Tipo="Despesa"),
-            ], ignore_index=True)[["Tipo", "Categoria", "Descrição", "Valor (Kz)"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
-            b3.download_button("⬇️ Descarregar (CSV)", data=_csv, file_name="orcamento_mensal.csv", mime="text/csv", use_container_width=True)
-        _om = st.session_state.pop("orc_msg", None)
-        if _om:
-            st.success(_om)
-
-
-# =========================================================
-# PÁGINA: BIBLIOTECA EDUCATIVA
-# =========================================================
-elif pagina == "📚 Biblioteca Educativa":
-    tx = t()
-    hero("📚 " + tx["nav_map"]["📚 Biblioteca Educativa"].replace("📚 ", ""), tx["bib_hero_sub"])
-    df_artigos = obter_artigos()
-    df_docs_bib = obter_documentos("biblioteca")
-    if not df_docs_bib.empty:
-        st.subheader("📄 Publicações em PDF")
-        for _, doc in df_docs_bib.iterrows():
-            with st.expander(f"{ICONES_CATEGORIA.get(doc['categoria'], '📄')} {doc['titulo']}"):
-                st.caption(f"{doc['categoria']} · {tx['bib_publicado']} {doc['criado_em']} · {doc['tamanho'] / 1048576:.1f} MB")
-                if str(doc["descricao"] or "").strip():
-                    st.write(doc["descricao"])
-                bloco_documento_pdf(int(doc["id"]), doc["nome_ficheiro"], f"bib_{int(doc['id'])}")
-        if not df_artigos.empty:
-            st.subheader("📝 Artigos")
-    if df_artigos.empty:
-        if df_docs_bib.empty:
-            st.info(tx["bib_sem_artigos"])
-    else:
-        todas_label = tx["bib_todas"]
-        categorias  = [todas_label] + sorted(df_artigos["categoria"].unique().tolist())
-        filtro      = st.selectbox(tx["bib_filtrar"], categorias)
-        filtro_bd   = None if filtro == todas_label else filtro
-        for _, artigo in obter_artigos(filtro_bd).iterrows():
-            with st.expander(f"{ICONES_CATEGORIA.get(artigo['categoria'], '📄')} {artigo['titulo']}", key=f"artigo_exp_{artigo['id']}"):
-                banner_categoria(artigo["categoria"])
-                st.caption(f"{tx['bib_publicado']} {artigo['criado_em']}")
-                st.markdown(artigo["conteudo"])   # conteúdo mantém-se em PT conforme acordado
-
-# =========================================================
-# PÁGINA: EDUCAÇÃO & SERVIÇOS
-# =========================================================
-elif pagina == "🎓 Educação & Serviços":
-    hero("🎓 Educação & Serviços", "Formação, materiais e ferramentas educativas do APPO", badge="🇦🇴 Educação financeira · Kwanzas (Kz)")
-    pagina_educacao_servicos()
-
-# =========================================================
-# PÁGINA: MANIFESTAÇÃO DE INTERESSE (antiga «Adesão de Sócios»; a chave interna mantém-se)
-# =========================================================
-elif pagina == "🧾 Adesão de Sócios":
-    tx = t()
-    hero("🧾 " + tx["nav_map"]["🧾 Adesão de Sócios"].replace("🧾 ", ""), "Regista o teu interesse numa futura participação. Não é uma admissão.", badge="🇦🇴 APPO")
-    pagina_manifestacao_interesse()
-
-# =========================================================
-# PÁGINA: SOBRE NÓS & ESTATUTOS
-# =========================================================
-elif pagina == "ℹ️ Sobre Nós & Estatutos":
-    tx = t()
-    hero("ℹ️ " + tx["nav_map"]["ℹ️ Sobre Nós & Estatutos"].replace("ℹ️ ", ""), tx["sobre_hero_sub"])
-    st.subheader(tx["sobre_quem_somos"])
-    st.markdown(tx["sobre_quem_texto"])
-    st.subheader(tx["sobre_principios"])
-    st.markdown(TEXTO_PRINCIPIOS)   # mantém-se em PT
-    st.subheader(tx["sobre_estatutos"])
-    st.markdown(tx["sobre_estatutos_texto"])
-    _df_est = obter_documentos("estatuto")
-    if not _df_est.empty:
-        _est = _df_est.iloc[0]
-        st.markdown(f"**📜 {_est['titulo']}**")
-        st.caption(f"{_est['criado_em']} · {_est['tamanho'] / 1048576:.1f} MB")
-        bloco_documento_pdf(int(_est["id"]), _est["nome_ficheiro"], f"estatuto_{int(_est['id'])}", altura=820)
-    st.caption(tx["sobre_nota"])
-
-# =========================================================
-# PÁGINA: PAINEL DO ADMINISTRADOR (mantém-se em PT)
-# =========================================================
-elif pagina == "🔐 Painel do Administrador":
-    hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
-
-    aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca, aba_edu_serv, aba_despesas = st.tabs(
-        ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança", "Educação & Serviços", "Despesas do grupo"])
-    with aba_edu_serv:
-        painel_educacao_servicos_admin()
-    with aba_despesas:
-        painel_despesas_admin()
-
-    with aba_resumo:
-        st.subheader("Editar Resumo Patrimonial")
-        st.caption("O Capital Realizado deve ser sempre ≤ ao Capital Subscrito.")
-        resumo = obter_resumo_patrimonial()
-        with st.form("form_editar_resumo"):
-            novo_subscrito  = st.number_input("Capital Subscrito (Kz)",  min_value=0.0, step=10000.0, value=float(resumo["capital_subscrito"]))
-            novo_realizado  = st.number_input("Capital Realizado (Kz)",  min_value=0.0, step=10000.0, value=float(resumo["capital_realizado"]))
-            novo_invest     = st.number_input("Investimentos (Kz)",      min_value=0.0, step=10000.0, value=float(resumo["investimentos"]))
-            novas_reservas  = st.number_input("Reservas (Kz)",           min_value=0.0, step=10000.0, value=float(resumo["reservas"]))
-            guardar_resumo  = st.form_submit_button("Guardar alterações")
-        if guardar_resumo:
-            if novo_realizado > novo_subscrito:
-                st.error("O Capital Realizado não pode ser maior do que o Capital Subscrito.")
-            else:
-                actualizar_resumo_patrimonial(novo_subscrito, novo_realizado, novo_invest, novas_reservas)
-                st.success("Resumo patrimonial actualizado e novo ponto de histórico registado.")
-                st.rerun()
-
-        st.divider()
-        st.subheader("Histórico de património (alimenta os gráficos)")
-        st.caption("Cada vez que guarda o resumo acima, regista-se um ponto com o Capital Realizado desse momento. "
-                   "Elimine aqui os pontos de teste ou com valores errados.")
-        _hist_adm = obter_historico_patrimonio_admin()
-        if _hist_adm.empty:
-            st.info("Ainda não há pontos de histórico.")
-        else:
-            for _, _h in _hist_adm.iterrows():
-                hc1, hc2, hc3 = st.columns([2, 3, 1])
-                hc1.write(str(_h["registado_em"])[:16])
-                hc2.write(f"Capital realizado: {kz(_h['capital_social'])}")
-                if hc3.button("Eliminar", key=f"del_hist_{int(_h['id'])}"):
-                    eliminar_registo_historico(int(_h["id"]))
-                    st.rerun()
-
-    with aba_unidades:
-        exigir_admin()
-        st.subheader("📐 Património líquido, unidades e VUP")
-        st.info("O VUP é o património líquido validado dividido pelas unidades em circulação. Ganhos e perdas alteram o valor das unidades. "
-                "Emissões e cancelamentos alteram a sua quantidade. Transferências entre participantes alteram a titularidade, não a quantidade total.")
-        _msg_c = st.session_state.pop("cotas_msg", None)
-        if _msg_c:
-            st.success(_msg_c)
-        _cfg = obter_cotas_config()
-        _vi = obter_vup_info()
-        _bal = _vi["balanco"]
-
-        # ---------- A. Estado actual ----------
-        _cor = {"Não calculado": "🔴", "Provisório": "🟠", "Validado": "🟢"}[_vi["estado"]]
-        st.markdown(f"**Estado do indicador:** {_cor} {_vi['estado']}")
-        for _mot in _vi["motivos"]:
-            st.warning(_mot)
-        if _vi["estado"] == "Provisório":
-            st.caption("Provisório: o balanço mais recente e/ou a base de unidades ainda não foram validados. Não apresente este valor como certeza contabilística.")
-        u1, u2, u3, u4 = st.columns(4)
-        u1.metric("Património líquido", kz(_vi["vlg"]) if _vi["estado"] != "Não calculado" else "—")
-        u2.metric("Unidades validadas", f"{_vi['unidades']:,.6f}".replace(",", " "))
-        u3.metric("VUP", (kz2(_vi["vup"]) + " Kz") if _vi["estado"] != "Não calculado" else "—")
-        _rent_u = (_vi["vup"] / _vi["vup_base"] - 1) * 100 if _vi["vup_base"] > 0 and _vi["estado"] != "Não calculado" else None
-        u4.metric(f"Variação desde a data-base ({_vi['data_base']:%d/%m/%Y})" if _vi["data_base"] else "Variação desde a data-base",
-                  pct_bruto(_rent_u) if _rent_u is not None else "—")
-        st.caption("A variação conta a partir da data-base das unidades; não representa o desempenho desde 2024 nem esconde as perdas históricas (ver registo histórico privado, abaixo).")
-        if _vi["unidades_por_rever"] > 0:
-            st.warning(f"Há {_vi['unidades_por_rever']:,.4f} unidades 'Por rever' (lançadas antes desta revisão). Não entram no VUP até serem validadas, corrigidas ou anuladas (secção 5).".replace(",", " "))
-        _dp = _vi["data_precos"]
-        st.caption(f"Investimentos a preços de avaliação da app: {kz(_vi['valor_carteira'])} (data dos preços: {_dp:%d/%m/%Y %H:%M}; preços inseridos pelo administrador, não são tempo real)."
-                   if _dp else f"Investimentos a preços de avaliação da app: {kz(_vi['valor_carteira'])} (sem data de actualização registada).")
-
-        # ---------- B. Balanço ----------
-        with st.expander("1. Balanço: dinheiro disponível, outros activos e passivos", expanded=_bal is None):
-            if _bal:
-                st.write(f"**Último retrato:** {_bal[1]:%d/%m/%Y}  ·  dinheiro disponível {kz2(_bal[2])} Kz  ·  outros activos {kz2(_bal[3])} Kz  ·  "
-                         f"passivos {kz2(_bal[4])} Kz  ·  estado: **{_bal[7]}**")
-                st.caption(f"Fonte: {_bal[5] or '—'}  ·  Titularidade: {_bal[6] or '—'}  ·  Origem: {_bal[8] or '—'}")
-                if _bal[7] != "Validado":
-                    if st.button("Validar este retrato", key="validar_balanco_btn"):
-                        validar_balanco(int(_bal[0]), "Validado pelo administrador")
-                        st.session_state["cotas_msg"] = "Balanço validado."
-                        st.rerun()
-            st.caption("Os retratos não se editam: cada actualização cria um novo, e os anteriores ficam guardados. Dinheiro disponível: o que está efectivamente "
-                       "disponível (extracto do homebroker/banco). Ordens vivas podem imobilizar saldo; ordens não executadas não são posições. "
-                       "O capital realizado e as 'reservas' do Resumo Patrimonial não entram neste cálculo.")
-            with st.form("form_balanco"):
-                b1, b2 = st.columns(2)
-                _b_data = b1.date_input("Data do retrato", value=datetime.now().date())
-                _b_din = b2.text_input("Dinheiro disponível (Kz)", value="")
-                b3, b4 = st.columns(2)
-                _b_out = b3.text_input("Outros activos e direitos comprovados (Kz)", value="0")
-                _b_pas = b4.text_input("Passivos e obrigações (Kz)", value="0")
-                _b_fonte = st.text_input("Fonte (ex.: extracto do homebroker de 05/10/2026)")
-                _b_tit = st.text_input("Titularidade da conta/activos (ex.: conta pessoal do administrador; acordo documentado?)")
-                _b_val = st.checkbox("Marcar já como Validado (confirmei os valores com documentos)")
-                _b_ok = st.form_submit_button("Registar novo retrato")
-            if _b_ok:
-                _din, _out, _pas = _numero_flex(_b_din), _numero_flex(_b_out), _numero_flex(_b_pas)
-                if _din is None or _out is None or _pas is None or min(_din, _out, _pas) < 0:
-                    st.error("Indique números válidos (≥ 0) nos três campos, por exemplo 2014073,93.")
-                elif not _b_fonte.strip():
-                    st.error("Indique a fonte do retrato.")
-                else:
-                    registar_balanco(_b_data, _din, _out, _pas, _b_fonte.strip(), _b_tit.strip(), "Validado" if _b_val else "Provisório")
-                    registar_vup_hoje()
-                    st.session_state["cotas_msg"] = "Retrato registado."
-                    st.rerun()
-
-        # ---------- C. Regras ----------
-        with st.expander("2. Regras (propostas pendentes de formalização)"):
-            st.caption("Estas regras são propostas, não regras comprovadas dos Estatutos, enquanto não houver deliberação documentada. "
-                       "100 unidades não equivalem necessariamente a 10 000 000 Kz quando o VUP varia. Os direitos de governação são separados da participação económica: "
-                       "todas as unidades valem o mesmo dinheiro; o peso do voto das unidades Fundadoras é uma proposta (1 = sem privilégio).")
-            with st.form("form_cotas_cfg"):
-                fc1, fc2, fc3, fc4 = st.columns(4)
-                _n_c = fc1.number_input("Valor nominal de referência (Kz)", min_value=1000.0, value=float(_cfg["valor_nominal"]), step=1000.0)
-                _l_c = fc2.number_input("Limite de unidades (0 = sem limite)", min_value=0.0, value=float(_cfg["limite_cotas"]), step=10.0)
-                _m_c = fc3.number_input("Entrada mínima (Kz)", min_value=0.0, value=float(_cfg["entrada_minima"]), step=10000.0)
-                _p_c = fc4.number_input("Votos por unidade Fundadora", min_value=1.0, value=float(_cfg["peso_voto_fundadora"]), step=1.0)
-                if st.form_submit_button("Guardar regras"):
-                    guardar_cotas_config(float(_n_c), float(_l_c), float(_m_c), float(_p_c))
-                    st.session_state["cotas_msg"] = "Regras guardadas (propostas pendentes de formalização)."
-                    st.rerun()
-            st.markdown(f"**Admissão de novos participantes:** 🔒 DESACTIVADA. Só poderá ser activada por decisão documentada e enquadramento validado, "
-                        "não por um botão. Entretanto, recolhem-se apenas manifestações de interesse.")
-            _rec = st.checkbox("A base de unidades foi reconciliada com contribuições comprovadas, acordos e perdas", value=_cfg["unidades_base_validada"], key="base_rec_chk")
-            if _rec != _cfg["unidades_base_validada"]:
-                _nota_rec = st.text_input("Fundamento desta alteração (obrigatório)", key="base_rec_nota")
-                if st.button("Confirmar alteração do estado da base", key="base_rec_btn"):
-                    if not _nota_rec.strip():
-                        st.error("Indique o fundamento.")
-                    else:
-                        definir_base_reconciliada(_rec, _nota_rec.strip())
-                        registar_vup_hoje()
-                        st.rerun()
-
-        # ---------- D. Estrutura inicial ----------
-        _validadas = int(consultar_um("SELECT COUNT(*) FROM unidades_movimentos WHERE estado = 'Validado'")[0])
-        with st.expander("3. Adopção da estrutura inicial de unidades (reorganização, não é entrada de dinheiro)", expanded=_validadas == 0):
-            if _validadas > 0:
-                st.info("Já existe uma estrutura de unidades validada. Só se adopta uma vez; alterações fazem-se por anulação documentada.")
-            else:
-                _rs = obter_resumo_patrimonial()
-                st.warning(f"HIPÓTESE: {kz(_rs['capital_realizado'])} ÷ {kz(_cfg['valor_nominal'])} = {_rs['capital_realizado'] / _cfg['valor_nominal']:.5f} unidades. "
-                           "Não é uma reconstrução comprovada das contribuições históricas e não prova quem entregou cada montante. "
-                           "Esta etapa regista um ACORDO de participação como reorganização: não cria transferências bancárias nem movimentos financeiros.")
-                _cap_base = st.number_input("Capital de referência a repartir (Kz)", min_value=0.0, step=1000.0, value=float(round(_rs["capital_realizado"])), key="cotas_cap_base")
-                _base_f = pd.DataFrame({"Sócio": [NOME_ADMIN_PUBLICO, "", "", "", ""], "E-mail da conta (opcional)": [""] * 5,
-                                        "% do capital": [55.0, 15.0, 10.0, 10.0, 10.0]})
-                st.caption("Percentagens de referência inicialmente acordadas: 55%, 15%, 10%, 10%, 10%. Escreva o nome real de cada participante (fica só nos registos internos).")
-                _fund = st.data_editor(_base_f, num_rows="dynamic", hide_index=True, key="cotas_fundadores",
-                                       column_config={"% do capital": st.column_config.NumberColumn("% do capital", min_value=0.0, max_value=100.0, step=0.5, format="%.2f")})
-                try:
-                    _subs = calcular_subscricoes_iniciais(float(_cap_base), _cfg["valor_nominal"], _fund.to_dict("records"))
-                except ValueError as _e:
-                    _subs = None
-                    st.info(str(_e))
-                if _subs:
-                    _prev = pd.DataFrame(_subs)
-                    _prev["montante"] = _prev["montante"].apply(lambda v: kz2(v) + " Kz")
-                    _prev["cotas"] = _prev["cotas"].apply(lambda v: f"{v:,.6f}".replace(",", " "))
-                    _prev["pct"] = _prev["pct"].apply(lambda v: f"{v:.2f}%")
-                    st.dataframe(_prev[["socio", "pct", "montante", "cotas"]].rename(columns={"socio": "Participante", "pct": "% acordada", "montante": "Valor de referência", "cotas": "Unidades"}), hide_index=True)
-                    _d_base = st.date_input("Data-base da adopção", value=datetime.now().date(), key="data_base_in")
-                    _fund_txt = st.text_area("Fundamento da adopção (acta, acordo, critério)", key="fund_base_txt", height=80)
-                    _rec_now = st.checkbox("Declaro que a base foi reconciliada (se não, o VUP fica 'Provisório')", key="rec_now_chk")
-                    if st.button("Adoptar estrutura inicial", type="primary", key="cotas_criar"):
-                        try:
-                            adoptar_estrutura_inicial(_subs, _cfg["valor_nominal"], _d_base, _fund_txt, _rec_now)
-                            registar_vup_hoje()
-                            st.session_state["cotas_msg"] = "Estrutura inicial adoptada como reorganização."
+                # confirmação de ordem pendente
+                pend = st.session_state.get("sim_ordem_pend")
+                if pend:
+                    _tp = pend["qtd"] * pend["preco"]
+                    st.info(f"**Confirmar ordem de {'COMPRA' if pend['op'] == 'C' else 'VENDA'}** — "
+                            f"{pend['qtd']:g} × {pend['nome']} a {kz2(pend['preco'])} = **{kz2(_tp)} Kz**")
+                    cc1, cc2, _ = st.columns([1, 1, 2])
+                    if cc1.button("✅ Confirmar ordem", key="sim_conf", type="primary", use_container_width=True):
+                        ch, nm, tkp, q, p = pend["chave"], pend["nome"], pend["tk"], pend["qtd"], pend["preco"]
+                        valor = q * p
+                        oper  = None
+                        if pend["op"] == "C":
+                            if st.session_state["sim_saldo_caixa"] >= valor:
+                                st.session_state["sim_saldo_caixa"] -= valor
+                                if ch in cart:
+                                    tq = cart[ch]["qtd"] + q
+                                    tc = cart[ch]["qtd"] * cart[ch]["preco_medio"] + valor
+                                    cart[ch] = {"qtd": tq, "preco_medio": tc / tq, "nome": nm}
+                                else:
+                                    cart[ch] = {"qtd": q, "preco_medio": p, "nome": nm}
+                                oper = "✅ COMPRA"
+                        else:
+                            if cart.get(ch, {}).get("qtd", 0) >= q:
+                                st.session_state["sim_saldo_caixa"] += valor
+                                cart[ch]["qtd"] -= q
+                                if cart[ch]["qtd"] <= 0:
+                                    del cart[ch]
+                                oper = "🔴 VENDA"
+                        if oper is None:
+                            st.session_state.pop("sim_ordem_pend", None)
+                            st.session_state["sim_msg"] = "Ordem não executada: saldo ou quantidade insuficiente."
                             st.rerun()
-                        except ValueError as _e2:
-                            st.error(str(_e2))
+                        else:
+                            st.session_state["sim_historico"].insert(0, {
+                                "Operação": oper, "Ticker": tkp or nm, "Qtd": q, "Preço Unit.": p, "Total": valor})
+                            guardar_saldo_simulador(_email_sim, st.session_state["sim_saldo_caixa"])
+                            guardar_posicao_simulador(_email_sim, ch, cart.get(ch))
+                            registar_operacao_simulador(_email_sim, oper, tkp or nm, q, p, valor)
+                            st.session_state.pop("sim_ordem_pend", None)
+                            st.session_state["sim_msg"] = f"{oper} executada: {q:g} × {nm} a {kz2(p)} Kz."
+                            st.rerun()
+                    if cc2.button("✖ Cancelar", key="sim_canc", use_container_width=True):
+                        st.session_state.pop("sim_ordem_pend", None)
+                        st.rerun()
 
-        # ---------- E. Operações ----------
-        st.markdown("**4. Entrada ou saída de um participante (operação autorizada)**")
-        st.caption("Calcula ao VUP aprovado ANTES da operação. Regista a operação, o novo retrato do dinheiro disponível e a auditoria, tudo de uma só vez. "
-                   "Não é possível emitir ao valor nominal para contornar o VUP. Não há reembolso imediato garantido: prazos, liquidez e custos dependem das regras aplicáveis.")
-        _contas_u = listar_contas()
-        _opc_u = [f"{r['nome']} — {r['email']}" for _, r in _contas_u.iterrows()] + ["Outro (escrever o nome)"]
-        if "ref_op" not in st.session_state:
-            st.session_state["ref_op"] = f"OP-{datetime.now():%Y%m%d%H%M%S}-{secrets.token_hex(3)}"
-        with st.form("form_unidades"):
-            _sel_u = st.selectbox("Participante", _opc_u)
-            _nome_u = st.text_input("Nome (só se escolheu 'Outro')")
-            f1, f2 = st.columns(2)
-            _tipo_u = f1.selectbox("Operação", ["Subscrição", "Resgate"])
-            _classe_u = f2.selectbox("Classe", ["Ordinária", "Fundadora"], help="Fundadora só se esse participante já for fundador. A classe é uma proposta pendente de formalização.")
-            f3, f4 = st.columns(2)
-            _mont_u = f3.text_input("Montante (Kz)", value="")
-            _data_u = f4.date_input("Data da operação", value=datetime.now().date())
-            _vh_u = st.text_input("Valor da unidade nessa data (só se a data for anterior a hoje: regularização)", value="")
-            _fund_u = st.text_area("Fundamento / observações (obrigatório em regularizações)", height=70)
-            st.caption(f"Referência desta operação (impede duplicações): {st.session_state['ref_op']}")
-            _ok_u = st.form_submit_button("Registar operação")
-        if _ok_u:
-            if _sel_u.startswith("Outro"):
-                _socio_u, _mail_u = _nome_u.strip(), None
+                c1, c2, c3 = st.columns(3)
+                qtd_op = int(c1.number_input("Quantidade", min_value=1, value=1, step=1, key="sim_qtd_op"))
+                total  = qtd_op * a["preco"]
+                c2.metric("Preço (cotação de mercado)", kz2(a["preco"]))
+                c3.metric("Valor da ordem", kz2(total))
+                b1, b2, _ = st.columns([1, 1, 2])
+                comprar = b1.button("＋ Comprar", key="sim_btn_buy", type="primary", use_container_width=True)
+                vender  = b2.button("－ Vender", key="sim_btn_sell", type="secondary", use_container_width=True,
+                                    disabled=(qtd_cart < qtd_op))
+                if comprar or vender:
+                    if comprar and saldo_caixa < total:
+                        st.warning(f"Saldo insuficiente — necessitas {kz2(total)} Kz, tens {kz2(saldo_caixa)} Kz.")
+                    else:
+                        st.session_state["sim_ordem_pend"] = {
+                            "op": "C" if comprar else "V", "chave": a["chave"], "nome": a["nome"],
+                            "tk": a["tk"], "qtd": qtd_op, "preco": a["preco"]}
+                        st.rerun()
+
+                st.caption("Ambiente de treino pedagógico com dados de mercado de referência, actualizados pelo administrador (não em tempo real). "
+                           "As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.")
+
+        # ══════════════════════════════════════════════════════════════
+        # ABA 2 — CARTEIRA (estilo BFA Capital Markets)
+        # ══════════════════════════════════════════════════════════════
+        with aba_carteira:
+            cart        = st.session_state["sim_carteira"]
+            saldo_caixa = st.session_state["sim_saldo_caixa"]
+            if not cart:
+                st.info("A tua carteira virtual está vazia. Vai ao Mercado e compra as tuas primeiras acções!")
             else:
-                _linha_u = _contas_u.iloc[_opc_u.index(_sel_u)]
-                _socio_u, _mail_u = str(_linha_u["nome"]), str(_linha_u["email"])
-            _m = _numero_flex(_mont_u)
-            _vh = _numero_flex(_vh_u) if _vh_u.strip() else None
-            if _m is None or _m <= 0:
-                st.error("Indique um montante válido (ex.: 500000).")
+                _vals      = {k: d["qtd"] * _mapa_preco.get(k, d["preco_medio"]) for k, d in cart.items()}
+                _tot_acoes = sum(_vals.values())
+                _tot_aq    = sum(d["qtd"] * d["preco_medio"] for d in cart.values())
+                _linhas_c  = []
+                for k, d in cart.items():
+                    p_act  = _mapa_preco.get(k, d["preco_medio"])
+                    var_d  = _mapa_var.get(k, 0.0)
+                    v_act  = _vals[k]
+                    v_aq   = d["qtd"] * d["preco_medio"]
+                    pl     = v_act - v_aq
+                    cls_pl = "bfa-up" if pl > 0 else ("bfa-dn" if pl < 0 else "bfa-fl")
+                    cls_vd = "bfa-up" if var_d > 0 else ("bfa-dn" if var_d < 0 else "bfa-fl")
+                    peso   = (v_act / _tot_acoes * 100) if _tot_acoes else 0
+                    _linhas_c.append(
+                        f"<tr><td class='l'><b>{_html.escape(str(d['nome']).upper())}</b></td><td class='l'>{_html.escape(k)}</td>"
+                        f"<td class='l'>BODIVA ACÇÕES</td><td>{d['qtd']:g}</td><td>{kz2(p_act)}</td><td>AOA</td>"
+                        f"<td>{kz2(v_act)}</td><td>{kz2(v_aq)}</td><td class='{cls_pl}'>{kz2(pl)}</td>"
+                        f"<td class='{cls_vd}'>{pct_bruto(var_d)}</td><td>{peso:.2f}%</td></tr>")
+                _pl_t   = _tot_acoes - _tot_aq
+                cls_plt = "bfa-up" if _pl_t > 0 else ("bfa-dn" if _pl_t < 0 else "bfa-fl")
+                _linhas_c.append(
+                    f"<tr class='tot'><td class='l' colspan='6'>TOTAL</td><td>{kz2(_tot_acoes)}</td>"
+                    f"<td>{kz2(_tot_aq)}</td><td class='{cls_plt}'>{kz2(_pl_t)}</td><td></td><td>100,00%</td></tr>")
+                render_html(
+                    "<div class='bfa-wrap'><table class='bfa-tbl'><thead><tr>"
+                    "<th class='l'>título</th><th class='l'>ticker</th><th class='l'>mercado</th>"
+                    "<th>quantidade</th><th>cotação</th><th>moeda</th><th>valor actual</th><th>aquisição</th>"
+                    "<th>valias potenciais</th><th>var. diária</th><th>% carteira</th>"
+                    "</tr></thead><tbody>" + "".join(_linhas_c) + "</tbody></table></div>")
+
+                col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+                col_r1.metric("Saldo negociação", kz2(saldo_caixa))
+                col_r2.metric("Valor em acções", kz2(_tot_acoes))
+                col_r3.metric("Património total", kz2(saldo_caixa + _tot_acoes))
+                var_t = saldo_caixa + _tot_acoes - 3_000_000
+                col_r4.metric("Ganho/Perda total", kz2(var_t), delta=f"{var_t/3_000_000*100:+.2f}%")
+                nota_indicador("<b>Valias potenciais</b> = diferença entre o valor actual e o que pagaste (ganho/perda ainda não realizado).")
+
+        # ══════════════════════════════════════════════════════════════
+        # ABA 3 — ORDENS (histórico) + reiniciar
+        # ══════════════════════════════════════════════════════════════
+        with aba_ordens:
+            st.subheader("📜 Histórico de Ordens")
+            if st.session_state["sim_historico"]:
+                df_h = pd.DataFrame(st.session_state["sim_historico"])
+                for _c in ("Preço Unit.", "Total"):
+                    if _c in df_h.columns:
+                        df_h[_c] = df_h[_c].apply(lambda v: kz2(v) if isinstance(v, (int, float)) else v)
+                st.dataframe(df_h, hide_index=True)
             else:
-                try:
-                    _r = registar_operacao_unidades(_tipo_u, _socio_u, _mail_u, _m, _classe_u, _data_u, st.session_state["ref_op"], _fund_u, _vh)
-                    registar_vup_hoje()
-                    st.session_state.pop("ref_op", None)
-                    st.session_state["cotas_msg"] = (f"{_tipo_u} registada: {_r['unidades']} unidades ao VUP de {_r['vup']} Kz ({_r['origem']}). "
-                                                     "O dinheiro disponível foi actualizado no novo retrato.")
-                    st.rerun()
-                except ValueError as _e3:
-                    st.error(str(_e3))
+                st.info("Ainda não executaste nenhuma ordem.")
 
-        # ---------- F. Revisão / movimentos ----------
-        _mov_u = obter_unidades_movimentos()
-        st.markdown("**5. Movimentos de unidades (revisão, correcção e anulação)**")
-        if _mov_u.empty:
-            st.info("Ainda não há movimentos.")
-        else:
-            st.caption("'Por rever': lançados antes desta revisão; não entram no VUP. Podem ser corrigidos e depois validados com fundamento, ou anulados. "
-                       "Movimentos validados não se editam nem se apagam: anulam-se com motivo (fica o rasto), e se houve efeito em caixa regista-se o estorno.")
-            for _, _m in _mov_u.head(30).iterrows():
-                _mid = int(_m["id"])
-                _est = str(_m["estado"])
-                with st.expander(f"{_m['data']}  ·  {_m['socio']}  ·  {_m['tipo']}  ·  {_est}  ·  {kz2(_m['montante'])} Kz  ·  {float(_m['unidades']):,.6f} un.".replace(",", " ")):
-                    st.write(f"Origem: {_m['origem'] or '—'}  ·  Referência: {_m['referencia'] or '—'}  ·  VUP aplicado: {kz2(_m['vup'])} Kz  ·  Classe: {_m['classe'] or '—'}")
-                    if _m["fundamento"]:
-                        st.write(f"Fundamento: {_m['fundamento']}")
-                    if _est == "Anulado":
-                        st.write(f"Anulado por {_m['anulado_por']} em {str(_m['anulado_em'])[:16]}: {_m['motivo_anulacao']}")
-                    if _est == "Por rever":
-                        with st.form(f"form_edit_mov_{_mid}"):
-                            e1, e2 = st.columns(2)
-                            _e_socio = e1.text_input("Participante", value=str(_m["socio"]))
-                            _e_data = e2.date_input("Data", value=_m["data"])
-                            e3, e4, e5 = st.columns(3)
-                            _e_mont = e3.text_input("Montante (Kz)", value=f"{abs(float(_m['montante'])):.2f}".replace(".", ","))
-                            _e_vup = e4.text_input("Valor da unidade nesse dia (Kz)", value=f"{float(_m['vup']):.4f}".replace(".", ","))
-                            _e_cls = e5.selectbox("Classe", ["Fundadora", "Ordinária"], index=0 if str(_m["classe"]) == "Fundadora" else 1)
-                            _gc = st.form_submit_button("Guardar correcção")
-                        if _gc:
-                            try:
-                                corrigir_movimento_unidades(_mid, _e_data, _e_socio, _numero_flex(_e_mont) or 0, _numero_flex(_e_vup) or 0, _e_cls)
-                                st.session_state["cotas_msg"] = "Movimento corrigido (auditado)."
-                                st.rerun()
-                            except ValueError as _e4:
-                                st.error(str(_e4))
-                        _fv = st.text_input("Fundamento da validação", key=f"fv_{_mid}")
-                        if st.button("Validar movimento", key=f"val_{_mid}"):
-                            try:
-                                validar_movimento_unidades(_mid, _fv)
-                                registar_vup_hoje()
-                                st.session_state["cotas_msg"] = "Movimento validado."
-                                st.rerun()
-                            except ValueError as _e5:
-                                st.error(str(_e5))
-                    if _est != "Anulado":
-                        _mot = st.text_input("Motivo da anulação", key=f"mot_{_mid}")
-                        if st.button("Anular movimento", key=f"anu_{_mid}"):
-                            try:
-                                anular_movimento_unidades(_mid, _mot)
-                                registar_vup_hoje()
-                                st.session_state["cotas_msg"] = "Movimento anulado (com estorno em caixa, se aplicável)."
-                                st.rerun()
-                            except ValueError as _e6:
-                                st.error(str(_e6))
-
-            # posições (só movimentos validados)
-            _val = _mov_u[_mov_u["estado"] == "Validado"]
-            if not _val.empty:
-                st.markdown("**6. Posição de cada participante (apenas movimentos validados)**")
-                _mv = adicionar_votos(_val, _cfg["peso_voto_fundadora"])
-                _pos = _mv.groupby(["socio", "classe"]).agg(unidades=("unidades", "sum"), aportado=("efeito_caixa", "sum"), votos=("votos", "sum")).reset_index()
-                _pos = _pos[_pos["unidades"].abs() > 1e-9]
-                _tot_un, _tot_vt = float(_pos["unidades"].sum()), float(_pos["votos"].sum())
-                _rot = rotulos_publicos(list(_pos["socio"].unique()))
-                _pos["Apresentação pública"] = _pos["socio"].map(_rot)
-                _pos["% das unidades"] = _pos["unidades"].apply(lambda v: f"{v / _tot_un * 100:.2f}%" if _tot_un > 0 else "—")
-                _pos["% dos votos"] = _pos["votos"].apply(lambda v: f"{v / _tot_vt * 100:.2f}%" if _tot_vt > 0 else "—")
-                _pos["Valor actual"] = _pos["unidades"].apply(lambda v: kz2(v * _vi["vup"]) + " Kz" if _vi["estado"] != "Não calculado" else "—")
-                _pos["unidades"] = _pos["unidades"].apply(lambda v: f"{v:,.6f}".replace(",", " "))
-                _pos["Entradas em dinheiro (líquidas)"] = _pos["aportado"].apply(lambda v: kz2(v) + " Kz")
-                st.dataframe(_pos[["socio", "Apresentação pública", "classe", "unidades", "% das unidades", "% dos votos", "Entradas em dinheiro (líquidas)", "Valor actual"]].rename(
-                    columns={"socio": "Participante (interno)", "classe": "Classe", "unidades": "Unidades"}), hide_index=True)
-                st.caption("As 'entradas em dinheiro' só contam subscrições e resgates autorizados; as unidades da reorganização inicial não são dinheiro entregue.")
-
-        # ---------- G. Registo histórico privado + reconciliação ----------
-        with st.expander("7. Registo histórico privado e reconciliação"):
-            st.caption("Registo interno, fora do património, do VUP e do preço de entrada. Não é auditado nem integralmente comprovado.")
-            for _, _h in consultar_df("SELECT id, descricao, valor_estimado, estado, nota, criado_em FROM historico_privado ORDER BY id").iterrows():
-                st.write(f"**{_h['descricao']}**: ~{kz2(_h['valor_estimado'])} Kz — *{_h['estado']}*")
-                st.caption(_h["nota"] or "")
-            _rsm = obter_resumo_patrimonial()
-            _nav_txt = kz2(_vi["vlg"]) + " Kz" if _vi["estado"] != "Não calculado" else "não calculado"
-            st.write(f"Capital realizado declarado: {kz2(_rsm['capital_realizado'])} Kz  ·  Património líquido calculado: {_nav_txt}")
-            st.caption("A diferença entre as duas rubricas ainda não está reconciliada e não se atribui a nenhuma causa; faça a reconciliação com documentos antes de a usar em decisões.")
-
-    with aba_activos:
-        st.subheader("Editar Cotações & Activos")
-        st.caption("Cada vez que guardas, o Índice APPO é recalculado e um novo ponto é registado no histórico.")
-        df_activos_admin = obter_activos()
-        # Mostrar variação actual (read-only) para referência
-        df_admin_display = df_activos_admin[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
-        df_admin_display = df_admin_display.rename(columns={"variacao": "Var.% (auto)"})
-        df_admin_display["Var.% (auto)"] = df_admin_display["Var.% (auto)"].apply(pct_bruto)
-        st.caption("A variação % é calculada automaticamente ao guardar. Edita apenas o preço.")
-        df_editado = st.data_editor(
-            df_activos_admin[["ticker", "nome", "tipo", "preco"]], num_rows="dynamic", key="editor_activos",
-            column_config={
-                "ticker": st.column_config.TextColumn("Ticker", max_chars=12),
-                "nome": "Nome do activo", "tipo": "Tipo",
-                "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
-            })
-        st.dataframe(df_admin_display[["ticker", "Var.% (auto)"]], hide_index=True)
-        # ---- Actualização directa a partir da BODIVA (com pré-visualização) ----
-        st.markdown("**Actualização directa a partir da BODIVA**")
-        st.caption("Vai buscar as cotações à BODIVA para os tickers registados acima (gravados). "
-                   "Nada é gravado até confirmar na pré-visualização.")
-        if st.button("🔄 Buscar cotações na BODIVA"):
-            try:
-                _tks = [str(x or "").strip().upper() for x in df_activos_admin["ticker"] if str(x or "").strip()]
-                st.session_state["bodiva_prev"] = buscar_cotacoes_bodiva(_tks)
-            except Exception as _e:
-                st.session_state.pop("bodiva_prev", None)
-                st.error(f"Não foi possível obter as cotações da BODIVA agora ({_e}). "
-                         "Pode continuar a editar os preços manualmente.")
-        _prev = st.session_state.get("bodiva_prev")
-        if _prev:
-            _linhas_prev = []
-            for _, _r in df_activos_admin.iterrows():
-                _tk = str(_r["ticker"] or "").strip().upper()
-                _novo = _prev.get(_tk)
-                _atual = float(_r["preco"])
-                _suspeito = (_novo is not None and _atual > 0 and abs(_novo / _atual - 1) > 0.5)
-                _linhas_prev.append({
-                    "Ticker": _tk, "Nome": _r["nome"],
-                    "Preço na app (Kz)": _atual,
-                    "Preço BODIVA (Kz)": _novo if _novo is not None else "não encontrado",
-                    "Estado": ("⚠️ variação >50% — não será aplicado" if _suspeito
-                               else ("sem alteração" if _novo is not None and _novo == _atual
-                                     else ("a actualizar" if _novo is not None else "mantém preço actual"))),
-                })
-            st.dataframe(pd.DataFrame(_linhas_prev), hide_index=True)
-            if st.button("✅ Aplicar cotações da BODIVA e guardar"):
-                _df_novo = df_activos_admin[["ticker", "nome", "tipo", "preco"]].copy()
-                for _i in _df_novo.index:
-                    _novo = _prev.get(str(_df_novo.at[_i, "ticker"] or "").strip().upper())
-                    _atual = float(_df_novo.at[_i, "preco"])
-                    if _novo is not None and not (_atual > 0 and abs(_novo / _atual - 1) > 0.5):
-                        _df_novo.at[_i, "preco"] = _novo
-                substituir_activos(_df_novo)
-                st.session_state.pop("bodiva_prev", None)
-                st.success("Cotações da BODIVA aplicadas. Índice APPO e variações actualizados.")
+            if st.button("🔄 Reiniciar carteira virtual (voltar a 3 000 000 Kz)", type="secondary"):
+                reiniciar_simulador_db(_email_sim)
+                st.session_state["sim_carteira"] = {}
+                st.session_state["sim_saldo_caixa"] = 3_000_000.0
+                st.session_state["sim_historico"] = []
+                st.session_state.pop("sim_ordem_pend", None)
+                for k in list(st.session_state.keys()):
+                    if k.startswith("sim_qtd_") and k != "sim_qtd_op":
+                        del st.session_state[k]
                 st.rerun()
 
-        with st.expander("🏷️ Preço da OPV (oferta pública de venda) — referência nos gráficos"):
-            st.caption("Aparece nos gráficos como uma linha tracejada, com a variação desde a OPV.")
-            _tks_opv = [str(x).strip().upper() for x in df_activos_admin["ticker"] if str(x).strip()]
-            oc1, oc2, oc3 = st.columns([2, 1.5, 1.5])
-            _t_opv = oc1.selectbox("Título", _tks_opv, key="opv_tk")
-            _p_opv = oc2.number_input("Preço da OPV (Kz)", min_value=0.0, step=100.0, key="opv_pr")
-            _d_opv = oc3.date_input("Data (opcional)", value=None, key="opv_dt")
-            if st.button("Guardar preço da OPV", key="opv_btn"):
-                if _p_opv > 0:
-                    guardar_opv(_t_opv, float(_p_opv), _d_opv)
-                    st.success("Preço da OPV guardado.")
-                    st.rerun()
-                else:
-                    st.error("Indique um preço superior a zero.")
-            _opvs = consultar_df("SELECT ticker, preco, data FROM opv_activos ORDER BY ticker")
-            for _, _o in _opvs.iterrows():
-                od1, od2 = st.columns([4, 1])
-                od1.write(f"{_o['ticker']}  ·  {float(_o['preco']):,.0f} Kz".replace(",", " ") + (f"  ·  {_o['data']}" if _o["data"] else ""))
-                if od2.button("Eliminar", key=f"del_opv_{_o['ticker']}"):
-                    eliminar_opv(_o["ticker"])
-                    st.rerun()
+        # ══════════════════════════════════════════════════════════════
+        # ABA 4 — JUROS COMPOSTOS
+        # ══════════════════════════════════════════════════════════════
+        with aba_compostos:
+            st.subheader("📈 Simulador de Juros Compostos")
+            col1, col2 = st.columns(2)
+            valor_inicial  = col1.number_input("Valor inicial (Kz)", min_value=0.0, value=100000.0, step=10000.0)
+            contrib_mensal = col2.number_input("Contribuição mensal (Kz)", min_value=0.0, value=20000.0, step=5000.0)
+            col3, col4, col5 = st.columns(3)
+            taxa_anual   = col3.slider("Taxa de retorno anual esperada (%)", 0.0, 40.0, 12.0, 0.5)
+            anos         = col4.slider("Prazo (anos)", 1, 30, 10)
+            inflacao_sim = col5.slider("Inflação anual assumida (%)", 0.0, 40.0, 13.5, 0.5)
 
-        with st.expander("📥 Importar histórico de cotações (CSV ou Excel)"):
-            st.caption("Para preencher o passado nos gráficos. O ficheiro precisa de três colunas, com cabeçalhos como "
-                       "**data**, **ticker** e **preço** (ex.: 02/10/2026; BAIAAAAA; 94600). Aceita as exportações da BODIVA/BFA se tiverem estas colunas.")
-            _f_hist = st.file_uploader("Ficheiro de histórico", type=["csv", "xlsx"], key="hist_cot_up")
-            _tks_app = [str(x).strip().upper() for x in df_activos_admin["ticker"] if str(x).strip()]
-            _tk_esc = st.selectbox("Se o ficheiro for de UM só título (sem coluna de ticker), escolha o título:",
-                                   ["(o ficheiro já traz a coluna de ticker)"] + _tks_app, key="hist_cot_tk")
-            _tk_forcado = "" if _tk_esc.startswith("(") else _tk_esc
-            if _f_hist is not None and st.button("Importar histórico", key="hist_cot_btn"):
-                try:
-                    if _f_hist.name.lower().endswith(".csv"):
-                        _dfh = pd.read_csv(_f_hist, sep=None, engine="python", encoding="utf-8-sig")
-                    else:
-                        _dfh = pd.read_excel(_f_hist)
-                    if len(_dfh) > 20000:
-                        st.error("O ficheiro tem demasiadas linhas (máximo 20 000).")
-                    else:
-                        _ok, _mau = importar_historico_cotacoes(_dfh, _tk_forcado)
-                        st.success(f"Importadas {_ok} cotações" + (f"; {_mau} linhas ignoradas (data, ticker ou preço inválidos)." if _mau else "."))
-                except Exception as _e:
-                    st.error(f"Não foi possível importar: {_e}")
-
-        if st.button("Guardar alterações às cotações"):
-            substituir_activos(df_editado)
-            st.success("Cotações e Índice APPO actualizados com sucesso.")
-            st.rerun()
-
-    with aba_carteira_real:
-        st.subheader("Editar Carteira Real do Clube")
-        st.caption(
-            "Posições REAIS, com dinheiro verdadeiro, investidas de facto pelo Clube "
-            "(ex.: na BFA Capital Markets). É esta tabela que alimenta o relatório PDF — "
-            "diferente do Simulador de Investimento, que é só treino com dinheiro fictício."
-        )
-        df_activos_lista = obter_activos()
-        if df_activos_lista.empty:
-            st.warning("Ainda não há activos em Cotações & Activos — regista-os lá primeiro.")
-        else:
-            # Mapa nome-visível → ticker real, para a lista de escolha. Isto
-            # elimina a classe de bugs em que o ticker escrito à mão (aqui ou
-            # em Cotações) não batia certo entre painéis, e o relatório ou
-            # não encontrava preço nenhum, ou "colava" a todos o preço do
-            # primeiro activo com ticker em branco.
-            df_activos_lista["rotulo"] = df_activos_lista.apply(
-                lambda r: f"{r['nome']}" + (f"  ({r['ticker']})" if str(r['ticker'] or '').strip() else "  ⚠️ sem ticker — define-o em Cotações & Activos"),
-                axis=1)
-            mapa_rotulo_para_ticker = dict(zip(df_activos_lista["rotulo"], df_activos_lista["ticker"]))
-            mapa_rotulo_para_nome   = dict(zip(df_activos_lista["rotulo"], df_activos_lista["nome"]))
-
-            df_carteira_admin = obter_carteira_real()
-            # construir a coluna "rotulo" de cada posição já guardada, para o
-            # selector mostrar a escolha actual correcta
-            if not df_carteira_admin.empty:
-                # só tickers não vazios entram no mapa (evita colisões entre activos sem ticker)
-                tk_para_rotulo = {str(v).strip().upper(): k for k, v in mapa_rotulo_para_ticker.items() if str(v or "").strip()}
-                nome_para_rotulo = {str(v).strip().upper(): k for k, v in mapa_rotulo_para_nome.items()}
-
-                def _resolver_rotulo(linha):
-                    r = tk_para_rotulo.get(str(linha["ticker"] or "").strip().upper())
-                    if r is None:
-                        r = nome_para_rotulo.get(str(linha["nome"] or "").strip().upper())
-                    return r
-
-                df_carteira_admin["rotulo"] = df_carteira_admin.apply(_resolver_rotulo, axis=1)
-                if df_carteira_admin["rotulo"].isna().any():
-                    st.warning("⚠️ Há posições gravadas antes que já não correspondem a nenhum activo de Cotações & Activos "
-                               "(ticker ou nome alterado). Escolhe o activo certo na lista para essas linhas e grava.")
-                # mesma ordem de Cotações & Activos (BAI no topo, etc.)
-                ordem_rotulos = {r: i for i, r in enumerate(df_activos_lista["rotulo"])}
-                df_carteira_admin["_ordem"] = df_carteira_admin["rotulo"].map(ordem_rotulos).fillna(9999)
-                df_carteira_admin = df_carteira_admin.sort_values("_ordem", kind="stable")
-                df_carteira_admin["gravado_como"] = df_carteira_admin["nome"]
-                tabela_base = df_carteira_admin[["rotulo", "gravado_como", "qtd", "valor_aquisicao"]].reset_index(drop=True)
-                tabela_base["valor_aquisicao"] = tabela_base["valor_aquisicao"].apply(
-                    lambda v: f"{float(v):.2f}".replace(".", ","))
-
-                # Diagnóstico: o que o relatório PDF está realmente a usar, linha a linha
-                _preco_por_rotulo = dict(zip(df_activos_lista["rotulo"], df_activos_lista["preco"]))
-                _diag = []
-                for _, _p in df_carteira_admin.iterrows():
-                    _pr = _preco_por_rotulo.get(_p["rotulo"]) if _p["rotulo"] is not None else None
-                    _pr = float(_pr) if _pr is not None and pd.notna(_pr) else 0.0
-                    _diag.append({
-                        "Gravado como": _p["nome"],
-                        "Activo ligado (ticker)": _p["rotulo"] if _p["rotulo"] is not None else "⚠️ sem correspondência",
-                        "Qtd": _p["qtd"],
-                        "Preço actual (Kz)": _pr,
-                        "Valor actual (Kz)": round(float(_p["qtd"]) * _pr, 2),
+            taxa_m   = (1 + taxa_anual   / 100) ** (1 / 12) - 1
+            infl_m   = (1 + inflacao_sim / 100) ** (1 / 12) - 1
+            saldo_c  = valor_inicial
+            total_inv= valor_inicial
+            pontos   = []
+            for mes in range(1, anos * 12 + 1):
+                saldo_c   = saldo_c * (1 + taxa_m) + contrib_mensal
+                total_inv += contrib_mensal
+                if mes % 12 == 0:
+                    pontos.append({
+                        "Ano": mes // 12,
+                        "Saldo Nominal": saldo_c,
+                        "Total Investido": total_inv,
+                        "Saldo Real": saldo_c / ((1 + infl_m) ** mes),
                     })
-                st.caption("Ligação actual de cada posição ao activo (é isto que o relatório PDF usa). "
-                           "Se o nome em 'Gravado como' não corresponde ao 'Activo ligado', "
-                           "corrija o activo na tabela abaixo e grave. Preço a 0 = activo sem cotação em Cotações & Activos.")
-                st.dataframe(pd.DataFrame(_diag), hide_index=True)
-            else:
-                st.info("Ainda não há nenhuma posição registada na carteira real.")
-                tabela_base = pd.DataFrame({"rotulo": pd.Series(dtype="object"), "gravado_como": pd.Series(dtype="object"),
-                                            "qtd": pd.Series(dtype="float"), "valor_aquisicao": pd.Series(dtype="object")})
 
-            df_editado_carteira = st.data_editor(
-                tabela_base, num_rows="dynamic", key="editor_carteira_real",
-                disabled=["gravado_como"],
-                column_config={
-                    "gravado_como": st.column_config.TextColumn("Gravado como (só leitura)"),
-                    "rotulo": st.column_config.SelectboxColumn(
-                        "Activo", options=list(mapa_rotulo_para_ticker.keys()), required=True,
-                        help="Escolhe da lista de Cotações & Activos — garante que o relatório encontra sempre o preço certo."),
-                    "qtd": st.column_config.NumberColumn("Quantidade de acções", min_value=0.0, step=1.0),
-                    "valor_aquisicao": st.column_config.TextColumn(
-                        "Valor TOTAL pago na aquisição (Kz)",
-                        help="Escreva com vírgula ou ponto nos cêntimos (ex.: 362031,48). Não é o preço unitário — é o custo total desta posição."),
-                })
+            df_sim = pd.DataFrame(pontos).set_index("Ano")
+            col_a, col_b, col_c = st.columns(3)
+            col_a.metric("Saldo Final (nominal)", kz(saldo_c))
+            col_b.metric("Total Investido",       kz(total_inv))
+            col_c.metric("Juros Compostos",       kz(saldo_c - total_inv))
+            st.bar_chart(df_sim[["Saldo Nominal", "Total Investido"]])
+            saldo_real_f = df_sim["Saldo Real"].iloc[-1]
+            st.caption(f"Saldo final em poder de compra de hoje (inflação {inflacao_sim:.1f}%/ano): {kz(saldo_real_f)}")
+            nota_indicador(f"Com inflação de {inflacao_sim:.1f}%/ano, o teu saldo nominal de {kz(saldo_c)} equivale apenas a {kz(saldo_real_f)} em poder de compra actual.")
+            st.caption("Ambiente de treino pedagógico. As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.")
+            botoes_partilha(f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo_c)} — Clube de Investimento APPO")
 
-            def _parse_valor_kz(txt):
-                """Aceita 362031,48 | 362031.48 | 1.311.562,53 | 1 311 562,53 | 1,311,562.53 | 'Kz'."""
-                if txt is None or (isinstance(txt, float) and pd.isna(txt)):
-                    return None
-                t_ = str(txt).replace("Kz", "").replace("\u00a0", "").replace(" ", "").strip()
-                if not t_:
-                    return None
-                if "," in t_ and "." in t_:
-                    dec = "," if t_.rfind(",") > t_.rfind(".") else "."
-                    mil = "." if dec == "," else ","
-                    t_ = t_.replace(mil, "").replace(dec, ".")
-                elif "," in t_ or "." in t_:
-                    sep = "," if "," in t_ else "."
-                    partes = t_.split(sep)
-                    if len(partes) == 2 and 1 <= len(partes[1]) <= 2:
-                        t_ = partes[0] + "." + partes[1]      # separador decimal
-                    else:
-                        t_ = "".join(partes)                   # separador de milhares
-                try:
-                    return float(t_)
-                except ValueError:
-                    return None
+    # =========================================================
+    # PÁGINA: REGRA 50/30/20
+    # =========================================================
+    elif pagina == "🧮 Regra 50/30/20":
+        tx = t()
+        hero("🧮 " + tx["nav_map"]["🧮 Regra 50/30/20"].replace("🧮 ", ""), tx["r50_hero_sub"], "📐 " + tx["r50_rendimento"])
+        st.caption("A regra 50/30/20 é uma referência educativa, não uma regra adequada a todas as pessoas. Para medir o seu ponto de partida, faça o diagnóstico em Capacidade Financeira.")
+        tab_regra, tab_orc = st.tabs(["🧮 Regra 50/30/20", "📒 Meu Orçamento Mensal"])
 
-            if st.button("Guardar alterações à Carteira Real"):
-                linhas_validas = df_editado_carteira.dropna(subset=["rotulo"]).copy()
-                linhas_validas = linhas_validas[linhas_validas["rotulo"].isin(mapa_rotulo_para_ticker)].copy()
-                linhas_validas["valor_aquisicao"] = linhas_validas["valor_aquisicao"].apply(_parse_valor_kz)
-                if linhas_validas["valor_aquisicao"].isna().any():
-                    st.error("Há valores de aquisição inválidos ou em branco. Escreva só números (ex.: 362031,48). Nada foi gravado.")
-                    st.stop()
-                if len(linhas_validas) < len(df_editado_carteira):
-                    st.warning("Algumas linhas sem activo escolhido foram ignoradas — selecciona um activo da lista em cada linha antes de gravar.")
-                df_para_gravar = pd.DataFrame({
-                    "ticker": linhas_validas["rotulo"].map(mapa_rotulo_para_ticker),
-                    "nome":   linhas_validas["rotulo"].map(mapa_rotulo_para_nome),
-                    "qtd":    linhas_validas["qtd"],
-                    "valor_aquisicao": linhas_validas["valor_aquisicao"],
-                })
-                substituir_carteira_real(df_para_gravar)
-                st.success("Carteira real actualizada. O relatório PDF passa já a reflectir estes valores.")
-                st.rerun()
+        with tab_regra:
+            rendimento = st.number_input(tx["r50_rendimento"], min_value=0.0, step=5000.0, value=250000.0, format="%.2f")
+            alvo_consumo, alvo_inv, alvo_entes = rendimento * 0.50, rendimento * 0.30, rendimento * 0.20
 
-    with aba_aval:
-        st.subheader("Premissas Macro (CAPM)")
-        premissas = obter_premissas_macro()
-        with st.form("form_premissas"):
+            st.subheader(tx["r50_alocacao"])
             col1, col2, col3 = st.columns(3)
-            infl = col1.number_input("Inflação anual", min_value=0.0, max_value=1.0, value=premissas["inflacao"], step=0.005, format="%.3f")
-            rf   = col2.number_input("Taxa livre de risco (Rf)", min_value=0.0, max_value=1.0, value=premissas["taxa_livre_risco"], step=0.005, format="%.3f")
-            erp  = col3.number_input("Prémio de risco de mercado (ERP)", min_value=0.0, max_value=1.0, value=premissas["premio_risco"], step=0.005, format="%.3f")
-            col4, col5, col6 = st.columns(3)
-            bb = col4.number_input("Beta — Banca",           min_value=0.0, max_value=3.0, value=premissas["beta_banca"],   step=0.05)
-            bt = col5.number_input("Beta — Telecom",         min_value=0.0, max_value=3.0, value=premissas["beta_telecom"], step=0.05)
-            bo = col6.number_input("Beta — Outros sectores", min_value=0.0, max_value=3.0, value=premissas["beta_outros"],  step=0.05)
-            guardar_premissas = st.form_submit_button("Guardar premissas")
-        if guardar_premissas:
-            actualizar_premissas_macro(infl, rf, erp, bb, bt, bo)
-            st.success("Premissas macro actualizadas.")
-            st.rerun()
+            col1.metric(tx["r50_consumo"],       kz(alvo_consumo))
+            col2.metric(tx["r50_investimento"],  kz(alvo_inv))
+            col3.metric(tx["r50_entesouramento"],kz(alvo_entes))
+            st.bar_chart(pd.DataFrame({"Categoria": [tx["r50_consumo"], tx["r50_investimento"], tx["r50_entesouramento"]],
+                                       "Valor recomendado (Kz)": [alvo_consumo, alvo_inv, alvo_entes]}).set_index("Categoria"))
 
-        st.divider()
-        st.subheader("Dados de Avaliação por Empresa")
-        df_aval_admin = obter_avaliacoes()
-        df_aval_editado = st.data_editor(
-            df_aval_admin[["empresa", "sector", "preco", "acoes_circulacao", "lucro_liquido", "ganho_pontual", "capital_proprio", "dividendo_total", "crescimento_g"]],
-            num_rows="dynamic", key="editor_avaliacoes",
-            column_config={
-                "empresa": "Empresa", "sector": "Sector",
-                "preco":             st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
-                "acoes_circulacao":  st.column_config.NumberColumn("Acções em circulação", min_value=0.0, step=1000.0),
-                "lucro_liquido":     st.column_config.NumberColumn("Lucro líquido (Kz)", step=1000000.0),
-                "ganho_pontual":     st.column_config.NumberColumn("Ganho pontual não recorrente (Kz)", step=1000000.0),
-                "capital_proprio":   st.column_config.NumberColumn("Capital próprio (Kz)", min_value=0.0, step=1000000.0),
-                "dividendo_total":   st.column_config.NumberColumn("Dividendo total distribuído (Kz)", min_value=0.0, step=1000000.0),
-                "crescimento_g":     st.column_config.NumberColumn("Crescimento assumido (g)", min_value=0.0, max_value=1.0, step=0.01, format="%.2f"),
-            })
-        if st.button("Guardar alterações às avaliações"):
-            substituir_avaliacoes(df_aval_editado)
-            st.success("Avaliações actualizadas com sucesso.")
-            st.rerun()
-
-    with aba_movimentos:
-        st.subheader("Registar novo movimento")
-        with st.form("form_novo_movimento", clear_on_submit=True):
-            tipo_mov    = st.selectbox("Tipo", ["Entrada de Capital", "Compra de Activo", "Venda de Activo", "Saída/Despesa", "Ajuste de Reserva"])
-            descricao_mov = st.text_input("Descrição")
-            montante_mov  = st.number_input("Montante (Kz)", min_value=0.0, step=1000.0)
-            data_mov      = st.date_input("Data do movimento")
-            registar_mov  = st.form_submit_button("Registar movimento")
-        if registar_mov:
-            inserir_movimento(tipo_mov, descricao_mov, montante_mov, data_mov)
-            st.success("Movimento registado com sucesso.")
-            st.rerun()
-        st.divider()
-        st.subheader("Movimentos existentes")
-        df_mov_admin = obter_movimentos()
-        if not df_mov_admin.empty:
-            df_mov_admin = df_mov_admin.copy()
-            df_mov_admin["montante"] = df_mov_admin["montante"].apply(kz)
-        st.dataframe(df_mov_admin, hide_index=True)
-
-    with aba_biblioteca:
-        st.subheader("Adicionar novo artigo (texto)")
-        st.info("📌 Para publicar um PDF **tal como é** (com gráficos, imagens e formatação), use a secção "
-                "**\"📄 Publicar documento PDF\"**, mais abaixo nesta página. Este formulário cria um artigo só de texto.")
-        modo = st.radio("Fonte do conteúdo", ["Extrair só o texto de um PDF (perde gráficos e imagens)", "Escrever manualmente"],
-                        horizontal=True, key="modo_artigo")
-        texto_extraido = ""
-        if modo.startswith("Extrair"):
-            ficheiro_pdf = st.file_uploader("Ficheiro PDF (só o texto será aproveitado)", type=["pdf"], key="uploader_pdf")
-            if ficheiro_pdf is not None:
-                try:
-                    texto_extraido = extrair_texto_pdf(ficheiro_pdf)
-                    st.success("Texto extraído com sucesso. Revê antes de publicar.")
-                except Exception as erro:
-                    st.error(f"Não foi possível ler o PDF: {erro}")
-        with st.form("form_novo_artigo", clear_on_submit=True):
-            titulo_artigo   = st.text_input("Título do artigo")
-            categoria_artigo= st.selectbox("Categoria", ["Institucional", "Educação", "Análise de Mercado", "Referência"])
-            conteudo_artigo = st.text_area("Conteúdo (Markdown suportado)", value=texto_extraido, height=280)
-            publicar        = st.form_submit_button("Publicar artigo")
-        if publicar:
-            if not titulo_artigo or not conteudo_artigo:
-                st.error("Preenche o título e o conteúdo do artigo.")
-            else:
-                inserir_artigo(titulo_artigo, categoria_artigo, conteudo_artigo)
-                st.success("Artigo publicado.")
-                st.rerun()
-        st.divider()
-        st.subheader("Artigos existentes")
-        for _, artigo in obter_artigos().iterrows():
-            col_a, col_b, col_c = st.columns([3, 1.5, 1])
-            col_a.write(artigo["titulo"])
-            col_b.write(artigo["categoria"])
-            if col_c.button("Eliminar", key=f"eliminar_artigo_{artigo['id']}"):
-                eliminar_artigo(int(artigo["id"]))
-                st.rerun()
-
-        st.divider()
-        st.subheader("📄 Publicar documento PDF (com gráficos e imagens)")
-        st.caption("O PDF original é guardado tal como está: os sócios podem lê-lo no ecrã ou descarregá-lo, "
-                   "com gráficos, imagens e formatação. Tamanho máximo: 15 MB.")
-        with st.form("form_doc_pdf", clear_on_submit=True):
-            f_pdf  = st.file_uploader("Ficheiro PDF", type=["pdf"], key="doc_pdf_up")
-            t_doc  = st.text_input("Título do documento")
-            c_doc  = st.selectbox("Categoria", ["Institucional", "Educação", "Análise de Mercado", "Referência"], key="doc_pdf_cat")
-            d_doc  = st.text_area("Descrição curta (opcional)", height=80)
-            pub_doc = st.form_submit_button("Publicar documento")
-        if pub_doc:
-            if f_pdf is None or not t_doc.strip():
-                st.error("Escolha o ficheiro PDF e escreva o título.")
-            else:
-                _bytes = f_pdf.getvalue()
-                if not _bytes.startswith(b"%PDF"):
-                    st.error("O ficheiro não parece ser um PDF válido.")
-                elif len(_bytes) > PDF_TAMANHO_MAX:
-                    st.error(f"O ficheiro tem {len(_bytes) / 1048576:.1f} MB — o máximo é 15 MB. Comprima o PDF e tente de novo.")
+            st.divider()
+            st.subheader(tx["r50_comparar_titulo"])
+            with st.form("form_orcamento_real"):
+                col_a, col_b, col_c = st.columns(3)
+                real_consumo      = col_a.number_input(tx["r50_real_consumo"],       min_value=0.0, step=1000.0)
+                real_investimento = col_b.number_input(tx["r50_real_investimento"],  min_value=0.0, step=1000.0)
+                real_entes        = col_c.number_input(tx["r50_real_entesouramento"],min_value=0.0, step=1000.0)
+                comparar = st.form_submit_button(tx["r50_comparar_btn"])
+            if comparar:
+                st.markdown(tx["r50_resultado"])
+                col1, col2, col3 = st.columns(3)
+                col1.metric(tx["r50_consumo"],       kz(real_consumo),      delta=kz(real_consumo      - alvo_consumo), delta_color="inverse")
+                col2.metric(tx["r50_investimento"],  kz(real_investimento), delta=kz(real_investimento - alvo_inv),     delta_color="normal")
+                col3.metric(tx["r50_entesouramento"],kz(real_entes),        delta=kz(real_entes        - alvo_entes),   delta_color="normal")
+                if real_entes < alvo_entes:
+                    st.warning(tx["r50_aviso"])
                 else:
-                    inserir_documento(t_doc.strip(), c_doc, d_doc.strip(), f_pdf.name, _bytes, "biblioteca")
-                    st.success("Documento publicado na Biblioteca Educativa.")
-                    st.rerun()
-        _docs_adm = obter_documentos("biblioteca")
-        if not _docs_adm.empty:
-            st.markdown("**Documentos PDF publicados**")
-            for _, _d in _docs_adm.iterrows():
-                ca, cb, cc = st.columns([3, 1.5, 1])
-                ca.write(f"{_d['titulo']}  ·  {_d['tamanho'] / 1048576:.1f} MB")
-                cb.write(_d["categoria"])
-                if cc.button("Eliminar", key=f"eliminar_doc_{int(_d['id'])}"):
-                    eliminar_documento(int(_d["id"]))
-                    st.rerun()
+                    st.success(tx["r50_sucesso"])
 
-        st.divider()
-        st.subheader("📜 Estatuto do Clube (PDF)")
-        _df_est_adm = obter_documentos("estatuto")
-        if not _df_est_adm.empty:
-            _e = _df_est_adm.iloc[0]
-            ce1, ce2 = st.columns([3, 1])
-            ce1.info(f"Estatuto publicado: {_e['nome_ficheiro']} ({_e['tamanho'] / 1048576:.1f} MB, {_e['criado_em']})")
-            if ce2.button("Eliminar estatuto", key="eliminar_estatuto"):
-                eliminar_documento(int(_e["id"]))
-                st.rerun()
-        with st.form("form_estatuto_pdf", clear_on_submit=True):
-            f_est   = st.file_uploader("Ficheiro PDF do Estatuto (substitui o anterior)", type=["pdf"], key="estatuto_pdf_up")
-            pub_est = st.form_submit_button("Publicar estatuto")
-        if pub_est:
-            if f_est is None:
-                st.error("Escolha o ficheiro PDF do Estatuto.")
+        with tab_orc:
+            _email_orc = st.session_state.get("conta_email", "")
+            st.subheader("📒 Orçamento mensal pessoal ou familiar")
+            st.caption("Preencha as receitas e os gastos do mês (em kwanzas inteiros). A app compara automaticamente "
+                       "com a Regra 50/30/20 e mostra quanto está a poupar e a investir. O orçamento fica gravado na sua conta.")
+
+            if st.session_state.get("orc_carregado_para") != _email_orc:
+                _d0 = obter_orcamento(_email_orc)
+                st.session_state["orc_rec_base"]  = pd.DataFrame(_d0["receitas"], columns=["Descrição", "Valor (Kz)"])
+                st.session_state["orc_desp_base"] = pd.DataFrame(_d0["despesas"], columns=["Categoria", "Descrição", "Valor (Kz)"])
+                st.session_state["orc_carregado_para"] = _email_orc
+            _ver = st.session_state.get("orc_versao", 0)
+
+            _cfg_valor = st.column_config.NumberColumn("Valor (Kz)", min_value=0, step=100, format="%d")
+            st.markdown("**1. Receitas do mês**")
+            df_rec = st.data_editor(
+                st.session_state["orc_rec_base"], num_rows="dynamic", key=f"orc_rec_{_ver}", hide_index=True,
+                column_config={"Descrição": st.column_config.TextColumn("Descrição"), "Valor (Kz)": _cfg_valor})
+            st.markdown("**2. Despesas e poupança do mês** — escolha a categoria de cada linha")
+            df_desp = st.data_editor(
+                st.session_state["orc_desp_base"], num_rows="dynamic", key=f"orc_desp_{_ver}", hide_index=True,
+                column_config={
+                    "Categoria": st.column_config.SelectboxColumn("Categoria", options=ORC_CATEGORIAS, required=True),
+                    "Descrição": st.column_config.TextColumn("Descrição"),
+                    "Valor (Kz)": _cfg_valor})
+
+            rec_total = float(sum(_num_seguro(v) for v in df_rec["Valor (Kz)"]))
+            _dd = df_desp.copy()
+            _dd["_v"] = _dd["Valor (Kz)"].apply(_num_seguro)
+            tot_cat = {c: float(_dd.loc[_dd["Categoria"] == c, "_v"].sum()) for c in ORC_CATEGORIAS}
+            sem_cat = int(((_dd["Categoria"].isna()) & (_dd["_v"] > 0)).sum())
+            desp_total = sum(tot_cat.values())
+            saldo_livre = rec_total - desp_total
+            poup_total = tot_cat[ORC_CATEGORIAS[1]] + tot_cat[ORC_CATEGORIAS[2]]
+
+            st.divider()
+            st.markdown("**3. Resultado**")
+            if sem_cat:
+                st.warning(f"{sem_cat} linha(s) com valor mas sem categoria foram ignoradas no cálculo.")
+            if rec_total <= 0:
+                st.info("Introduza as suas receitas para ver a comparação com a Regra 50/30/20.")
             else:
-                _b = f_est.getvalue()
-                if not _b.startswith(b"%PDF"):
-                    st.error("O ficheiro não parece ser um PDF válido.")
-                elif len(_b) > PDF_TAMANHO_MAX:
-                    st.error(f"O ficheiro tem {len(_b) / 1048576:.1f} MB — o máximo é 15 MB.")
+                alvos = {ORC_CATEGORIAS[0]: rec_total * 0.50, ORC_CATEGORIAS[1]: rec_total * 0.30, ORC_CATEGORIAS[2]: rec_total * 0.20}
+                k1, k2, k3, k4 = st.columns(4)
+                k1.metric("Receitas", kz(rec_total))
+                k2.metric("Despesas + poupança planeadas", kz(desp_total))
+                k3.metric("Saldo por alocar", kz(saldo_livre))
+                k4.metric("Poupado + investido", f"{poup_total / rec_total * 100:.0f}%", help="Investimento + Entesouramento, em % das receitas (meta: 50%)")
+
+                c1, c2, c3 = st.columns(3)
+                for col, cat, inv in ((c1, ORC_CATEGORIAS[0], "inverse"), (c2, ORC_CATEGORIAS[1], "normal"), (c3, ORC_CATEGORIAS[2], "normal")):
+                    col.metric(f"{cat}", kz(tot_cat[cat]), delta=f"{kz(tot_cat[cat] - alvos[cat])} face à meta ({kz(alvos[cat])})", delta_color=inv)
+                st.bar_chart(pd.DataFrame(
+                    {"O seu orçamento (Kz)": [tot_cat[c] for c in ORC_CATEGORIAS], "Recomendado 50/30/20 (Kz)": [alvos[c] for c in ORC_CATEGORIAS]},
+                    index=ORC_CATEGORIAS))
+
+                if desp_total > rec_total:
+                    st.error(f"Os gastos e a poupança planeados superam as receitas em {kz(-saldo_livre)}. Reduza o consumo antes de pensar em investir.")
                 else:
-                    executar("DELETE FROM documentos_pdf WHERE tipo = 'estatuto'")
-                    inserir_documento("Estatuto do Clube de Investimento APPO", "Institucional", "", f_est.name, _b, "estatuto")
-                    st.success("Estatuto publicado. Já aparece em Sobre Nós & Estatutos.")
-                    st.rerun()
+                    if tot_cat[ORC_CATEGORIAS[0]] > alvos[ORC_CATEGORIAS[0]]:
+                        st.warning(f"O consumo ({tot_cat[ORC_CATEGORIAS[0]] / rec_total * 100:.0f}% das receitas) está acima dos 50% recomendados — "
+                                   f"tente reduzir cerca de {kz(tot_cat[ORC_CATEGORIAS[0]] - alvos[ORC_CATEGORIAS[0]])}.")
+                    if tot_cat[ORC_CATEGORIAS[1]] < alvos[ORC_CATEGORIAS[1]]:
+                        st.info(f"Para chegar aos 30% de investimento faltam {kz(alvos[ORC_CATEGORIAS[1]] - tot_cat[ORC_CATEGORIAS[1]])} por mês.")
+                    if tot_cat[ORC_CATEGORIAS[2]] < alvos[ORC_CATEGORIAS[2]]:
+                        st.info(f"Para chegar aos 20% de entesouramento (reserva) faltam {kz(alvos[ORC_CATEGORIAS[2]] - tot_cat[ORC_CATEGORIAS[2]])} por mês.")
+                    if (tot_cat[ORC_CATEGORIAS[0]] <= alvos[ORC_CATEGORIAS[0]] and tot_cat[ORC_CATEGORIAS[1]] >= alvos[ORC_CATEGORIAS[1]]
+                            and tot_cat[ORC_CATEGORIAS[2]] >= alvos[ORC_CATEGORIAS[2]]):
+                        st.success("Parabéns — o seu orçamento cumpre a Regra 50/30/20.")
+                    if saldo_livre > 0:
+                        st.info(f"Tem {kz(saldo_livre)} ainda por alocar: distribua-os pelas linhas de investimento e entesouramento.")
+                if poup_total > 0:
+                    st.caption(f"Ao ritmo actual, poupa e investe {kz(poup_total)} por mês: cerca de {kz(poup_total * 12)} em 12 meses "
+                               "(sem juros). Veja o efeito dos juros compostos no Simulador de Investimento.")
 
-    with aba_socios:
-        st.subheader("Pedidos de adesão recebidos")
-        df_socios = obter_socios()
-        if df_socios.empty:
-            st.info("Ainda não existem pedidos de adesão.")
+            b1, b2, b3 = st.columns(3)
+            if b1.button("💾 Guardar orçamento", type="primary", key="orc_guardar", use_container_width=True):
+                def _recs(df):
+                    return df.astype(object).where(df.notna(), None).to_dict("records")
+                guardar_orcamento(_email_orc, {"receitas": _recs(df_rec), "despesas": _recs(df_desp)})
+                # a base da sessão passa a ser o que ficou gravado; assim, ao sair da página e voltar,
+                # os dados continuam lá. O editor recomeça com uma chave nova a partir dessa base.
+                st.session_state["orc_rec_base"]  = df_rec.reset_index(drop=True).copy()
+                st.session_state["orc_desp_base"] = df_desp.reset_index(drop=True).copy()
+                st.session_state["orc_versao"] = _ver + 1
+                st.session_state["orc_msg"] = "Orçamento guardado na sua conta."
+                st.rerun()
+            if b2.button("↺ Repor modelo inicial", key="orc_repor", use_container_width=True):
+                _m = orcamento_modelo_inicial()
+                st.session_state["orc_rec_base"]  = pd.DataFrame(_m["receitas"], columns=["Descrição", "Valor (Kz)"])
+                st.session_state["orc_desp_base"] = pd.DataFrame(_m["despesas"], columns=["Categoria", "Descrição", "Valor (Kz)"])
+                st.session_state["orc_versao"] = _ver + 1
+                st.rerun()
+            _xl_orc = _xlsx_seguro(lambda: gerar_xlsx_orcamento(df_rec, df_desp, ORC_CATEGORIAS))
+            if _xl_orc:
+                b3.download_button("⬇️ Descarregar Excel", data=_xl_orc, file_name="orcamento_mensal_appo.xlsx",
+                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                   use_container_width=True, key="dl_orc_xlsx")
+            else:
+                _csv = pd.concat([
+                    df_rec.assign(Tipo="Receita", Categoria=""),
+                    df_desp.assign(Tipo="Despesa"),
+                ], ignore_index=True)[["Tipo", "Categoria", "Descrição", "Valor (Kz)"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
+                b3.download_button("⬇️ Descarregar (CSV)", data=_csv, file_name="orcamento_mensal.csv", mime="text/csv", use_container_width=True)
+            _om = st.session_state.pop("orc_msg", None)
+            if _om:
+                st.success(_om)
+
+
+    # =========================================================
+    # PÁGINA: BIBLIOTECA EDUCATIVA
+    # =========================================================
+    elif pagina == "📚 Biblioteca Educativa":
+        tx = t()
+        hero("📚 " + tx["nav_map"]["📚 Biblioteca Educativa"].replace("📚 ", ""), tx["bib_hero_sub"])
+        df_artigos = obter_artigos()
+        df_docs_bib = obter_documentos("biblioteca")
+        if not df_docs_bib.empty:
+            st.subheader("📄 Publicações em PDF")
+            for _, doc in df_docs_bib.iterrows():
+                with st.expander(f"{ICONES_CATEGORIA.get(doc['categoria'], '📄')} {doc['titulo']}"):
+                    st.caption(f"{doc['categoria']} · {tx['bib_publicado']} {doc['criado_em']} · {doc['tamanho'] / 1048576:.1f} MB")
+                    if str(doc["descricao"] or "").strip():
+                        st.write(doc["descricao"])
+                    bloco_documento_pdf(int(doc["id"]), doc["nome_ficheiro"], f"bib_{int(doc['id'])}")
+            if not df_artigos.empty:
+                st.subheader("📝 Artigos")
+        if df_artigos.empty:
+            if df_docs_bib.empty:
+                st.info(tx["bib_sem_artigos"])
         else:
-            df_socios_exibir = df_socios.copy()
-            df_socios_exibir["contribuicao_inicial"] = df_socios_exibir["contribuicao_inicial"].apply(kz)
-            st.dataframe(df_socios_exibir.rename(columns={"nome": "Nome", "email": "E-mail", "telefone": "Telefone",
-                                                           "bi": "Nº BI", "contribuicao_inicial": "Contribuição Inicial",
-                                                           "criado_em": "Submetido em"}), hide_index=True)
+            todas_label = tx["bib_todas"]
+            categorias  = [todas_label] + sorted(df_artigos["categoria"].unique().tolist())
+            filtro      = st.selectbox(tx["bib_filtrar"], categorias)
+            filtro_bd   = None if filtro == todas_label else filtro
+            for _, artigo in obter_artigos(filtro_bd).iterrows():
+                with st.expander(f"{ICONES_CATEGORIA.get(artigo['categoria'], '📄')} {artigo['titulo']}", key=f"artigo_exp_{artigo['id']}"):
+                    banner_categoria(artigo["categoria"])
+                    st.caption(f"{tx['bib_publicado']} {artigo['criado_em']}")
+                    st.markdown(artigo["conteudo"])   # conteúdo mantém-se em PT conforme acordado
 
-    with aba_contas:
-        st.subheader("Criar conta de acesso para um sócio")
-        with st.form("form_nova_conta", clear_on_submit=True):
-            nome_conta     = st.text_input("Nome completo")
-            email_conta    = st.text_input("E-mail (usado para entrar)")
-            password_conta = st.text_input("Palavra-passe inicial", type="password")
-            admin_conta    = st.checkbox("Esta conta é administradora")
-            criar_conta    = st.form_submit_button("Criar conta")
-        if criar_conta:
-            if not nome_conta or not email_conta or not password_conta:
-                st.error("Preenche todos os campos.")
+    # =========================================================
+    # PÁGINA: CAPACIDADE FINANCEIRA
+    # =========================================================
+    elif pagina == "🧠 Capacidade Financeira":
+        hero("🧠 Capacidade Financeira", "Diagnóstico, treino e ferramentas para decidir com autonomia", badge="🇦🇴 Kwanzas (Kz)")
+        pagina_capacidade_financeira(True)
+
+    # =========================================================
+    # PÁGINA: EDUCAÇÃO & SERVIÇOS
+    # =========================================================
+    elif pagina == "🎓 Educação & Serviços":
+        hero("🎓 Educação & Serviços", "Formação, materiais e ferramentas educativas do APPO", badge="🇦🇴 Educação financeira · Kwanzas (Kz)")
+        pagina_educacao_servicos()
+
+    # =========================================================
+    # PÁGINA: MANIFESTAÇÃO DE INTERESSE (antiga «Adesão de Sócios»; a chave interna mantém-se)
+    # =========================================================
+    elif pagina == "🧾 Adesão de Sócios":
+        tx = t()
+        hero("🧾 " + tx["nav_map"]["🧾 Adesão de Sócios"].replace("🧾 ", ""), "Regista o teu interesse numa futura participação. Não é uma admissão.", badge="🇦🇴 APPO")
+        pagina_manifestacao_interesse()
+
+    # =========================================================
+    # PÁGINA: SOBRE NÓS & ESTATUTOS
+    # =========================================================
+    elif pagina == "ℹ️ Sobre Nós & Estatutos":
+        tx = t()
+        hero("ℹ️ " + tx["nav_map"]["ℹ️ Sobre Nós & Estatutos"].replace("ℹ️ ", ""), tx["sobre_hero_sub"])
+        st.subheader(tx["sobre_quem_somos"])
+        st.markdown(tx["sobre_quem_texto"])
+        st.subheader(tx["sobre_principios"])
+        st.markdown(TEXTO_PRINCIPIOS)   # mantém-se em PT
+        st.subheader(tx["sobre_estatutos"])
+        st.markdown(tx["sobre_estatutos_texto"])
+        _df_est = obter_documentos("estatuto") if eh_participante() else pd.DataFrame()
+        if not _df_est.empty:
+            _est = _df_est.iloc[0]
+            st.markdown(f"**📜 {_est['titulo']}**")
+            st.caption(f"{_est['criado_em']} · {_est['tamanho'] / 1048576:.1f} MB")
+            bloco_documento_pdf(int(_est["id"]), _est["nome_ficheiro"], f"estatuto_{int(_est['id'])}", altura=820)
+        st.caption(tx["sobre_nota"])
+
+    # =========================================================
+    # PÁGINA: PAINEL DO ADMINISTRADOR (mantém-se em PT)
+    # =========================================================
+    elif pagina == "🔐 Painel do Administrador":
+        hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
+
+        aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca, aba_edu_serv, aba_despesas = st.tabs(
+            ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança", "Educação & Serviços", "Despesas do grupo"])
+        with aba_edu_serv:
+            painel_educacao_servicos_admin()
+        with aba_despesas:
+            painel_despesas_admin()
+
+        with aba_resumo:
+            st.subheader("Editar Resumo Patrimonial")
+            st.caption("O Capital Realizado deve ser sempre ≤ ao Capital Subscrito.")
+            resumo = obter_resumo_patrimonial()
+            with st.form("form_editar_resumo"):
+                novo_subscrito  = st.number_input("Capital Subscrito (Kz)",  min_value=0.0, step=10000.0, value=float(resumo["capital_subscrito"]))
+                novo_realizado  = st.number_input("Capital Realizado (Kz)",  min_value=0.0, step=10000.0, value=float(resumo["capital_realizado"]))
+                novo_invest     = st.number_input("Investimentos (Kz)",      min_value=0.0, step=10000.0, value=float(resumo["investimentos"]))
+                novas_reservas  = st.number_input("Reservas (Kz)",           min_value=0.0, step=10000.0, value=float(resumo["reservas"]))
+                guardar_resumo  = st.form_submit_button("Guardar alterações")
+            if guardar_resumo:
+                if novo_realizado > novo_subscrito:
+                    st.error("O Capital Realizado não pode ser maior do que o Capital Subscrito.")
+                else:
+                    actualizar_resumo_patrimonial(novo_subscrito, novo_realizado, novo_invest, novas_reservas)
+                    st.success("Resumo patrimonial actualizado e novo ponto de histórico registado.")
+                    st.rerun()
+
+            st.divider()
+            st.subheader("Histórico de património (alimenta os gráficos)")
+            st.caption("Cada vez que guarda o resumo acima, regista-se um ponto com o Capital Realizado desse momento. "
+                       "Elimine aqui os pontos de teste ou com valores errados.")
+            _hist_adm = obter_historico_patrimonio_admin()
+            if _hist_adm.empty:
+                st.info("Ainda não há pontos de histórico.")
             else:
+                for _, _h in _hist_adm.iterrows():
+                    hc1, hc2, hc3 = st.columns([2, 3, 1])
+                    hc1.write(str(_h["registado_em"])[:16])
+                    hc2.write(f"Capital realizado: {kz(_h['capital_social'])}")
+                    if hc3.button("Eliminar", key=f"del_hist_{int(_h['id'])}"):
+                        eliminar_registo_historico(int(_h["id"]))
+                        st.rerun()
+
+        with aba_unidades:
+            exigir_admin()
+            st.subheader("📐 Património líquido, unidades e VUP")
+            st.info("O VUP é o património líquido validado dividido pelas unidades em circulação. Ganhos e perdas alteram o valor das unidades. "
+                    "Emissões e cancelamentos alteram a sua quantidade. Transferências entre participantes alteram a titularidade, não a quantidade total.")
+            _msg_c = st.session_state.pop("cotas_msg", None)
+            if _msg_c:
+                st.success(_msg_c)
+            _cfg = obter_cotas_config()
+            _vi = obter_vup_info()
+            _bal = _vi["balanco"]
+
+            # ---------- A. Estado actual ----------
+            _cor = {"Não calculado": "🔴", "Provisório": "🟠", "Validado": "🟢"}[_vi["estado"]]
+            st.markdown(f"**Estado do indicador:** {_cor} {_vi['estado']}")
+            for _mot in _vi["motivos"]:
+                st.warning(_mot)
+            if _vi["estado"] == "Provisório":
+                st.caption("Provisório: o balanço mais recente e/ou a base de unidades ainda não foram validados. Não apresente este valor como certeza contabilística.")
+            u1, u2, u3, u4 = st.columns(4)
+            u1.metric("Património líquido", kz(_vi["vlg"]) if _vi["estado"] != "Não calculado" else "—")
+            u2.metric("Unidades validadas", f"{_vi['unidades']:,.6f}".replace(",", " "))
+            u3.metric("VUP", (kz2(_vi["vup"]) + " Kz") if _vi["estado"] != "Não calculado" else "—")
+            _rent_u = (_vi["vup"] / _vi["vup_base"] - 1) * 100 if _vi["vup_base"] > 0 and _vi["estado"] != "Não calculado" else None
+            u4.metric(f"Variação desde a data-base ({_vi['data_base']:%d/%m/%Y})" if _vi["data_base"] else "Variação desde a data-base",
+                      pct_bruto(_rent_u) if _rent_u is not None else "—")
+            st.caption("A variação conta a partir da data-base das unidades; não representa o desempenho desde 2024 nem esconde as perdas históricas (ver registo histórico privado, abaixo).")
+            if _vi["unidades_por_rever"] > 0:
+                st.warning(f"Há {_vi['unidades_por_rever']:,.4f} unidades 'Por rever' (lançadas antes desta revisão). Não entram no VUP até serem validadas, corrigidas ou anuladas (secção 5).".replace(",", " "))
+            _dp = _vi["data_precos"]
+            st.caption(f"Investimentos a preços de avaliação da app: {kz(_vi['valor_carteira'])} (data dos preços: {_dp:%d/%m/%Y %H:%M}; preços inseridos pelo administrador, não são tempo real)."
+                       if _dp else f"Investimentos a preços de avaliação da app: {kz(_vi['valor_carteira'])} (sem data de actualização registada).")
+
+            # ---------- B. Balanço ----------
+            with st.expander("1. Balanço: dinheiro disponível, outros activos e passivos", expanded=_bal is None):
+                if _bal:
+                    st.write(f"**Último retrato:** {_bal[1]:%d/%m/%Y}  ·  dinheiro disponível {kz2(_bal[2])} Kz  ·  outros activos {kz2(_bal[3])} Kz  ·  "
+                             f"passivos {kz2(_bal[4])} Kz  ·  estado: **{_bal[7]}**")
+                    st.caption(f"Fonte: {_bal[5] or '—'}  ·  Titularidade: {_bal[6] or '—'}  ·  Origem: {_bal[8] or '—'}")
+                    if _bal[7] != "Validado":
+                        if st.button("Validar este retrato", key="validar_balanco_btn"):
+                            validar_balanco(int(_bal[0]), "Validado pelo administrador")
+                            st.session_state["cotas_msg"] = "Balanço validado."
+                            st.rerun()
+                st.caption("Os retratos não se editam: cada actualização cria um novo, e os anteriores ficam guardados. Dinheiro disponível: o que está efectivamente "
+                           "disponível (extracto do homebroker/banco). Ordens vivas podem imobilizar saldo; ordens não executadas não são posições. "
+                           "O capital realizado e as 'reservas' do Resumo Patrimonial não entram neste cálculo.")
+                with st.form("form_balanco"):
+                    b1, b2 = st.columns(2)
+                    _b_data = b1.date_input("Data do retrato", value=datetime.now().date())
+                    _b_din = b2.text_input("Dinheiro disponível (Kz)", value="")
+                    b3, b4 = st.columns(2)
+                    _b_out = b3.text_input("Outros activos e direitos comprovados (Kz)", value="0")
+                    _b_pas = b4.text_input("Passivos e obrigações (Kz)", value="0")
+                    _b_fonte = st.text_input("Fonte (ex.: extracto do homebroker de 05/10/2026)")
+                    _b_tit = st.text_input("Titularidade da conta/activos (ex.: conta pessoal do administrador; acordo documentado?)")
+                    _b_val = st.checkbox("Marcar já como Validado (confirmei os valores com documentos)")
+                    _b_ok = st.form_submit_button("Registar novo retrato")
+                if _b_ok:
+                    _din, _out, _pas = _numero_flex(_b_din), _numero_flex(_b_out), _numero_flex(_b_pas)
+                    if _din is None or _out is None or _pas is None or min(_din, _out, _pas) < 0:
+                        st.error("Indique números válidos (≥ 0) nos três campos, por exemplo 2014073,93.")
+                    elif not _b_fonte.strip():
+                        st.error("Indique a fonte do retrato.")
+                    else:
+                        registar_balanco(_b_data, _din, _out, _pas, _b_fonte.strip(), _b_tit.strip(), "Validado" if _b_val else "Provisório")
+                        registar_vup_hoje()
+                        st.session_state["cotas_msg"] = "Retrato registado."
+                        st.rerun()
+
+            # ---------- C. Regras ----------
+            with st.expander("2. Regras (propostas pendentes de formalização)"):
+                st.caption("Estas regras são propostas, não regras comprovadas dos Estatutos, enquanto não houver deliberação documentada. "
+                           "100 unidades não equivalem necessariamente a 10 000 000 Kz quando o VUP varia. Os direitos de governação são separados da participação económica: "
+                           "todas as unidades valem o mesmo dinheiro; o peso do voto das unidades Fundadoras é uma proposta (1 = sem privilégio).")
+                with st.form("form_cotas_cfg"):
+                    fc1, fc2, fc3, fc4 = st.columns(4)
+                    _n_c = fc1.number_input("Valor nominal de referência (Kz)", min_value=1000.0, value=float(_cfg["valor_nominal"]), step=1000.0)
+                    _l_c = fc2.number_input("Limite de unidades (0 = sem limite)", min_value=0.0, value=float(_cfg["limite_cotas"]), step=10.0)
+                    _m_c = fc3.number_input("Entrada mínima (Kz)", min_value=0.0, value=float(_cfg["entrada_minima"]), step=10000.0)
+                    _p_c = fc4.number_input("Votos por unidade Fundadora", min_value=1.0, value=float(_cfg["peso_voto_fundadora"]), step=1.0)
+                    if st.form_submit_button("Guardar regras"):
+                        guardar_cotas_config(float(_n_c), float(_l_c), float(_m_c), float(_p_c))
+                        st.session_state["cotas_msg"] = "Regras guardadas (propostas pendentes de formalização)."
+                        st.rerun()
+                st.markdown(f"**Admissão de novos participantes:** 🔒 DESACTIVADA. Só poderá ser activada por decisão documentada e enquadramento validado, "
+                            "não por um botão. Entretanto, recolhem-se apenas manifestações de interesse.")
+                _rec = st.checkbox("A base de unidades foi reconciliada com contribuições comprovadas, acordos e perdas", value=_cfg["unidades_base_validada"], key="base_rec_chk")
+                if _rec != _cfg["unidades_base_validada"]:
+                    _nota_rec = st.text_input("Fundamento desta alteração (obrigatório)", key="base_rec_nota")
+                    if st.button("Confirmar alteração do estado da base", key="base_rec_btn"):
+                        if not _nota_rec.strip():
+                            st.error("Indique o fundamento.")
+                        else:
+                            definir_base_reconciliada(_rec, _nota_rec.strip())
+                            registar_vup_hoje()
+                            st.rerun()
+
+            # ---------- D. Estrutura inicial ----------
+            _validadas = int(consultar_um("SELECT COUNT(*) FROM unidades_movimentos WHERE estado = 'Validado'")[0])
+            with st.expander("3. Adopção da estrutura inicial de unidades (reorganização, não é entrada de dinheiro)", expanded=_validadas == 0):
+                if _validadas > 0:
+                    st.info("Já existe uma estrutura de unidades validada. Só se adopta uma vez; alterações fazem-se por anulação documentada.")
+                else:
+                    _rs = obter_resumo_patrimonial()
+                    st.warning(f"HIPÓTESE: {kz(_rs['capital_realizado'])} ÷ {kz(_cfg['valor_nominal'])} = {_rs['capital_realizado'] / _cfg['valor_nominal']:.5f} unidades. "
+                               "Não é uma reconstrução comprovada das contribuições históricas e não prova quem entregou cada montante. "
+                               "Esta etapa regista um ACORDO de participação como reorganização: não cria transferências bancárias nem movimentos financeiros.")
+                    _cap_base = st.number_input("Capital de referência a repartir (Kz)", min_value=0.0, step=1000.0, value=float(round(_rs["capital_realizado"])), key="cotas_cap_base")
+                    _base_f = pd.DataFrame({"Sócio": [NOME_ADMIN_PUBLICO, "", "", "", ""], "E-mail da conta (opcional)": [""] * 5,
+                                            "% do capital": [55.0, 15.0, 10.0, 10.0, 10.0]})
+                    st.caption("Percentagens de referência inicialmente acordadas: 55%, 15%, 10%, 10%, 10%. Escreva o nome real de cada participante (fica só nos registos internos).")
+                    _fund = st.data_editor(_base_f, num_rows="dynamic", hide_index=True, key="cotas_fundadores",
+                                           column_config={"% do capital": st.column_config.NumberColumn("% do capital", min_value=0.0, max_value=100.0, step=0.5, format="%.2f")})
+                    try:
+                        _subs = calcular_subscricoes_iniciais(float(_cap_base), _cfg["valor_nominal"], _fund.to_dict("records"))
+                    except ValueError as _e:
+                        _subs = None
+                        st.info(str(_e))
+                    if _subs:
+                        _prev = pd.DataFrame(_subs)
+                        _prev["montante"] = _prev["montante"].apply(lambda v: kz2(v) + " Kz")
+                        _prev["cotas"] = _prev["cotas"].apply(lambda v: f"{v:,.6f}".replace(",", " "))
+                        _prev["pct"] = _prev["pct"].apply(lambda v: f"{v:.2f}%")
+                        st.dataframe(_prev[["socio", "pct", "montante", "cotas"]].rename(columns={"socio": "Participante", "pct": "% acordada", "montante": "Valor de referência", "cotas": "Unidades"}), hide_index=True)
+                        _d_base = st.date_input("Data-base da adopção", value=datetime.now().date(), key="data_base_in")
+                        _fund_txt = st.text_area("Fundamento da adopção (acta, acordo, critério)", key="fund_base_txt", height=80)
+                        _rec_now = st.checkbox("Declaro que a base foi reconciliada (se não, o VUP fica 'Provisório')", key="rec_now_chk")
+                        if st.button("Adoptar estrutura inicial", type="primary", key="cotas_criar"):
+                            try:
+                                adoptar_estrutura_inicial(_subs, _cfg["valor_nominal"], _d_base, _fund_txt, _rec_now)
+                                registar_vup_hoje()
+                                st.session_state["cotas_msg"] = "Estrutura inicial adoptada como reorganização."
+                                st.rerun()
+                            except ValueError as _e2:
+                                st.error(str(_e2))
+
+            # ---------- E. Operações ----------
+            st.markdown("**4. Entrada ou saída de um participante (operação autorizada)**")
+            st.caption("Calcula ao VUP aprovado ANTES da operação. Regista a operação, o novo retrato do dinheiro disponível e a auditoria, tudo de uma só vez. "
+                       "Não é possível emitir ao valor nominal para contornar o VUP. Não há reembolso imediato garantido: prazos, liquidez e custos dependem das regras aplicáveis.")
+            _contas_u = listar_contas()
+            _opc_u = [f"{r['nome']} — {r['email']}" for _, r in _contas_u.iterrows()] + ["Outro (escrever o nome)"]
+            if "ref_op" not in st.session_state:
+                st.session_state["ref_op"] = f"OP-{datetime.now():%Y%m%d%H%M%S}-{secrets.token_hex(3)}"
+            with st.form("form_unidades"):
+                _sel_u = st.selectbox("Participante", _opc_u)
+                _nome_u = st.text_input("Nome (só se escolheu 'Outro')")
+                f1, f2 = st.columns(2)
+                _tipo_u = f1.selectbox("Operação", ["Subscrição", "Resgate"])
+                _classe_u = f2.selectbox("Classe", ["Ordinária", "Fundadora"], help="Fundadora só se esse participante já for fundador. A classe é uma proposta pendente de formalização.")
+                f3, f4 = st.columns(2)
+                _mont_u = f3.text_input("Montante (Kz)", value="")
+                _data_u = f4.date_input("Data da operação", value=datetime.now().date())
+                _vh_u = st.text_input("Valor da unidade nessa data (só se a data for anterior a hoje: regularização)", value="")
+                _fund_u = st.text_area("Fundamento / observações (obrigatório em regularizações)", height=70)
+                st.caption(f"Referência desta operação (impede duplicações): {st.session_state['ref_op']}")
+                _ok_u = st.form_submit_button("Registar operação")
+            if _ok_u:
+                if _sel_u.startswith("Outro"):
+                    _socio_u, _mail_u = _nome_u.strip(), None
+                else:
+                    _linha_u = _contas_u.iloc[_opc_u.index(_sel_u)]
+                    _socio_u, _mail_u = str(_linha_u["nome"]), str(_linha_u["email"])
+                _m = _numero_flex(_mont_u)
+                _vh = _numero_flex(_vh_u) if _vh_u.strip() else None
+                if _m is None or _m <= 0:
+                    st.error("Indique um montante válido (ex.: 500000).")
+                else:
+                    try:
+                        _r = registar_operacao_unidades(_tipo_u, _socio_u, _mail_u, _m, _classe_u, _data_u, st.session_state["ref_op"], _fund_u, _vh)
+                        registar_vup_hoje()
+                        st.session_state.pop("ref_op", None)
+                        st.session_state["cotas_msg"] = (f"{_tipo_u} registada: {_r['unidades']} unidades ao VUP de {_r['vup']} Kz ({_r['origem']}). "
+                                                         "O dinheiro disponível foi actualizado no novo retrato.")
+                        st.rerun()
+                    except ValueError as _e3:
+                        st.error(str(_e3))
+
+            # ---------- F. Revisão / movimentos ----------
+            _mov_u = obter_unidades_movimentos()
+            st.markdown("**5. Movimentos de unidades (revisão, correcção e anulação)**")
+            if _mov_u.empty:
+                st.info("Ainda não há movimentos.")
+            else:
+                st.caption("'Por rever': lançados antes desta revisão; não entram no VUP. Podem ser corrigidos e depois validados com fundamento, ou anulados. "
+                           "Movimentos validados não se editam nem se apagam: anulam-se com motivo (fica o rasto), e se houve efeito em caixa regista-se o estorno.")
+                for _, _m in _mov_u.head(30).iterrows():
+                    _mid = int(_m["id"])
+                    _est = str(_m["estado"])
+                    with st.expander(f"{_m['data']}  ·  {_m['socio']}  ·  {_m['tipo']}  ·  {_est}  ·  {kz2(_m['montante'])} Kz  ·  {float(_m['unidades']):,.6f} un.".replace(",", " ")):
+                        st.write(f"Origem: {_m['origem'] or '—'}  ·  Referência: {_m['referencia'] or '—'}  ·  VUP aplicado: {kz2(_m['vup'])} Kz  ·  Classe: {_m['classe'] or '—'}")
+                        if _m["fundamento"]:
+                            st.write(f"Fundamento: {_m['fundamento']}")
+                        if _est == "Anulado":
+                            st.write(f"Anulado por {_m['anulado_por']} em {str(_m['anulado_em'])[:16]}: {_m['motivo_anulacao']}")
+                        if _est == "Por rever":
+                            with st.form(f"form_edit_mov_{_mid}"):
+                                e1, e2 = st.columns(2)
+                                _e_socio = e1.text_input("Participante", value=str(_m["socio"]))
+                                _e_data = e2.date_input("Data", value=_m["data"])
+                                e3, e4, e5 = st.columns(3)
+                                _e_mont = e3.text_input("Montante (Kz)", value=f"{abs(float(_m['montante'])):.2f}".replace(".", ","))
+                                _e_vup = e4.text_input("Valor da unidade nesse dia (Kz)", value=f"{float(_m['vup']):.4f}".replace(".", ","))
+                                _e_cls = e5.selectbox("Classe", ["Fundadora", "Ordinária"], index=0 if str(_m["classe"]) == "Fundadora" else 1)
+                                _gc = st.form_submit_button("Guardar correcção")
+                            if _gc:
+                                try:
+                                    corrigir_movimento_unidades(_mid, _e_data, _e_socio, _numero_flex(_e_mont) or 0, _numero_flex(_e_vup) or 0, _e_cls)
+                                    st.session_state["cotas_msg"] = "Movimento corrigido (auditado)."
+                                    st.rerun()
+                                except ValueError as _e4:
+                                    st.error(str(_e4))
+                            _fv = st.text_input("Fundamento da validação", key=f"fv_{_mid}")
+                            if st.button("Validar movimento", key=f"val_{_mid}"):
+                                try:
+                                    validar_movimento_unidades(_mid, _fv)
+                                    registar_vup_hoje()
+                                    st.session_state["cotas_msg"] = "Movimento validado."
+                                    st.rerun()
+                                except ValueError as _e5:
+                                    st.error(str(_e5))
+                        if _est != "Anulado":
+                            _mot = st.text_input("Motivo da anulação", key=f"mot_{_mid}")
+                            if st.button("Anular movimento", key=f"anu_{_mid}"):
+                                try:
+                                    anular_movimento_unidades(_mid, _mot)
+                                    registar_vup_hoje()
+                                    st.session_state["cotas_msg"] = "Movimento anulado (com estorno em caixa, se aplicável)."
+                                    st.rerun()
+                                except ValueError as _e6:
+                                    st.error(str(_e6))
+
+                # posições (só movimentos validados)
+                _val = _mov_u[_mov_u["estado"] == "Validado"]
+                if not _val.empty:
+                    st.markdown("**6. Posição de cada participante (apenas movimentos validados)**")
+                    _mv = adicionar_votos(_val, _cfg["peso_voto_fundadora"])
+                    _pos = _mv.groupby(["socio", "classe"]).agg(unidades=("unidades", "sum"), aportado=("efeito_caixa", "sum"), votos=("votos", "sum")).reset_index()
+                    _pos = _pos[_pos["unidades"].abs() > 1e-9]
+                    _tot_un, _tot_vt = float(_pos["unidades"].sum()), float(_pos["votos"].sum())
+                    _rot = rotulos_publicos(list(_pos["socio"].unique()))
+                    _pos["Apresentação pública"] = _pos["socio"].map(_rot)
+                    _pos["% das unidades"] = _pos["unidades"].apply(lambda v: f"{v / _tot_un * 100:.2f}%" if _tot_un > 0 else "—")
+                    _pos["% dos votos"] = _pos["votos"].apply(lambda v: f"{v / _tot_vt * 100:.2f}%" if _tot_vt > 0 else "—")
+                    _pos["Valor actual"] = _pos["unidades"].apply(lambda v: kz2(v * _vi["vup"]) + " Kz" if _vi["estado"] != "Não calculado" else "—")
+                    _pos["unidades"] = _pos["unidades"].apply(lambda v: f"{v:,.6f}".replace(",", " "))
+                    _pos["Entradas em dinheiro (líquidas)"] = _pos["aportado"].apply(lambda v: kz2(v) + " Kz")
+                    st.dataframe(_pos[["socio", "Apresentação pública", "classe", "unidades", "% das unidades", "% dos votos", "Entradas em dinheiro (líquidas)", "Valor actual"]].rename(
+                        columns={"socio": "Participante (interno)", "classe": "Classe", "unidades": "Unidades"}), hide_index=True)
+                    st.caption("As 'entradas em dinheiro' só contam subscrições e resgates autorizados; as unidades da reorganização inicial não são dinheiro entregue.")
+
+            # ---------- G. Registo histórico privado + reconciliação ----------
+            with st.expander("7. Registo histórico privado e reconciliação"):
+                st.caption("Registo interno, fora do património, do VUP e do preço de entrada. Não é auditado nem integralmente comprovado.")
+                for _, _h in consultar_df("SELECT id, descricao, valor_estimado, estado, nota, criado_em FROM historico_privado ORDER BY id").iterrows():
+                    st.write(f"**{_h['descricao']}**: ~{kz2(_h['valor_estimado'])} Kz — *{_h['estado']}*")
+                    st.caption(_h["nota"] or "")
+                _rsm = obter_resumo_patrimonial()
+                _nav_txt = kz2(_vi["vlg"]) + " Kz" if _vi["estado"] != "Não calculado" else "não calculado"
+                st.write(f"Capital realizado declarado: {kz2(_rsm['capital_realizado'])} Kz  ·  Património líquido calculado: {_nav_txt}")
+                st.caption("A diferença entre as duas rubricas ainda não está reconciliada e não se atribui a nenhuma causa; faça a reconciliação com documentos antes de a usar em decisões.")
+
+        with aba_activos:
+            st.subheader("Editar Cotações & Activos")
+            st.caption("Cada vez que guardas, o Índice APPO é recalculado e um novo ponto é registado no histórico.")
+            df_activos_admin = obter_activos()
+            # Mostrar variação actual (read-only) para referência
+            df_admin_display = df_activos_admin[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
+            df_admin_display = df_admin_display.rename(columns={"variacao": "Var.% (auto)"})
+            df_admin_display["Var.% (auto)"] = df_admin_display["Var.% (auto)"].apply(pct_bruto)
+            st.caption("A variação % é calculada automaticamente ao guardar. Edita apenas o preço.")
+            df_editado = st.data_editor(
+                df_activos_admin[["ticker", "nome", "tipo", "preco"]], num_rows="dynamic", key="editor_activos",
+                column_config={
+                    "ticker": st.column_config.TextColumn("Ticker", max_chars=12),
+                    "nome": "Nome do activo", "tipo": "Tipo",
+                    "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
+                })
+            st.dataframe(df_admin_display[["ticker", "Var.% (auto)"]], hide_index=True)
+            # ---- Actualização directa a partir da BODIVA (com pré-visualização) ----
+            st.markdown("**Actualização directa a partir da BODIVA**")
+            st.caption("Vai buscar as cotações à BODIVA para os tickers registados acima (gravados). "
+                       "Nada é gravado até confirmar na pré-visualização.")
+            if st.button("🔄 Buscar cotações na BODIVA"):
                 try:
-                    inserir_conta(nome_conta, email_conta.strip().lower(), password_conta, admin_conta)
-                    st.success(f"Conta criada para {email_conta}.")
+                    _tks = [str(x or "").strip().upper() for x in df_activos_admin["ticker"] if str(x or "").strip()]
+                    st.session_state["bodiva_prev"] = buscar_cotacoes_bodiva(_tks)
+                except Exception as _e:
+                    st.session_state.pop("bodiva_prev", None)
+                    st.error(f"Não foi possível obter as cotações da BODIVA agora ({_e}). "
+                             "Pode continuar a editar os preços manualmente.")
+            _prev = st.session_state.get("bodiva_prev")
+            if _prev:
+                _linhas_prev = []
+                for _, _r in df_activos_admin.iterrows():
+                    _tk = str(_r["ticker"] or "").strip().upper()
+                    _novo = _prev.get(_tk)
+                    _atual = float(_r["preco"])
+                    _suspeito = (_novo is not None and _atual > 0 and abs(_novo / _atual - 1) > 0.5)
+                    _linhas_prev.append({
+                        "Ticker": _tk, "Nome": _r["nome"],
+                        "Preço na app (Kz)": _atual,
+                        "Preço BODIVA (Kz)": _novo if _novo is not None else "não encontrado",
+                        "Estado": ("⚠️ variação >50% — não será aplicado" if _suspeito
+                                   else ("sem alteração" if _novo is not None and _novo == _atual
+                                         else ("a actualizar" if _novo is not None else "mantém preço actual"))),
+                    })
+                st.dataframe(pd.DataFrame(_linhas_prev), hide_index=True)
+                if st.button("✅ Aplicar cotações da BODIVA e guardar"):
+                    _df_novo = df_activos_admin[["ticker", "nome", "tipo", "preco"]].copy()
+                    for _i in _df_novo.index:
+                        _novo = _prev.get(str(_df_novo.at[_i, "ticker"] or "").strip().upper())
+                        _atual = float(_df_novo.at[_i, "preco"])
+                        if _novo is not None and not (_atual > 0 and abs(_novo / _atual - 1) > 0.5):
+                            _df_novo.at[_i, "preco"] = _novo
+                    substituir_activos(_df_novo)
+                    st.session_state.pop("bodiva_prev", None)
+                    st.success("Cotações da BODIVA aplicadas. Índice APPO e variações actualizados.")
                     st.rerun()
-                except psycopg2.errors.UniqueViolation:
-                    obter_ligacao().rollback()
-                    st.error("Já existe uma conta com este e-mail.")
-        st.divider()
-        st.subheader("Contas existentes")
-        st.caption("Activa o acesso Premium depois de confirmares o pagamento do sócio.")
-        df_contas = listar_contas()
-        for _, conta in df_contas.iterrows():
-            col_a, col_b, col_c, col_d, col_e = st.columns([2.3, 0.9, 1.1, 1.1, 1.1])
-            col_a.write(f"{conta['nome']} — {conta['email']}")
-            col_b.write("Admin" if conta["is_admin"] else "Sócio")
-            if conta["is_premium"]:
-                if col_c.button("Remover Premium", key=f"despremium_{conta['id']}"):
-                    alternar_premium(int(conta["id"]), False)
-                    st.rerun()
-            else:
-                if col_c.button("Tornar Premium", key=f"premium_{conta['id']}"):
-                    alternar_premium(int(conta["id"]), True)
-                    st.rerun()
-            if col_d.button("Repor password", key=f"repor_{conta['id']}"):
-                nova = repor_password(int(conta["id"]))
-                st.info(f"Nova palavra-passe para {conta['email']}: **{nova}**")
-            pode_eliminar = not (conta["is_admin"] and contar_admins() <= 1)
-            if col_e.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
-                eliminar_conta(int(conta["id"]))
+
+            with st.expander("🏷️ Preço da OPV (oferta pública de venda) — referência nos gráficos"):
+                st.caption("Aparece nos gráficos como uma linha tracejada, com a variação desde a OPV.")
+                _tks_opv = [str(x).strip().upper() for x in df_activos_admin["ticker"] if str(x).strip()]
+                oc1, oc2, oc3 = st.columns([2, 1.5, 1.5])
+                _t_opv = oc1.selectbox("Título", _tks_opv, key="opv_tk")
+                _p_opv = oc2.number_input("Preço da OPV (Kz)", min_value=0.0, step=100.0, key="opv_pr")
+                _d_opv = oc3.date_input("Data (opcional)", value=None, key="opv_dt")
+                if st.button("Guardar preço da OPV", key="opv_btn"):
+                    if _p_opv > 0:
+                        guardar_opv(_t_opv, float(_p_opv), _d_opv)
+                        st.success("Preço da OPV guardado.")
+                        st.rerun()
+                    else:
+                        st.error("Indique um preço superior a zero.")
+                _opvs = consultar_df("SELECT ticker, preco, data FROM opv_activos ORDER BY ticker")
+                for _, _o in _opvs.iterrows():
+                    od1, od2 = st.columns([4, 1])
+                    od1.write(f"{_o['ticker']}  ·  {float(_o['preco']):,.0f} Kz".replace(",", " ") + (f"  ·  {_o['data']}" if _o["data"] else ""))
+                    if od2.button("Eliminar", key=f"del_opv_{_o['ticker']}"):
+                        eliminar_opv(_o["ticker"])
+                        st.rerun()
+
+            with st.expander("📥 Importar histórico de cotações (CSV ou Excel)"):
+                st.caption("Para preencher o passado nos gráficos. O ficheiro precisa de três colunas, com cabeçalhos como "
+                           "**data**, **ticker** e **preço** (ex.: 02/10/2026; BAIAAAAA; 94600). Aceita as exportações da BODIVA/BFA se tiverem estas colunas.")
+                _f_hist = st.file_uploader("Ficheiro de histórico", type=["csv", "xlsx"], key="hist_cot_up")
+                _tks_app = [str(x).strip().upper() for x in df_activos_admin["ticker"] if str(x).strip()]
+                _tk_esc = st.selectbox("Se o ficheiro for de UM só título (sem coluna de ticker), escolha o título:",
+                                       ["(o ficheiro já traz a coluna de ticker)"] + _tks_app, key="hist_cot_tk")
+                _tk_forcado = "" if _tk_esc.startswith("(") else _tk_esc
+                if _f_hist is not None and st.button("Importar histórico", key="hist_cot_btn"):
+                    try:
+                        if _f_hist.name.lower().endswith(".csv"):
+                            _dfh = pd.read_csv(_f_hist, sep=None, engine="python", encoding="utf-8-sig")
+                        else:
+                            _dfh = pd.read_excel(_f_hist)
+                        if len(_dfh) > 20000:
+                            st.error("O ficheiro tem demasiadas linhas (máximo 20 000).")
+                        else:
+                            _ok, _mau = importar_historico_cotacoes(_dfh, _tk_forcado)
+                            st.success(f"Importadas {_ok} cotações" + (f"; {_mau} linhas ignoradas (data, ticker ou preço inválidos)." if _mau else "."))
+                    except Exception as _e:
+                        st.error(f"Não foi possível importar: {_e}")
+
+            if st.button("Guardar alterações às cotações"):
+                substituir_activos(df_editado)
+                st.success("Cotações e Índice APPO actualizados com sucesso.")
                 st.rerun()
 
-    with aba_seguranca:
-        st.subheader("Registo de tentativas de acesso (últimas 50)")
-        df_log = obter_log_acessos()
-        if df_log.empty:
-            st.info("Ainda não há registos de acesso.")
-        else:
-            st.dataframe(df_log.rename(columns={"email": "E-mail", "sucesso": "Sucesso", "criado_em": "Data/Hora"}), hide_index=True)
+        with aba_carteira_real:
+            st.subheader("Editar Carteira Real do Clube")
+            st.caption(
+                "Posições REAIS, com dinheiro verdadeiro, investidas de facto pelo Clube "
+                "(ex.: na BFA Capital Markets). É esta tabela que alimenta o relatório PDF — "
+                "diferente do Simulador de Investimento, que é só treino com dinheiro fictício."
+            )
+            df_activos_lista = obter_activos()
+            if df_activos_lista.empty:
+                st.warning("Ainda não há activos em Cotações & Activos — regista-os lá primeiro.")
+            else:
+                # Mapa nome-visível → ticker real, para a lista de escolha. Isto
+                # elimina a classe de bugs em que o ticker escrito à mão (aqui ou
+                # em Cotações) não batia certo entre painéis, e o relatório ou
+                # não encontrava preço nenhum, ou "colava" a todos o preço do
+                # primeiro activo com ticker em branco.
+                df_activos_lista["rotulo"] = df_activos_lista.apply(
+                    lambda r: f"{r['nome']}" + (f"  ({r['ticker']})" if str(r['ticker'] or '').strip() else "  ⚠️ sem ticker — define-o em Cotações & Activos"),
+                    axis=1)
+                mapa_rotulo_para_ticker = dict(zip(df_activos_lista["rotulo"], df_activos_lista["ticker"]))
+                mapa_rotulo_para_nome   = dict(zip(df_activos_lista["rotulo"], df_activos_lista["nome"]))
+
+                df_carteira_admin = obter_carteira_real()
+                # construir a coluna "rotulo" de cada posição já guardada, para o
+                # selector mostrar a escolha actual correcta
+                if not df_carteira_admin.empty:
+                    # só tickers não vazios entram no mapa (evita colisões entre activos sem ticker)
+                    tk_para_rotulo = {str(v).strip().upper(): k for k, v in mapa_rotulo_para_ticker.items() if str(v or "").strip()}
+                    nome_para_rotulo = {str(v).strip().upper(): k for k, v in mapa_rotulo_para_nome.items()}
+
+                    def _resolver_rotulo(linha):
+                        r = tk_para_rotulo.get(str(linha["ticker"] or "").strip().upper())
+                        if r is None:
+                            r = nome_para_rotulo.get(str(linha["nome"] or "").strip().upper())
+                        return r
+
+                    df_carteira_admin["rotulo"] = df_carteira_admin.apply(_resolver_rotulo, axis=1)
+                    if df_carteira_admin["rotulo"].isna().any():
+                        st.warning("⚠️ Há posições gravadas antes que já não correspondem a nenhum activo de Cotações & Activos "
+                                   "(ticker ou nome alterado). Escolhe o activo certo na lista para essas linhas e grava.")
+                    # mesma ordem de Cotações & Activos (BAI no topo, etc.)
+                    ordem_rotulos = {r: i for i, r in enumerate(df_activos_lista["rotulo"])}
+                    df_carteira_admin["_ordem"] = df_carteira_admin["rotulo"].map(ordem_rotulos).fillna(9999)
+                    df_carteira_admin = df_carteira_admin.sort_values("_ordem", kind="stable")
+                    df_carteira_admin["gravado_como"] = df_carteira_admin["nome"]
+                    tabela_base = df_carteira_admin[["rotulo", "gravado_como", "qtd", "valor_aquisicao"]].reset_index(drop=True)
+                    tabela_base["valor_aquisicao"] = tabela_base["valor_aquisicao"].apply(
+                        lambda v: f"{float(v):.2f}".replace(".", ","))
+
+                    # Diagnóstico: o que o relatório PDF está realmente a usar, linha a linha
+                    _preco_por_rotulo = dict(zip(df_activos_lista["rotulo"], df_activos_lista["preco"]))
+                    _diag = []
+                    for _, _p in df_carteira_admin.iterrows():
+                        _pr = _preco_por_rotulo.get(_p["rotulo"]) if _p["rotulo"] is not None else None
+                        _pr = float(_pr) if _pr is not None and pd.notna(_pr) else 0.0
+                        _diag.append({
+                            "Gravado como": _p["nome"],
+                            "Activo ligado (ticker)": _p["rotulo"] if _p["rotulo"] is not None else "⚠️ sem correspondência",
+                            "Qtd": _p["qtd"],
+                            "Preço actual (Kz)": _pr,
+                            "Valor actual (Kz)": round(float(_p["qtd"]) * _pr, 2),
+                        })
+                    st.caption("Ligação actual de cada posição ao activo (é isto que o relatório PDF usa). "
+                               "Se o nome em 'Gravado como' não corresponde ao 'Activo ligado', "
+                               "corrija o activo na tabela abaixo e grave. Preço a 0 = activo sem cotação em Cotações & Activos.")
+                    st.dataframe(pd.DataFrame(_diag), hide_index=True)
+                else:
+                    st.info("Ainda não há nenhuma posição registada na carteira real.")
+                    tabela_base = pd.DataFrame({"rotulo": pd.Series(dtype="object"), "gravado_como": pd.Series(dtype="object"),
+                                                "qtd": pd.Series(dtype="float"), "valor_aquisicao": pd.Series(dtype="object")})
+
+                df_editado_carteira = st.data_editor(
+                    tabela_base, num_rows="dynamic", key="editor_carteira_real",
+                    disabled=["gravado_como"],
+                    column_config={
+                        "gravado_como": st.column_config.TextColumn("Gravado como (só leitura)"),
+                        "rotulo": st.column_config.SelectboxColumn(
+                            "Activo", options=list(mapa_rotulo_para_ticker.keys()), required=True,
+                            help="Escolhe da lista de Cotações & Activos — garante que o relatório encontra sempre o preço certo."),
+                        "qtd": st.column_config.NumberColumn("Quantidade de acções", min_value=0.0, step=1.0),
+                        "valor_aquisicao": st.column_config.TextColumn(
+                            "Valor TOTAL pago na aquisição (Kz)",
+                            help="Escreva com vírgula ou ponto nos cêntimos (ex.: 362031,48). Não é o preço unitário — é o custo total desta posição."),
+                    })
+
+                def _parse_valor_kz(txt):
+                    """Aceita 362031,48 | 362031.48 | 1.311.562,53 | 1 311 562,53 | 1,311,562.53 | 'Kz'."""
+                    if txt is None or (isinstance(txt, float) and pd.isna(txt)):
+                        return None
+                    t_ = str(txt).replace("Kz", "").replace("\u00a0", "").replace(" ", "").strip()
+                    if not t_:
+                        return None
+                    if "," in t_ and "." in t_:
+                        dec = "," if t_.rfind(",") > t_.rfind(".") else "."
+                        mil = "." if dec == "," else ","
+                        t_ = t_.replace(mil, "").replace(dec, ".")
+                    elif "," in t_ or "." in t_:
+                        sep = "," if "," in t_ else "."
+                        partes = t_.split(sep)
+                        if len(partes) == 2 and 1 <= len(partes[1]) <= 2:
+                            t_ = partes[0] + "." + partes[1]      # separador decimal
+                        else:
+                            t_ = "".join(partes)                   # separador de milhares
+                    try:
+                        return float(t_)
+                    except ValueError:
+                        return None
+
+                if st.button("Guardar alterações à Carteira Real"):
+                    linhas_validas = df_editado_carteira.dropna(subset=["rotulo"]).copy()
+                    linhas_validas = linhas_validas[linhas_validas["rotulo"].isin(mapa_rotulo_para_ticker)].copy()
+                    linhas_validas["valor_aquisicao"] = linhas_validas["valor_aquisicao"].apply(_parse_valor_kz)
+                    if linhas_validas["valor_aquisicao"].isna().any():
+                        st.error("Há valores de aquisição inválidos ou em branco. Escreva só números (ex.: 362031,48). Nada foi gravado.")
+                        st.stop()
+                    if len(linhas_validas) < len(df_editado_carteira):
+                        st.warning("Algumas linhas sem activo escolhido foram ignoradas — selecciona um activo da lista em cada linha antes de gravar.")
+                    df_para_gravar = pd.DataFrame({
+                        "ticker": linhas_validas["rotulo"].map(mapa_rotulo_para_ticker),
+                        "nome":   linhas_validas["rotulo"].map(mapa_rotulo_para_nome),
+                        "qtd":    linhas_validas["qtd"],
+                        "valor_aquisicao": linhas_validas["valor_aquisicao"],
+                    })
+                    substituir_carteira_real(df_para_gravar)
+                    st.success("Carteira real actualizada. O relatório PDF passa já a reflectir estes valores.")
+                    st.rerun()
+
+        with aba_aval:
+            st.subheader("Premissas Macro (CAPM)")
+            premissas = obter_premissas_macro()
+            with st.form("form_premissas"):
+                col1, col2, col3 = st.columns(3)
+                infl = col1.number_input("Inflação anual", min_value=0.0, max_value=1.0, value=premissas["inflacao"], step=0.005, format="%.3f")
+                rf   = col2.number_input("Taxa livre de risco (Rf)", min_value=0.0, max_value=1.0, value=premissas["taxa_livre_risco"], step=0.005, format="%.3f")
+                erp  = col3.number_input("Prémio de risco de mercado (ERP)", min_value=0.0, max_value=1.0, value=premissas["premio_risco"], step=0.005, format="%.3f")
+                col4, col5, col6 = st.columns(3)
+                bb = col4.number_input("Beta — Banca",           min_value=0.0, max_value=3.0, value=premissas["beta_banca"],   step=0.05)
+                bt = col5.number_input("Beta — Telecom",         min_value=0.0, max_value=3.0, value=premissas["beta_telecom"], step=0.05)
+                bo = col6.number_input("Beta — Outros sectores", min_value=0.0, max_value=3.0, value=premissas["beta_outros"],  step=0.05)
+                guardar_premissas = st.form_submit_button("Guardar premissas")
+            if guardar_premissas:
+                actualizar_premissas_macro(infl, rf, erp, bb, bt, bo)
+                st.success("Premissas macro actualizadas.")
+                st.rerun()
+
+            st.divider()
+            st.subheader("Dados de Avaliação por Empresa")
+            df_aval_admin = obter_avaliacoes()
+            df_aval_editado = st.data_editor(
+                df_aval_admin[["empresa", "sector", "preco", "acoes_circulacao", "lucro_liquido", "ganho_pontual", "capital_proprio", "dividendo_total", "crescimento_g"]],
+                num_rows="dynamic", key="editor_avaliacoes",
+                column_config={
+                    "empresa": "Empresa", "sector": "Sector",
+                    "preco":             st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
+                    "acoes_circulacao":  st.column_config.NumberColumn("Acções em circulação", min_value=0.0, step=1000.0),
+                    "lucro_liquido":     st.column_config.NumberColumn("Lucro líquido (Kz)", step=1000000.0),
+                    "ganho_pontual":     st.column_config.NumberColumn("Ganho pontual não recorrente (Kz)", step=1000000.0),
+                    "capital_proprio":   st.column_config.NumberColumn("Capital próprio (Kz)", min_value=0.0, step=1000000.0),
+                    "dividendo_total":   st.column_config.NumberColumn("Dividendo total distribuído (Kz)", min_value=0.0, step=1000000.0),
+                    "crescimento_g":     st.column_config.NumberColumn("Crescimento assumido (g)", min_value=0.0, max_value=1.0, step=0.01, format="%.2f"),
+                })
+            if st.button("Guardar alterações às avaliações"):
+                substituir_avaliacoes(df_aval_editado)
+                st.success("Avaliações actualizadas com sucesso.")
+                st.rerun()
+
+        with aba_movimentos:
+            st.subheader("Registar novo movimento")
+            with st.form("form_novo_movimento", clear_on_submit=True):
+                tipo_mov    = st.selectbox("Tipo", ["Entrada de Capital", "Compra de Activo", "Venda de Activo", "Saída/Despesa", "Ajuste de Reserva"])
+                descricao_mov = st.text_input("Descrição")
+                montante_mov  = st.number_input("Montante (Kz)", min_value=0.0, step=1000.0)
+                data_mov      = st.date_input("Data do movimento")
+                registar_mov  = st.form_submit_button("Registar movimento")
+            if registar_mov:
+                inserir_movimento(tipo_mov, descricao_mov, montante_mov, data_mov)
+                st.success("Movimento registado com sucesso.")
+                st.rerun()
+            st.divider()
+            st.subheader("Movimentos existentes")
+            df_mov_admin = obter_movimentos()
+            if not df_mov_admin.empty:
+                df_mov_admin = df_mov_admin.copy()
+                df_mov_admin["montante"] = df_mov_admin["montante"].apply(kz)
+            st.dataframe(df_mov_admin, hide_index=True)
+
+        with aba_biblioteca:
+            st.subheader("Adicionar novo artigo (texto)")
+            st.info("📌 Para publicar um PDF **tal como é** (com gráficos, imagens e formatação), use a secção "
+                    "**\"📄 Publicar documento PDF\"**, mais abaixo nesta página. Este formulário cria um artigo só de texto.")
+            modo = st.radio("Fonte do conteúdo", ["Extrair só o texto de um PDF (perde gráficos e imagens)", "Escrever manualmente"],
+                            horizontal=True, key="modo_artigo")
+            texto_extraido = ""
+            if modo.startswith("Extrair"):
+                ficheiro_pdf = st.file_uploader("Ficheiro PDF (só o texto será aproveitado)", type=["pdf"], key="uploader_pdf")
+                if ficheiro_pdf is not None:
+                    try:
+                        texto_extraido = extrair_texto_pdf(ficheiro_pdf)
+                        st.success("Texto extraído com sucesso. Revê antes de publicar.")
+                    except Exception as erro:
+                        st.error(f"Não foi possível ler o PDF: {erro}")
+            with st.form("form_novo_artigo", clear_on_submit=True):
+                titulo_artigo   = st.text_input("Título do artigo")
+                categoria_artigo= st.selectbox("Categoria", ["Institucional", "Educação", "Análise de Mercado", "Referência"])
+                conteudo_artigo = st.text_area("Conteúdo (Markdown suportado)", value=texto_extraido, height=280)
+                publicar        = st.form_submit_button("Publicar artigo")
+            if publicar:
+                if not titulo_artigo or not conteudo_artigo:
+                    st.error("Preenche o título e o conteúdo do artigo.")
+                else:
+                    inserir_artigo(titulo_artigo, categoria_artigo, conteudo_artigo)
+                    st.success("Artigo publicado.")
+                    st.rerun()
+            st.divider()
+            st.subheader("Artigos existentes")
+            for _, artigo in obter_artigos().iterrows():
+                col_a, col_b, col_c = st.columns([3, 1.5, 1])
+                col_a.write(artigo["titulo"])
+                col_b.write(artigo["categoria"])
+                if col_c.button("Eliminar", key=f"eliminar_artigo_{artigo['id']}"):
+                    eliminar_artigo(int(artigo["id"]))
+                    st.rerun()
+
+            st.divider()
+            st.subheader("📄 Publicar documento PDF (com gráficos e imagens)")
+            st.caption("O PDF original é guardado tal como está: os sócios podem lê-lo no ecrã ou descarregá-lo, "
+                       "com gráficos, imagens e formatação. Tamanho máximo: 15 MB.")
+            with st.form("form_doc_pdf", clear_on_submit=True):
+                f_pdf  = st.file_uploader("Ficheiro PDF", type=["pdf"], key="doc_pdf_up")
+                t_doc  = st.text_input("Título do documento")
+                c_doc  = st.selectbox("Categoria", ["Institucional", "Educação", "Análise de Mercado", "Referência"], key="doc_pdf_cat")
+                d_doc  = st.text_area("Descrição curta (opcional)", height=80)
+                pub_doc = st.form_submit_button("Publicar documento")
+            if pub_doc:
+                if f_pdf is None or not t_doc.strip():
+                    st.error("Escolha o ficheiro PDF e escreva o título.")
+                else:
+                    _bytes = f_pdf.getvalue()
+                    if not _bytes.startswith(b"%PDF"):
+                        st.error("O ficheiro não parece ser um PDF válido.")
+                    elif len(_bytes) > PDF_TAMANHO_MAX:
+                        st.error(f"O ficheiro tem {len(_bytes) / 1048576:.1f} MB — o máximo é 15 MB. Comprima o PDF e tente de novo.")
+                    else:
+                        inserir_documento(t_doc.strip(), c_doc, d_doc.strip(), f_pdf.name, _bytes, "biblioteca")
+                        st.success("Documento publicado na Biblioteca Educativa.")
+                        st.rerun()
+            _docs_adm = obter_documentos("biblioteca")
+            if not _docs_adm.empty:
+                st.markdown("**Documentos PDF publicados**")
+                for _, _d in _docs_adm.iterrows():
+                    ca, cb, cc = st.columns([3, 1.5, 1])
+                    ca.write(f"{_d['titulo']}  ·  {_d['tamanho'] / 1048576:.1f} MB")
+                    cb.write(_d["categoria"])
+                    if cc.button("Eliminar", key=f"eliminar_doc_{int(_d['id'])}"):
+                        eliminar_documento(int(_d["id"]))
+                        st.rerun()
+
+            st.divider()
+            st.subheader("📜 Estatuto do Clube (PDF)")
+            _df_est_adm = obter_documentos("estatuto")
+            if not _df_est_adm.empty:
+                _e = _df_est_adm.iloc[0]
+                ce1, ce2 = st.columns([3, 1])
+                ce1.info(f"Estatuto publicado: {_e['nome_ficheiro']} ({_e['tamanho'] / 1048576:.1f} MB, {_e['criado_em']})")
+                if ce2.button("Eliminar estatuto", key="eliminar_estatuto"):
+                    eliminar_documento(int(_e["id"]))
+                    st.rerun()
+            with st.form("form_estatuto_pdf", clear_on_submit=True):
+                f_est   = st.file_uploader("Ficheiro PDF do Estatuto (substitui o anterior)", type=["pdf"], key="estatuto_pdf_up")
+                pub_est = st.form_submit_button("Publicar estatuto")
+            if pub_est:
+                if f_est is None:
+                    st.error("Escolha o ficheiro PDF do Estatuto.")
+                else:
+                    _b = f_est.getvalue()
+                    if not _b.startswith(b"%PDF"):
+                        st.error("O ficheiro não parece ser um PDF válido.")
+                    elif len(_b) > PDF_TAMANHO_MAX:
+                        st.error(f"O ficheiro tem {len(_b) / 1048576:.1f} MB — o máximo é 15 MB.")
+                    else:
+                        executar("DELETE FROM documentos_pdf WHERE tipo = 'estatuto'")
+                        inserir_documento("Estatuto do Clube de Investimento APPO", "Institucional", "", f_est.name, _b, "estatuto")
+                        st.success("Estatuto publicado. Já aparece em Sobre Nós & Estatutos.")
+                        st.rerun()
+
+        with aba_socios:
+            st.subheader("Pedidos de adesão recebidos")
+            df_socios = obter_socios()
+            if df_socios.empty:
+                st.info("Ainda não existem pedidos de adesão.")
+            else:
+                df_socios_exibir = df_socios.copy()
+                df_socios_exibir["contribuicao_inicial"] = df_socios_exibir["contribuicao_inicial"].apply(kz)
+                st.dataframe(df_socios_exibir.rename(columns={"nome": "Nome", "email": "E-mail", "telefone": "Telefone",
+                                                               "bi": "Nº BI", "contribuicao_inicial": "Contribuição Inicial",
+                                                               "criado_em": "Submetido em"}), hide_index=True)
+
+        with aba_contas:
+            st.subheader("Criar conta de acesso para um sócio")
+            with st.form("form_nova_conta", clear_on_submit=True):
+                nome_conta     = st.text_input("Nome completo")
+                email_conta    = st.text_input("E-mail (usado para entrar)")
+                password_conta = st.text_input("Palavra-passe inicial", type="password")
+                admin_conta    = st.checkbox("Esta conta é administradora")
+                criar_conta    = st.form_submit_button("Criar conta")
+            if criar_conta:
+                if not nome_conta or not email_conta or not password_conta:
+                    st.error("Preenche todos os campos.")
+                else:
+                    try:
+                        inserir_conta(nome_conta, email_conta.strip().lower(), password_conta, admin_conta)
+                        st.success(f"Conta criada para {email_conta}.")
+                        st.rerun()
+                    except psycopg2.errors.UniqueViolation:
+                        obter_ligacao().rollback()
+                        st.error("Já existe uma conta com este e-mail.")
+            st.divider()
+            st.subheader("Contas existentes")
+            st.caption("Activa o acesso Premium depois de confirmares o pagamento do sócio.")
+            df_contas = listar_contas()
+            for _, conta in df_contas.iterrows():
+                col_a, col_b, col_c, col_d, col_e = st.columns([2.3, 0.9, 1.1, 1.1, 1.1])
+                col_a.write(f"{conta['nome']} — {conta['email']}")
+                col_b.write("Admin" if conta["is_admin"] else "Sócio")
+                if conta["is_premium"]:
+                    if col_c.button("Remover Premium", key=f"despremium_{conta['id']}"):
+                        alternar_premium(int(conta["id"]), False)
+                        st.rerun()
+                else:
+                    if col_c.button("Tornar Premium", key=f"premium_{conta['id']}"):
+                        alternar_premium(int(conta["id"]), True)
+                        st.rerun()
+                if col_d.button("Repor password", key=f"repor_{conta['id']}"):
+                    nova = repor_password(int(conta["id"]))
+                    st.info(f"Nova palavra-passe para {conta['email']}: **{nova}**")
+                pode_eliminar = not (conta["is_admin"] and contar_admins() <= 1)
+                if col_e.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
+                    eliminar_conta(int(conta["id"]))
+                    st.rerun()
+
+        with aba_seguranca:
+            st.subheader("Registo de tentativas de acesso (últimas 50)")
+            df_log = obter_log_acessos()
+            if df_log.empty:
+                st.info("Ainda não há registos de acesso.")
+            else:
+                st.dataframe(df_log.rename(columns={"email": "E-mail", "sucesso": "Sucesso", "criado_em": "Data/Hora"}), hide_index=True)
+
+except PermissionError:
+    st.info("Esta área é reservada aos participantes dos investimentos ou ao administrador.")
+except (psycopg2.Error, requests.RequestException):
+    traceback.print_exc()
+    st.error("Não foi possível concluir o pedido neste momento (base de dados ou serviço externo). Tente novamente dentro de instantes.")
+except Exception:
+    traceback.print_exc()
+    st.error("Ocorreu um erro inesperado nesta página. Tente novamente; se persistir, contacte o administrador.")

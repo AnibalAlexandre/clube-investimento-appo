@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --appo-vinho: #7C1F3E;
+  --appo-vinho-esc: #5E1830;
+  --appo-navy: #1E293B;
+  --appo-cinza: #F8FAFC;
+  --appo-borda: #E2E8F0;
+  --appo-suave: #64748B;
+}
+
+/* Tipografia corporativa (sem tocar nos ícones do Streamlit) */
+.stApp, .stApp p, .stApp li, .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
+.stApp button, .stApp input, .stApp textarea, .stApp [data-baseweb="tab"], .stApp [data-testid="stMetricValue"],
+.stApp [data-testid="stMetricLabel"], .stApp [data-testid="stCaptionContainer"] {
+  font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+.stApp h1, .stApp h2, .stApp h3, .stApp h4 { color: var(--appo-navy); letter-spacing: -0.01em; font-weight: 700; }
+
+[data-testid="stAppViewContainer"] { background: var(--appo-cinza); }
+[data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid var(--appo-borda); }
+[data-testid="stHeader"] { background: transparent; }
+
+/* Botões e separadores */
+button[kind="primary"], button[data-testid="stBaseButton-primary"] { background: var(--appo-vinho); border-color: var(--appo-vinho); color: #FFFFFF; font-weight: 600; }
+button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover { background: var(--appo-vinho-esc); border-color: var(--appo-vinho-esc); color: #FFFFFF; }
+button[data-baseweb="tab"][aria-selected="true"] { color: var(--appo-vinho); }
+div[data-baseweb="tab-highlight"] { background-color: var(--appo-vinho); }
+
+/* Indicadores: cartões limpos, sem gradientes nem sombras */
+div[data-testid="stMetric"] { background: #FFFFFF; border: 1px solid var(--appo-borda); border-radius: 10px; padding: 14px 16px; }
+div[data-testid="stMetricLabel"] { color: var(--appo-suave); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+div[data-testid="stMetricValue"] { color: var(--appo-navy); font-weight: 700; font-variant-numeric: tabular-nums; }
+div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
+
+/* Cabeçalho de página */
+.appo-hero { background: var(--appo-navy); color: #FFFFFF; border-left: 5px solid var(--appo-vinho); border-radius: 12px; padding: 22px 28px; margin-bottom: 18px; display: flex; align-items: center; gap: 18px; }
+.appo-hero h1 { margin: 0; font-size: 1.55rem; line-height: 1.25; color: #FFFFFF; font-weight: 700; }
+.appo-hero p { margin: 4px 0 0 0; color: #CBD5E1; font-size: 0.92rem; }
+.appo-badge { display: inline-block; border: 1px solid #475569; color: #E2E8F0; padding: 2px 10px; border-radius: 999px; font-size: 0.72rem; margin-top: 10px; letter-spacing: 0.02em; }
+
+/* Marca */
+.appo-sidebar-header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.appo-sidebar-sub { font-size: 0.66rem; color: var(--appo-suave); letter-spacing: 0.12em; text-transform: uppercase; margin: 0; }
+.appo-sidebar-word { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 1.4rem; letter-spacing: 0.18em; color: var(--appo-vinho); line-height: 1.1; margin-top: 2px; }
+.appo-wordmark { font-family: 'Inter', sans-serif; font-weight: 800; letter-spacing: 0.22em; font-size: 2.6rem; color: var(--appo-vinho); text-align: center; margin-top: 4px; line-height: 1.1; }
+
+/* Blocos de apoio */
+.appo-premium-lock { background: #FFFFFF; border: 1px dashed var(--appo-vinho); border-radius: 10px; padding: 18px 20px; text-align: center; }
+.appo-indicador-nota { background: #F1F5F9; border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; color: #334155; margin: 6px 0 4px 0; }
+.appo-categoria-banner { border-radius: 10px 10px 0 0; padding: 10px 18px; display: flex; align-items: center; gap: 12px; margin: -1rem -1rem 12px -1rem; }
+.appo-categoria-banner span { color: #FFFFFF; font-weight: 700; letter-spacing: 0.06em; font-size: 0.74rem; text-transform: uppercase; }
+.appo-capa { background: var(--appo-navy); border-left: 5px solid var(--appo-vinho); border-radius: 12px; margin-bottom: 18px; display: flex; align-items: center; }
+.appo-capa span { color: #FFFFFF; font-weight: 600; padding: 16px 24px; font-size: 1.05rem; }
+.appo-card { background: #FFFFFF; border: 1px solid var(--appo-borda); border-radius: 12px; padding: 16px 18px; }
+.appo-kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--appo-suave); font-weight: 600; }
+
+/* Cotações em fita */
+.appo-ticker-wrap { overflow: hidden; white-space: nowrap; background: #FFFFFF; border-top: 1px solid var(--appo-borda); border-bottom: 1px solid var(--appo-borda); padding: 8px 0; margin-bottom: 16px; }
+.appo-ticker-move { display: inline-block; padding-left: 100%; animation: appo-scroll 135s linear infinite; font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; font-size: 0.8rem; }
+@keyframes appo-scroll { 0% { transform: translate(0,0); } 100% { transform: translate(-100%,0); } }
+
+.appo-share a { text-decoration: none; color: #FFFFFF; padding: 6px 14px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; }
