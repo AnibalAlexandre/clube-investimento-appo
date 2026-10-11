@@ -1815,6 +1815,8 @@ def inicializar_bd():
     # ---- Actualização "Educação e Serviços / Área privada": migrações apenas aditivas (nada é apagado) ----
     executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS is_participante BOOLEAN NOT NULL DEFAULT FALSE")
     executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS nivel TEXT NOT NULL DEFAULT 'iniciante'")
+    executar("""CREATE TABLE IF NOT EXISTS perfil_investidor (id SERIAL PRIMARY KEY, conta_id INTEGER NOT NULL, versao INTEGER NOT NULL DEFAULT 1, respostas TEXT NOT NULL, pontuacoes TEXT NOT NULL, perfil TEXT NOT NULL, portal TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("CREATE INDEX IF NOT EXISTS idx_perfil_conta ON perfil_investidor (conta_id, criado_em)")
     executar("""CREATE TABLE IF NOT EXISTS auditoria (id SERIAL PRIMARY KEY, quando TIMESTAMP NOT NULL DEFAULT NOW(), utilizador TEXT, accao TEXT NOT NULL, entidade TEXT, entidade_id TEXT, antes TEXT, depois TEXT, motivo TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS balanco_privado (id SERIAL PRIMARY KEY, data_ref DATE NOT NULL, dinheiro_disponivel NUMERIC NOT NULL DEFAULT 0, outros_activos NUMERIC NOT NULL DEFAULT 0, passivos NUMERIC NOT NULL DEFAULT 0, fonte TEXT, titularidade TEXT, estado TEXT NOT NULL DEFAULT 'Provisório', origem TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), validado_por TEXT, validado_em TIMESTAMP)""")
     for _col, _tipo in [("classe", "TEXT"), ("estado", "TEXT"), ("origem", "TEXT"), ("referencia", "TEXT"), ("fundamento", "TEXT"),
@@ -1934,7 +1936,7 @@ def exigir_participante():
         raise PermissionError("Acesso reservado aos participantes dos investimentos.")
 
 
-# ---- Portais de Educação: Iniciante e Investidor (o nível é escolha da pessoa e NÃO é o Premium) ----
+# ---- Portais de Educação: Iniciante e Investidor (resultam do Perfil de Investidor; o nível NÃO é o Premium) ----
 NIVEIS = {"iniciante": "Iniciante", "investidor": "Investidor"}
 
 
@@ -1944,22 +1946,8 @@ def nivel_actual() -> str:
 
 
 def eh_investidor() -> bool:
-    """Portal Investidor: administrador, participantes dos investimentos ou quem escolheu o nível Investidor."""
+    """Portal Investidor: administrador, participantes dos investimentos ou conta cujo perfil indicou o nível Investidor."""
     return bool(st.session_state.get("autenticado")) and (eh_admin() or eh_participante() or nivel_actual() == "investidor")
-
-
-def _mudar_portal():
-    """Callback do seletor de portal: grava o nível escolhido na conta (reversível a qualquer momento)."""
-    novo = st.session_state.get("portal_sel")
-    conta_id = st.session_state.get("conta_id")
-    if novo in NIVEIS and conta_id:
-        executar("UPDATE contas SET nivel = %s WHERE id = %s", (novo, int(conta_id)))
-        st.session_state["nivel"] = novo
-
-
-def _passar_a_investidor():
-    st.session_state["portal_sel"] = "investidor"
-    _mudar_portal()
 
 
 def utilizador_actual() -> str:
@@ -2058,6 +2046,7 @@ def repor_password(conta_id: int) -> str:
 
 def eliminar_conta(conta_id: int):
     exigir_admin()
+    executar("DELETE FROM perfil_investidor WHERE conta_id = %s", (conta_id,))
     executar("DELETE FROM contas WHERE id = %s", (conta_id,))
 
 def registar_acesso(email: str, sucesso: bool):
@@ -3907,7 +3896,7 @@ except Exception as _erro_bd:
 # =========================================================
 # AUTENTICAÇÃO
 # =========================================================
-for _k, _v in [("autenticado", False), ("login_timestamp", None), ("conta_nome", ""), ("conta_email", ""), ("is_admin", False), ("is_premium", False), ("is_participante", False), ("nivel", "iniciante")]:
+for _k, _v in [("autenticado", False), ("login_timestamp", None), ("conta_nome", ""), ("conta_email", ""), ("is_admin", False), ("is_premium", False), ("is_participante", False), ("nivel", "iniciante"), ("perfil", None), ("perfil_data", None)]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
@@ -4748,10 +4737,387 @@ def pagina_capacidade_financeira(autenticado: bool):
         st.caption("O diagnóstico é um instrumento educativo inspirado nestes modelos; não é uma escala psicometricamente validada nem substitui aconselhamento financeiro.")
 
 
+# =========================================================
+# PERFIL DE INVESTIDOR (SUITABILITY): perguntas → perfil de risco → portal recomendado
+# Instrumento educativo de autoconhecimento: não é recomendação personalizada de compra ou venda.
+# O portal (Iniciante / Investidor) resulta do diagnóstico, não de uma escolha livre.
+# =========================================================
+import json as _json_perfil
+from datetime import timedelta
+
+VERSAO_PERFIL = 1
+DIAS_ENTRE_REPETICOES = 7
+HORIZONTES = ["Menos de 1 ano", "1 a 3 anos", "3 a 5 anos", "Mais de 5 anos"]
+MIN_CONHECIMENTO_INVESTIDOR = 4   # pontos em 7 (4 perguntas de conhecimento + experiência)
+AVISO_PERFIL = ("Instrumento educativo de autoconhecimento: orienta o teu percurso na plataforma. "
+                "Não é uma recomendação personalizada nem substitui a avaliação de adequação feita por uma entidade autorizada.")
+TITULOS_SEC_PERFIL = {"A": "A · A tua situação financeira", "B": "B · O objectivo e o prazo", "C": "C · Como reages ao risco", "D": "D · O que já sabes"}
+BENS_OPCOES = ["Casa ou terreno", "Viatura", "Negócio próprio", "Poupanças ou depósitos",
+               "Investimentos financeiros (acções, BT, OT, fundos)", "Nenhum dos anteriores"]
+
+QUESTOES_PERFIL = [
+    {"id": "rend", "sec": "A", "t": "Como descreves a estabilidade do teu rendimento?",
+     "op": [("Irregular ou sem rendimento próprio", 0), ("Variável, com meses fracos", 1), ("Estável, mas depende de uma única fonte", 2), ("Estável e com mais de uma fonte", 3)]},
+    {"id": "reserva", "sec": "A", "t": "Sem rendimento, durante quantos meses conseguirias pagar as tuas despesas com dinheiro disponível (sem contar o que queres investir)?",
+     "op": [("Menos de 1 mês", 0), ("1 a 3 meses", 1), ("3 a 6 meses", 2), ("Mais de 6 meses", 3)]},
+    {"id": "dividas", "sec": "A", "t": "Que parte do teu rendimento mensal vai para prestações e dívidas?",
+     "op": [("Mais de 50%", 0), ("Entre 30% e 50%", 1), ("Entre 10% e 30%", 2), ("Menos de 10% ou nenhuma", 3)]},
+    {"id": "dependentes", "sec": "A", "t": "Quantas pessoas dependem do teu rendimento (além de ti)?",
+     "op": [("5 ou mais", 0), ("3 ou 4", 1), ("1 ou 2", 2), ("Nenhuma", 3)]},
+    {"id": "bens", "sec": "A", "t": "Que bens possuis? (escolhe todos os que se aplicam)", "multi": True},
+    {"id": "peso", "sec": "A", "t": "O valor que pretendes investir representa que parte de tudo o que possuis, depois de descontar o que deves?",
+     "op": [("Mais de 50%", 0), ("Entre 25% e 50%", 1), ("Entre 10% e 25%", 2), ("Menos de 10%", 3)]},
+    {"id": "horizonte", "sec": "B", "t": "Quando vais precisar deste dinheiro?",
+     "op": [("Em menos de 1 ano", 0), ("Daqui a 1 a 3 anos", 1), ("Daqui a 3 a 5 anos", 2), ("Só daqui a mais de 5 anos", 3)]},
+    {"id": "liquidez", "sec": "B", "t": "Com que probabilidade poderás ter de levantar este dinheiro de repente (doença, desemprego, emergência)?",
+     "op": [("É provável nos próximos meses", 0), ("Pode acontecer", 1), ("É improvável", 2), ("É praticamente impossível", 3)]},
+    {"id": "queda", "sec": "C", "t": "Investiste 100 000 Kz e, um mês depois, valem 80 000 Kz. O que fazes?",
+     "op": [("Vendo tudo para não perder mais", 0), ("Vendo uma parte", 1), ("Mantenho e espero", 2), ("Aproveito para comprar mais", 3)]},
+    {"id": "resultado", "sec": "C", "t": "Qual destes resultados possíveis, num ano, preferes? (valores ilustrativos)",
+     "op": [("Ganho pequeno e quase certo, sem perdas", 0), ("Entre −5% e +15%", 1), ("Entre −15% e +30%", 2), ("Entre −30% e +50%", 3)]},
+    {"id": "perda", "sec": "C", "t": "Se perdesses o dinheiro que queres investir, o que aconteceria?",
+     "op": [("Não conseguiria pagar despesas essenciais", 0), ("Teria de mudar planos importantes", 1), ("Ficaria desconfortável, mas conseguiria continuar", 2), ("Seria um contratempo pequeno", 3)]},
+    {"id": "experiencia", "sec": "D", "t": "Que experiência tens com investimentos?",
+     "op": [("Nenhuma", 0), ("Só depósitos a prazo, BT ou OT", 1), ("Já comprei acções ou fundos", 2), ("Invisto regularmente há mais de 2 anos", 3)]},
+    {"id": "q_acao", "sec": "D", "t": "Uma acção representa:",
+     "op": [("Um empréstimo feito à empresa", 0), ("Uma fracção da propriedade da empresa", 1), ("Um depósito garantido pelo Estado", 0)]},
+    {"id": "q_bt", "sec": "D", "t": "Um Bilhete do Tesouro (BT) é:",
+     "op": [("Um depósito a prazo garantido pelo Estado", 0), ("Dívida pública de curto prazo emitida pelo Estado", 1), ("Uma acção de uma empresa pública", 0)]},
+    {"id": "q_div", "sec": "D", "t": "Diversificar uma carteira serve para:",
+     "op": [("Reduzir o risco de depender de um único activo", 1), ("Garantir que nunca há perdas", 0), ("Aumentar o valor do dividendo", 0)]},
+    {"id": "q_pe", "sec": "D", "t": "Se o P/E de uma empresa é 10x, isso significa que:",
+     "op": [("A empresa paga 10% de dividendo", 0), ("A acção subiu 10% este ano", 0), ("O preço da acção é cerca de 10 vezes o lucro anual por acção", 1)]},
+]
+_QP = {q["id"]: q for q in QUESTOES_PERFIL}
+_QUIZ = ["q_acao", "q_bt", "q_div", "q_pe"]
+
+DESCRICAO_PERFIL = {
+    "Conservador": "Dás prioridade a proteger o capital e a ter o dinheiro disponível. Os instrumentos de menor risco são o teu ponto de partida natural.",
+    "Moderado": "Aceitas oscilações moderadas em troca de maior potencial de retorno, desde que o prazo seja suficiente para as absorver.",
+    "Dinâmico": "Aceitas oscilações fortes e tens margem financeira e prazo para as suportar. Mesmo assim, o risco concentra-se: diversifica.",
+}
+
+
+def _pts_perfil(r: dict, qid: str) -> int:
+    return dict(_QP[qid]["op"])[r[qid]]
+
+
+def calcular_perfil(r: dict) -> dict:
+    """Pontua as respostas. O perfil é o mais cauteloso entre capacidade, prazo e tolerância ('o elo mais fraco'); alguns sinais de alerta limitam o risco."""
+    n_bens = len([b for b in r["bens"] if b != BENS_OPCOES[-1]])
+    cap = sum(_pts_perfil(r, i) for i in ["rend", "reserva", "dividas", "dependentes", "peso"]) + min(3, n_bens)
+    hor = _pts_perfil(r, "horizonte") + _pts_perfil(r, "liquidez")
+    tol = sum(_pts_perfil(r, i) for i in ["queda", "resultado", "perda"])
+    quiz = sum(_pts_perfil(r, i) for i in _QUIZ)
+    conh = quiz + _pts_perfil(r, "experiencia")
+
+    alertas, bloq_portal = [], False
+    if _pts_perfil(r, "reserva") <= 1:
+        alertas.append("A tua reserva de emergência cobre menos de 3 meses de despesas: antes de assumir risco de mercado, constrói esta reserva em dinheiro disponível ou depósitos.")
+        bloq_portal = True
+    if _pts_perfil(r, "horizonte") == 0:
+        alertas.append("Vais precisar deste dinheiro em menos de 1 ano: não deve ficar exposto a activos cujo preço pode cair, como acções e fundos de acções.")
+        bloq_portal = True
+    if _pts_perfil(r, "perda") == 0:
+        alertas.append("Perder este dinheiro comprometeria despesas essenciais: não é dinheiro para arriscar.")
+        bloq_portal = True
+    bloq_risco = bloq_portal
+    if _pts_perfil(r, "dividas") == 0:
+        alertas.append("Mais de metade do teu rendimento vai para dívidas: vale a pena avaliar primeiro a redução de dívidas caras, antes de assumir risco de mercado.")
+        bloq_risco = True
+
+    base = min(cap / 18.0, hor / 6.0, tol / 9.0)
+    if bloq_risco or base < 0.34:
+        perfil = "Conservador"
+    elif base < 0.67:
+        perfil = "Moderado"
+    else:
+        perfil = "Dinâmico"
+
+    portal = "investidor" if (conh >= MIN_CONHECIMENTO_INVESTIDOR and not bloq_portal) else "iniciante"
+    motivos = []
+    if portal == "iniciante":
+        if bloq_portal:
+            motivos.append("há sinais de alerta na tua situação (ver acima): o primeiro passo é protegê-la")
+        if conh < MIN_CONHECIMENTO_INVESTIDOR:
+            motivos.append(f"o teu resultado de conhecimento e experiência foi {conh}/7 (o portal Investidor pede pelo menos {MIN_CONHECIMENTO_INVESTIDOR})")
+    return {"perfil": perfil, "portal": portal, "bloq_risco": bloq_risco, "alertas": alertas, "motivos": motivos,
+            "horizonte_idx": _pts_perfil(r, "horizonte"),
+            "pontos": {"capacidade": cap, "prazo": hor, "tolerancia": tol, "conhecimento": conh},
+            "maximos": {"capacidade": 18, "prazo": 6, "tolerancia": 9, "conhecimento": 7}}
+
+
+# ---- Adequação por tipo de instrumento (regras gerais de prazo e perfil; sem produtos nem recomendações individuais) ----
+_A, _C, _N = "Adequado", "Com cautela", "Não adequado"
+_CLASSE_ADEQ = {_A: "A", _C: "C", _N: "N"}
+_ACCOES = {0: (_N, _N, _N), 1: (_N, _N, _N), 2: (_N, _C, _C), 3: (_C, _A, _A)}   # por prazo: (Conservador, Moderado, Dinâmico)
+_PERFIS_ORDEM = ["Conservador", "Moderado", "Dinâmico"]
+
+
+def adequacao_instrumentos(h: int, perfil: str, bloq_risco: bool):
+    h = max(0, min(3, int(h)))
+    ip = _PERFIS_ORDEM.index(perfil) if perfil in _PERFIS_ORDEM else 0
+    risco = _N if (bloq_risco or h <= 1) else _ACCOES[h][ip]
+    if bloq_risco:
+        pq_risco = "Há sinais de alerta na tua situação (reserva, prazo, dívidas ou capacidade de suportar perdas) que devem ser resolvidos antes de assumir este risco."
+    elif h <= 1:
+        pq_risco = "Os preços podem cair e demorar anos a recuperar: dinheiro com data marcada nos próximos 3 anos não deve ficar exposto."
+    elif risco == _N:
+        pq_risco = "Com este prazo e perfil, o risco de precisares de vender com perda é elevado."
+    elif risco == _C:
+        pq_risco = "Possível apenas com uma parte pequena e diversificada: o prazo ou o perfil ainda deixam pouca margem."
+    else:
+        pq_risco = "O prazo e o perfil permitem absorver oscilações, mas o risco continua: diversifica e respeita os limites da carteira."
+    return [
+        ("Liquidez e depósitos à ordem", _A, "Disponível quando precisares; é o lugar do dinheiro com data marcada e da reserva de emergência."),
+        ("Depósitos a prazo", _C if h == 0 else _A, "Escolhe um prazo que termine antes da data em que precisas do dinheiro; levantar antes pode ter penalização."),
+        ("Dívida pública (BT e OT)", _C if h == 0 else _A, "Escolhe vencimentos até à data em que precisas do dinheiro: vender antes do vencimento pode implicar perda."),
+        ("Fundos de investimento com acções", risco, pq_risco + " A diversificação reduz, mas não elimina, o risco."),
+        ("Acções cotadas na BODIVA", risco, pq_risco + " O mercado angolano tem pouca liquidez: pode ser difícil vender ao preço desejado."),
+    ]
+
+
+def _tabela_adequacao_html(linhas) -> str:
+    corpo = "".join(f'<tr><td><b>{_esc(c)}</b></td><td><span class="appo-adeq appo-adeq-{_CLASSE_ADEQ[n]}">{_esc(n)}</span></td><td>{_esc(p)}</td></tr>' for c, n, p in linhas)
+    return f'<table class="appo-adeq-tab"><thead><tr><th>Tipo de instrumento</th><th>Adequação</th><th>Porquê</th></tr></thead><tbody>{corpo}</tbody></table>'
+
+
+# ---- Base de dados ----
+def obter_ultimo_perfil(conta_id):
+    if not conta_id:
+        return None
+    r = consultar_um("SELECT perfil, portal, pontuacoes, criado_em, NOW() FROM perfil_investidor WHERE conta_id = %s ORDER BY criado_em DESC, id DESC LIMIT 1", (int(conta_id),))
+    if not r:
+        return None
+    try:
+        res = _json_perfil.loads(r[2])
+    except Exception:
+        res = {}
+    return {"perfil": r[0], "portal": r[1], "res": res, "criado_em": r[3], "agora": r[4]}
+
+
+def guardar_perfil(conta_id: int, respostas: dict, res: dict):
+    anterior = consultar_um("SELECT nivel FROM contas WHERE id = %s", (int(conta_id),))
+    with transaccao() as cur:
+        cur.execute("INSERT INTO perfil_investidor (conta_id, versao, respostas, pontuacoes, perfil, portal) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (int(conta_id), VERSAO_PERFIL, _json_perfil.dumps(respostas, ensure_ascii=False), _json_perfil.dumps(res, ensure_ascii=False), res["perfil"], res["portal"]))
+        cur.execute("UPDATE contas SET nivel = %s WHERE id = %s", (res["portal"], int(conta_id)))
+        registar_auditoria("perfil_calculado", "conta", conta_id, antes={"nivel": anterior[0] if anterior else None},
+                           depois={"nivel": res["portal"], "perfil": res["perfil"]}, cur=cur)
+
+
+def definir_nivel_conta(conta_id: int, nivel: str, motivo: str):
+    exigir_admin()
+    if nivel not in NIVEIS:
+        raise ValueError("Nível inválido.")
+    if not (motivo or "").strip():
+        raise ValueError("Indica o motivo do ajuste.")
+    anterior = consultar_um("SELECT nivel FROM contas WHERE id = %s", (int(conta_id),))
+    with transaccao() as cur:
+        cur.execute("UPDATE contas SET nivel = %s WHERE id = %s", (nivel, int(conta_id)))
+        registar_auditoria("nivel_ajustado_admin", "conta", conta_id, antes={"nivel": anterior[0] if anterior else None}, depois={"nivel": nivel}, motivo=motivo.strip(), cur=cur)
+
+
+def obter_perfis_resumo() -> pd.DataFrame:
+    exigir_admin()
+    return consultar_df("SELECT c.email AS email, c.nivel AS portal, p.perfil AS perfil, p.criado_em AS calculado_em FROM contas c "
+                        "LEFT JOIN LATERAL (SELECT perfil, criado_em FROM perfil_investidor WHERE conta_id = c.id ORDER BY criado_em DESC, id DESC LIMIT 1) p ON TRUE "
+                        "ORDER BY c.criado_em DESC")
+
+
+def _carregar_perfil_sessao(conta_id):
+    u = obter_ultimo_perfil(conta_id)
+    st.session_state["perfil"] = u["perfil"] if u else None
+    st.session_state["perfil_data"] = u["criado_em"] if u else None
+
+
+def tem_perfil() -> bool:
+    return bool(st.session_state.get("perfil"))
+
+
+# ---- Interface ----
+CSS_PERFIL = """
+.appo-portal { border-radius: 12px; padding: 16px 18px; color: #FFFFFF; margin: 4px 0 10px 0; }
+.appo-portal-ini { background: #0F766E; }
+.appo-portal-inv { background: var(--appo-vinho, #7C1F3E); }
+.appo-portal-pleno { background: #475569; }
+.appo-portal-rot { font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.85; margin: 0; }
+.appo-portal-nome { font-size: 1.45rem; font-weight: 800; line-height: 1.15; margin: 2px 0; }
+.appo-portal-sub { font-size: 0.82rem; opacity: 0.92; margin: 0; }
+.appo-perfil-topo { border: 1px solid var(--appo-borda, #E2E8F0); border-left: 6px solid var(--appo-vinho, #7C1F3E); background: #FFFFFF; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+.appo-perfil-rotulo { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--appo-suave, #64748B); }
+.appo-perfil-nome { font-size: 2rem; font-weight: 800; color: var(--appo-vinho, #7C1F3E); line-height: 1.15; }
+.appo-perfil-topo p { margin: 6px 0 0 0; color: #334155; }
+.appo-pcard { border-radius: 14px; padding: 22px 24px; border: 2px solid var(--appo-borda, #E2E8F0); background: #FFFFFF; min-height: 170px; }
+.appo-pcard h3 { margin: 0 0 6px 0; font-size: 1.4rem; }
+.appo-pcard p { margin: 0; color: #334155; }
+.appo-pcard-ini.appo-pcard-rec { border-color: #0F766E; background: #F0FDFA; }
+.appo-pcard-inv.appo-pcard-rec { border-color: var(--appo-vinho, #7C1F3E); background: #FDF2F5; }
+.appo-pcard-off { opacity: 0.6; }
+.appo-fita { display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; color: #FFFFFF; padding: 3px 10px; border-radius: 999px; margin-bottom: 8px; }
+.appo-pcard-ini .appo-fita { background: #0F766E; }
+.appo-pcard-inv .appo-fita { background: var(--appo-vinho, #7C1F3E); }
+.appo-adeq-tab { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.appo-adeq-tab th { text-align: left; padding: 8px 10px; color: var(--appo-suave, #64748B); border-bottom: 2px solid var(--appo-borda, #E2E8F0); font-weight: 600; }
+.appo-adeq-tab td { padding: 10px; border-bottom: 1px solid var(--appo-borda, #E2E8F0); vertical-align: top; }
+.appo-adeq { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+.appo-adeq-A { background: #DCFCE7; color: #166534; }
+.appo-adeq-C { background: #FEF3C7; color: #92400E; }
+.appo-adeq-N { background: #FEE2E2; color: #991B1B; }
+"""
+st.markdown(f"<style>{CSS_PERFIL}</style>", unsafe_allow_html=True)
+
+
+def _cartao_portal_lateral():
+    """Cartão grande e colorido com o portal da conta. O portal resulta do perfil: não há seletor livre."""
+    if eh_admin() or eh_participante():
+        cls, nome = "appo-portal-pleno", "Acesso completo"
+        sub = "Portal Investidor e área do Clube" if eh_participante() else "Administração"
+    elif eh_investidor():
+        cls, nome = "appo-portal-inv", "Portal Investidor"
+        sub = f"Perfil {st.session_state.get('perfil')}" if tem_perfil() else "Perfil por fazer"
+    else:
+        cls, nome = "appo-portal-ini", "Portal Iniciante"
+        sub = f"Perfil {st.session_state.get('perfil')}" if tem_perfil() else "Perfil por fazer"
+    render_html(f'<div class="appo-portal {cls}"><p class="appo-portal-rot">O teu portal</p><div class="appo-portal-nome">{_esc(nome)}</div><p class="appo-portal-sub">{_esc(sub)}</p></div>')
+    st.button("🧭 Rever o meu perfil" if tem_perfil() else "🧭 Fazer o meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",),
+              key="lat_perfil", use_container_width=True, type="secondary" if tem_perfil() else "primary")
+
+
+def _cartoes_portais(portal_rec: str):
+    c1, c2 = st.columns(2)
+    for col, chave, titulo, texto in [
+        (c1, "ini", "Portal Iniciante", "Fundamentos, Biblioteca e diagnóstico de capacidade financeira. Constrói a base antes de assumir risco."),
+        (c2, "inv", "Portal Investidor", "Cotações, avaliação de activos, simulador, conversor e Regra 50/30/20."),
+    ]:
+        recomendado = (("ini" if portal_rec == "iniciante" else "inv") == chave)
+        fita = '<span class="appo-fita">O TEU PORTAL</span><br>' if recomendado else ""
+        extra = "" if recomendado else " appo-pcard-off"
+        nota = "" if recomendado else '<p style="margin-top:8px;font-size:0.85rem;">Abre-se quando o teu perfil o permitir.</p>'
+        col.markdown(f'<div class="appo-pcard appo-pcard-{chave}{" appo-pcard-rec" if recomendado else ""}{extra}">{fita}<h3>{_esc(titulo)}</h3><p>{_esc(texto)}</p>{nota}</div>', unsafe_allow_html=True)
+
+
+def _mostrar_resultado_perfil(u: dict):
+    res = u["res"] or {}
+    perfil = u["perfil"]
+    render_html(f'<div class="appo-perfil-topo"><span class="appo-perfil-rotulo">O teu perfil de risco</span>'
+                f'<div class="appo-perfil-nome">{_esc(perfil)}</div><p>{_esc(DESCRICAO_PERFIL.get(perfil, ""))}</p></div>')
+    _cartoes_portais(u["portal"])
+    st.markdown("")
+    pts, mx = res.get("pontos", {}), res.get("maximos", {})
+    st.markdown("##### Como chegámos aqui")
+    for chave, rotulo in [("capacidade", "Capacidade financeira para suportar perdas"), ("prazo", "Prazo e necessidade de liquidez"),
+                          ("tolerancia", "Tolerância emocional ao risco"), ("conhecimento", "Conhecimento e experiência")]:
+        if chave in pts and mx.get(chave):
+            st.caption(f"{rotulo}: {pts[chave]}/{mx[chave]}")
+            st.progress(min(1.0, max(0.0, pts[chave] / mx[chave])))
+    st.caption("O perfil de risco segue a dimensão mais cautelosa entre capacidade, prazo e tolerância; o portal depende também do conhecimento e dos sinais de alerta.")
+    for a in res.get("alertas", []):
+        st.warning(a)
+    if u["portal"] == "iniciante" and res.get("motivos"):
+        st.info("Estás no portal Iniciante porque " + "; ".join(res["motivos"]) + ". Podes refazer o perfil passados " + f"{DIAS_ENTRE_REPETICOES} dias, depois de estudares a Biblioteca.")
+    h = int(res.get("horizonte_idx", 0))
+    st.markdown(f"##### Adequação por tipo de instrumento · prazo indicado: {HORIZONTES[max(0, min(3, h))]}")
+    render_html(_tabela_adequacao_html(adequacao_instrumentos(h, perfil, bool(res.get("bloq_risco")))))
+    try:
+        st.caption(f"Perfil calculado em {u['criado_em']:%d/%m/%Y}.")
+    except Exception:
+        pass
+    st.caption(AVISO_PERFIL)
+
+
+def _pode_refazer_perfil(u) -> bool:
+    if eh_admin() or not u:
+        return True
+    try:
+        return (u["agora"] - u["criado_em"]).days >= DIAS_ENTRE_REPETICOES
+    except Exception:
+        return True
+
+
+def _formulario_perfil(conta_id: int):
+    with st.form("form_perfil_investidor"):
+        respostas, sec = {}, None
+        for q in QUESTOES_PERFIL:
+            if q["sec"] != sec:
+                st.markdown(f"##### {TITULOS_SEC_PERFIL[q['sec']]}")
+                sec = q["sec"]
+            if q.get("multi"):
+                respostas[q["id"]] = st.multiselect(q["t"], BENS_OPCOES, key=f"pf_{q['id']}")
+            else:
+                respostas[q["id"]] = st.radio(q["t"], [o[0] for o in q["op"]], index=None, key=f"pf_{q['id']}")
+        enviar = st.form_submit_button("Calcular o meu perfil", type="primary")
+    if not enviar:
+        return
+    em_falta = [q["t"] for q in QUESTOES_PERFIL if not respostas[q["id"]]]
+    if em_falta:
+        st.error(f"Faltam {len(em_falta)} resposta(s). Primeira por responder: «{em_falta[0]}»")
+        return
+    if BENS_OPCOES[-1] in respostas["bens"] and len(respostas["bens"]) > 1:
+        st.error("Em «Que bens possuis?», «Nenhum dos anteriores» não pode ser escolhido junto com outros bens.")
+        return
+    res = calcular_perfil(respostas)
+    guardar_perfil(conta_id, respostas, res)
+    st.session_state["nivel"] = res["portal"]
+    _carregar_perfil_sessao(conta_id)
+    st.success("Perfil calculado e guardado.")
+    st.rerun()
+
+
+def _verificador_objectivo(u):
+    st.markdown("Diz para que é o dinheiro e quando vais precisar dele. O APPO mostra que tipos de instrumento fazem, ou não, sentido para esse prazo.")
+    if not u:
+        st.info("Faz primeiro o teu perfil, no separador «O meu perfil»: o verificador usa o teu perfil de risco.")
+        return
+    objectivos = ["Viagem ou despesa com data marcada", "Propinas ou educação", "Reserva de emergência", "Comprar casa ou terreno",
+                  "Reforma ou futuro dos filhos", "Fazer crescer poupança a longo prazo"]
+    c1, c2 = st.columns(2)
+    objectivo = c1.selectbox("Objectivo do dinheiro", objectivos, key="ver_obj")
+    horizonte = c2.selectbox("Quando vais precisar dele?", HORIZONTES, index=1, key="ver_hor")
+    h = HORIZONTES.index(horizonte)
+    bloq = bool((u["res"] or {}).get("bloq_risco"))
+    if objectivo == "Reserva de emergência":
+        h, bloq = 0, True
+        st.caption("A reserva de emergência deve estar sempre disponível, qualquer que seja o prazo.")
+    st.markdown(f"##### «{objectivo}» · {horizonte} · perfil {u['perfil']}")
+    render_html(_tabela_adequacao_html(adequacao_instrumentos(h, u["perfil"], bloq)))
+    st.caption(AVISO_PERFIL)
+
+
+def pagina_perfil_investidor():
+    conta_id = st.session_state.get("conta_id")
+    u = obter_ultimo_perfil(conta_id)
+    aba_perfil, aba_ver = st.tabs(["🧭 O meu perfil", "🎯 Verificador de objectivo"])
+    with aba_perfil:
+        if u:
+            _mostrar_resultado_perfil(u)
+            st.divider()
+            if _pode_refazer_perfil(u):
+                with st.expander("Refazer o perfil"):
+                    _formulario_perfil(conta_id)
+            else:
+                try:
+                    quando = u["criado_em"] + timedelta(days=DIAS_ENTRE_REPETICOES)
+                    st.info(f"Podes refazer o perfil a partir de {quando:%d/%m/%Y}.")
+                except Exception:
+                    st.info(f"Podes refazer o perfil passados {DIAS_ENTRE_REPETICOES} dias.")
+        else:
+            st.markdown("Responde com sinceridade: não há respostas certas, só respostas úteis. Demora cerca de 4 minutos e ajusta o teu portal ao teu momento.")
+            _formulario_perfil(conta_id)
+            st.caption(AVISO_PERFIL)
+    with aba_ver:
+        _verificador_objectivo(u)
+
+
+
 def _painel_inicio_aluno():
     """Início para contas sem acesso ao módulo patrimonial: progresso de capacidade financeira, atalhos e mercado."""
     nome = str(st.session_state.get("conta_nome") or "").split(" ")[0]
     st.markdown(f"### Bem-vindo, {_html_pub.escape(nome)}" if nome else "### Bem-vindo")
+    if not tem_perfil():
+        render_html('<div class="appo-perfil-topo"><span class="appo-perfil-rotulo">Primeiro passo</span><div class="appo-perfil-nome" style="font-size:1.4rem;">Faz o teu perfil de investidor</div>'
+                    '<p>Em cerca de 4 minutos, o APPO ajusta o teu portal ao teu perfil de risco e à tua experiência.</p></div>')
+        st.button("🧭 Fazer o meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="ini_perfil", type="primary")
     try:
         dfd = obter_diagnosticos_cf()
     except Exception:
@@ -4774,7 +5140,7 @@ def _painel_inicio_aluno():
         b3.button("🧪 Treinar no Home Broker virtual", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key="ini_sim")
     else:
         b2.button("📚 Ler a Biblioteca", on_click=_ir_para, args=("📚 Biblioteca Educativa",), key="ini_bib")
-        b3.button("🚀 Passar ao portal Investidor", on_click=_passar_a_investidor, key="ini_inv")
+        b3.button("🧭 Rever o meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="ini_rev")
     st.markdown("##### Mercado")
     if not _df_activos_ticker.empty:
         st.dataframe(tabela_cotacoes_estilizada(_df_activos_ticker), hide_index=True)
@@ -4808,6 +5174,10 @@ def pagina_login():
                 st.session_state["is_premium"]      = bool(conta[5])
                 st.session_state["is_participante"] = bool(conta[6])
                 st.session_state["nivel"]           = str(conta[7] or "iniciante")
+                try:
+                    _carregar_perfil_sessao(conta[0])
+                except Exception:
+                    traceback.print_exc()
                 st.rerun()
             else:
                 registar_acesso(email, False)
@@ -4834,16 +5204,11 @@ render_html(f'<div class="appo-sidebar-header">{logo_svg(50)}<div><p class="appo
 st.sidebar.selectbox("🌐 Idioma / Language", LISTA_IDIOMAS, key="idioma")
 selo_premium = " · ⭐ Premium" if st.session_state["is_premium"] else ""
 st.sidebar.caption(f"{tx['sessao']}: {st.session_state['conta_nome']} ({st.session_state['conta_email']}){selo_premium}")
-if eh_admin() or eh_participante():
-    st.sidebar.caption("Acesso completo: portal Investidor e área do Clube" if eh_participante() else "Acesso de administração")
-else:
-    st.session_state["portal_sel"] = nivel_actual()
-    st.sidebar.radio("Portal", list(NIVEIS.keys()), key="portal_sel", horizontal=True,
-                     format_func=lambda v: NIVEIS[v], on_change=_mudar_portal,
-                     help="Iniciante: fundamentos e biblioteca. Investidor: cotações, avaliação, simulador e Regra 50/30/20. Podes mudar quando quiseres.")
+with st.sidebar:
+    _cartao_portal_lateral()
 st.sidebar.divider()
 
-PAGINAS = ["🏠 Início & Análises", "🧠 Capacidade Financeira"]
+PAGINAS = ["🏠 Início & Análises", "🧭 Perfil de Investidor", "🧠 Capacidade Financeira"]
 if eh_participante():
     PAGINAS += ["💰 Contabilidade & Finanças", "📊 Histórico & Relatórios"]   # área patrimonial restrita
 if eh_investidor():   # Portal Investidor (níveis avançados)
@@ -4853,12 +5218,16 @@ if st.session_state["is_admin"]:
     PAGINAS.append("🔐 Painel do Administrador")
 if st.session_state.get("nav_pagina") not in PAGINAS:
     st.session_state["nav_pagina"] = PAGINAS[0]
+# Primeira visita sem perfil: aterra no Perfil de Investidor (uma só vez; pode sair quando quiser)
+if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.session_state.get("_perfil_visto"):
+    st.session_state["nav_pagina"] = "🧭 Perfil de Investidor"
+    st.session_state["_perfil_visto"] = True
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
 st.sidebar.divider()
 if st.sidebar.button(tx["terminar_sessao"]):
-    for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium", "is_participante", "nivel", "portal_sel"]:
+    for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium", "is_participante", "nivel", "perfil", "perfil_data", "_perfil_visto"]:
         st.session_state.pop(chave, None)
     st.rerun()
 
@@ -5737,6 +6106,10 @@ try:
     # =========================================================
     # PÁGINA: CAPACIDADE FINANCEIRA
     # =========================================================
+    elif pagina == "🧭 Perfil de Investidor":
+        hero("🧭 Perfil de Investidor", "Descobre o teu perfil de risco e o portal que melhor se ajusta ao teu momento", badge="🇦🇴 Kwanzas (Kz)")
+        pagina_perfil_investidor()
+
     elif pagina == "🧠 Capacidade Financeira":
         hero("🧠 Capacidade Financeira", "Diagnóstico, treino e ferramentas para decidir com autonomia", badge="🇦🇴 Kwanzas (Kz)")
         pagina_capacidade_financeira(True)
@@ -6532,6 +6905,29 @@ try:
                 if col_e.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
                     eliminar_conta(int(conta["id"]))
                     st.rerun()
+
+            st.divider()
+            st.subheader("Perfis e portais")
+            st.caption("O portal de cada conta resulta do perfil de investidor. Só o administrador pode ajustar um portal, com motivo registado na auditoria.")
+            df_pf = obter_perfis_resumo()
+            if df_pf.empty:
+                st.info("Ainda não há contas.")
+            else:
+                st.dataframe(df_pf.rename(columns={"email": "E-mail", "portal": "Portal", "perfil": "Perfil de risco", "calculado_em": "Perfil calculado em"}), hide_index=True)
+            with st.expander("Ajustar o portal de uma conta (excepção)"):
+                with st.form("form_ajustar_portal", clear_on_submit=True):
+                    alvo = st.selectbox("Conta", df_contas["email"].tolist())
+                    novo_portal = st.selectbox("Novo portal", list(NIVEIS.keys()), format_func=lambda v: NIVEIS[v])
+                    motivo_portal = st.text_input("Motivo (obrigatório)")
+                    aplicar_portal = st.form_submit_button("Aplicar ajuste")
+                if aplicar_portal:
+                    try:
+                        cid = int(df_contas.loc[df_contas["email"] == alvo, "id"].iloc[0])
+                        definir_nivel_conta(cid, novo_portal, motivo_portal)
+                        st.success("Portal ajustado e registado na auditoria.")
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(str(e))
 
         with aba_seguranca:
             st.subheader("Registo de tentativas de acesso (últimas 50)")
