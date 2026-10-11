@@ -1814,6 +1814,7 @@ def inicializar_bd():
     executar("INSERT INTO opv_activos (ticker, preco, data) VALUES ('UNTLAAAA', 40040, NULL) ON CONFLICT (ticker) DO NOTHING")
     # ---- Actualização "Educação e Serviços / Área privada": migrações apenas aditivas (nada é apagado) ----
     executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS is_participante BOOLEAN NOT NULL DEFAULT FALSE")
+    executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS nivel TEXT NOT NULL DEFAULT 'iniciante'")
     executar("""CREATE TABLE IF NOT EXISTS auditoria (id SERIAL PRIMARY KEY, quando TIMESTAMP NOT NULL DEFAULT NOW(), utilizador TEXT, accao TEXT NOT NULL, entidade TEXT, entidade_id TEXT, antes TEXT, depois TEXT, motivo TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS balanco_privado (id SERIAL PRIMARY KEY, data_ref DATE NOT NULL, dinheiro_disponivel NUMERIC NOT NULL DEFAULT 0, outros_activos NUMERIC NOT NULL DEFAULT 0, passivos NUMERIC NOT NULL DEFAULT 0, fonte TEXT, titularidade TEXT, estado TEXT NOT NULL DEFAULT 'Provisório', origem TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), validado_por TEXT, validado_em TIMESTAMP)""")
     for _col, _tipo in [("classe", "TEXT"), ("estado", "TEXT"), ("origem", "TEXT"), ("referencia", "TEXT"), ("fundamento", "TEXT"),
@@ -1933,6 +1934,34 @@ def exigir_participante():
         raise PermissionError("Acesso reservado aos participantes dos investimentos.")
 
 
+# ---- Portais de Educação: Iniciante e Investidor (o nível é escolha da pessoa e NÃO é o Premium) ----
+NIVEIS = {"iniciante": "Iniciante", "investidor": "Investidor"}
+
+
+def nivel_actual() -> str:
+    n = str(st.session_state.get("nivel") or "iniciante")
+    return n if n in NIVEIS else "iniciante"
+
+
+def eh_investidor() -> bool:
+    """Portal Investidor: administrador, participantes dos investimentos ou quem escolheu o nível Investidor."""
+    return bool(st.session_state.get("autenticado")) and (eh_admin() or eh_participante() or nivel_actual() == "investidor")
+
+
+def _mudar_portal():
+    """Callback do seletor de portal: grava o nível escolhido na conta (reversível a qualquer momento)."""
+    novo = st.session_state.get("portal_sel")
+    conta_id = st.session_state.get("conta_id")
+    if novo in NIVEIS and conta_id:
+        executar("UPDATE contas SET nivel = %s WHERE id = %s", (novo, int(conta_id)))
+        st.session_state["nivel"] = novo
+
+
+def _passar_a_investidor():
+    st.session_state["portal_sel"] = "investidor"
+    _mudar_portal()
+
+
 def utilizador_actual() -> str:
     return str(st.session_state.get("conta_email") or "sistema")
 
@@ -1994,7 +2023,7 @@ def transaccao():
 
 # ---------------- Contas ----------------
 def obter_conta_por_email(email: str):
-    return consultar_um("SELECT id, nome, email, password_hash, is_admin, is_premium, is_participante FROM contas WHERE email = %s", (email,))
+    return consultar_um("SELECT id, nome, email, password_hash, is_admin, is_premium, is_participante, nivel FROM contas WHERE email = %s", (email,))
 
 def inserir_conta(nome, email, password, is_admin):
     exigir_admin()
@@ -3878,7 +3907,7 @@ except Exception as _erro_bd:
 # =========================================================
 # AUTENTICAÇÃO
 # =========================================================
-for _k, _v in [("autenticado", False), ("login_timestamp", None), ("conta_nome", ""), ("conta_email", ""), ("is_admin", False), ("is_premium", False), ("is_participante", False)]:
+for _k, _v in [("autenticado", False), ("login_timestamp", None), ("conta_nome", ""), ("conta_email", ""), ("is_admin", False), ("is_premium", False), ("is_participante", False), ("nivel", "iniciante")]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
@@ -4740,8 +4769,12 @@ def _painel_inicio_aluno():
     st.markdown("##### Por onde começar")
     b1, b2, b3 = st.columns(3)
     b1.button("🔎 Fazer o diagnóstico", on_click=_ir_para, args=("🧠 Capacidade Financeira",), key="ini_cf", type="primary")
-    b2.button("🧮 Montar o meu orçamento", on_click=_ir_para, args=("🧮 Regra 50/30/20",), key="ini_r50")
-    b3.button("🧪 Treinar no Home Broker virtual", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key="ini_sim")
+    if eh_investidor():
+        b2.button("🧮 Montar o meu orçamento", on_click=_ir_para, args=("🧮 Regra 50/30/20",), key="ini_r50")
+        b3.button("🧪 Treinar no Home Broker virtual", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key="ini_sim")
+    else:
+        b2.button("📚 Ler a Biblioteca", on_click=_ir_para, args=("📚 Biblioteca Educativa",), key="ini_bib")
+        b3.button("🚀 Passar ao portal Investidor", on_click=_passar_a_investidor, key="ini_inv")
     st.markdown("##### Mercado")
     if not _df_activos_ticker.empty:
         st.dataframe(tabela_cotacoes_estilizada(_df_activos_ticker), hide_index=True)
@@ -4774,6 +4807,7 @@ def pagina_login():
                 st.session_state["is_admin"]        = bool(conta[4])
                 st.session_state["is_premium"]      = bool(conta[5])
                 st.session_state["is_participante"] = bool(conta[6])
+                st.session_state["nivel"]           = str(conta[7] or "iniciante")
                 st.rerun()
             else:
                 registar_acesso(email, False)
@@ -4800,13 +4834,21 @@ render_html(f'<div class="appo-sidebar-header">{logo_svg(50)}<div><p class="appo
 st.sidebar.selectbox("🌐 Idioma / Language", LISTA_IDIOMAS, key="idioma")
 selo_premium = " · ⭐ Premium" if st.session_state["is_premium"] else ""
 st.sidebar.caption(f"{tx['sessao']}: {st.session_state['conta_nome']} ({st.session_state['conta_email']}){selo_premium}")
+if eh_admin() or eh_participante():
+    st.sidebar.caption("Acesso completo: portal Investidor e área do Clube" if eh_participante() else "Acesso de administração")
+else:
+    st.session_state["portal_sel"] = nivel_actual()
+    st.sidebar.radio("Portal", list(NIVEIS.keys()), key="portal_sel", horizontal=True,
+                     format_func=lambda v: NIVEIS[v], on_change=_mudar_portal,
+                     help="Iniciante: fundamentos e biblioteca. Investidor: cotações, avaliação, simulador e Regra 50/30/20. Podes mudar quando quiseres.")
 st.sidebar.divider()
 
 PAGINAS = ["🏠 Início & Análises", "🧠 Capacidade Financeira"]
 if eh_participante():
     PAGINAS += ["💰 Contabilidade & Finanças", "📊 Histórico & Relatórios"]   # área patrimonial restrita
-PAGINAS += ["📈 Cotações & Activos", "📐 Avaliação de Activos", "🧪 Simulador de Investimento", "🧮 Regra 50/30/20", "💱 Conversor de Moeda",
-            "📚 Biblioteca Educativa", "🎓 Educação & Serviços", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos"]
+if eh_investidor():   # Portal Investidor (níveis avançados)
+    PAGINAS += ["📈 Cotações & Activos", "📐 Avaliação de Activos", "🧪 Simulador de Investimento", "🧮 Regra 50/30/20", "💱 Conversor de Moeda"]
+PAGINAS += ["📚 Biblioteca Educativa", "🎓 Educação & Serviços", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos"]
 if st.session_state["is_admin"]:
     PAGINAS.append("🔐 Painel do Administrador")
 if st.session_state.get("nav_pagina") not in PAGINAS:
@@ -4816,7 +4858,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 
 st.sidebar.divider()
 if st.sidebar.button(tx["terminar_sessao"]):
-    for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium", "is_participante"]:
+    for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium", "is_participante", "nivel", "portal_sel"]:
         st.session_state.pop(chave, None)
     st.rerun()
 
