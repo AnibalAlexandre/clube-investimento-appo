@@ -64,7 +64,7 @@ TRADUCOES = {
             "📐 Avaliação de Activos":       "📐 Avaliação de Activos",
             "💱 Conversor de Moeda":         "💱 Conversor de Moeda",
             "🧪 Simulador de Investimento": "🧪 Simulador de Investimento",
-            "🧮 Regra 50/30/20":            "🧮 Regra 50/30/20",
+            "🧮 Princípio 50/30/20":            "🧮 Princípio 50/30/20",
             "📚 Biblioteca Educativa":       "📚 Biblioteca Educativa",
             "🧾 Adesão de Sócios":          "🧾 Manifestação de Interesse",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ Sobre Nós & Estatutos",
@@ -261,7 +261,7 @@ TRADUCOES = {
             "📐 Avaliação de Activos":       "📐 Asset Valuation",
             "💱 Conversor de Moeda":         "💱 Currency Converter",
             "🧪 Simulador de Investimento": "🧪 Investment Simulator",
-            "🧮 Regra 50/30/20":            "🧮 50/30/20 Rule",
+            "🧮 Princípio 50/30/20":            "🧮 50/30/20 Rule",
             "📚 Biblioteca Educativa":       "📚 Learning Library",
             "🧾 Adesão de Sócios":          "🧾 Expression of Interest",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ About Us & Bylaws",
@@ -444,7 +444,7 @@ TRADUCOES = {
             "📐 Avaliação de Activos":       "📐 Évaluation des Actifs",
             "💱 Conversor de Moeda":         "💱 Convertisseur de Devises",
             "🧪 Simulador de Investimento": "🧪 Simulateur d'Investissement",
-            "🧮 Regra 50/30/20":            "🧮 Règle 50/30/20",
+            "🧮 Princípio 50/30/20":            "🧮 Règle 50/30/20",
             "📚 Biblioteca Educativa":       "📚 Bibliothèque Éducative",
             "🧾 Adesão de Sócios":          "🧾 Manifestation d'intérêt",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ À propos & Statuts",
@@ -627,7 +627,7 @@ TRADUCOES = {
             "📐 Avaliação de Activos":       "📐 Valoración de Activos",
             "💱 Conversor de Moeda":         "💱 Conversor de Moneda",
             "🧪 Simulador de Investimento": "🧪 Simulador de Inversión",
-            "🧮 Regra 50/30/20":            "🧮 Regla 50/30/20",
+            "🧮 Princípio 50/30/20":            "🧮 Regla 50/30/20",
             "📚 Biblioteca Educativa":       "📚 Biblioteca Educativa",
             "🧾 Adesão de Sócios":          "🧾 Manifestación de interés",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ Sobre Nosotros y Estatutos",
@@ -810,7 +810,7 @@ TRADUCOES = {
             "📐 Avaliação de Activos":       "📐 资产估值",
             "💱 Conversor de Moeda":         "💱 货币换算器",
             "🧪 Simulador de Investimento": "🧪 投资模拟器",
-            "🧮 Regra 50/30/20":            "🧮 50/30/20法则",
+            "🧮 Princípio 50/30/20":            "🧮 50/30/20法则",
             "📚 Biblioteca Educativa":       "📚 教育图书馆",
             "🧾 Adesão de Sócios":          "🧾 意向登记",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ 关于我们与章程",
@@ -1440,6 +1440,60 @@ def obter_serie_cambio_aoa(moeda: str, periodo: str = "1m") -> pd.DataFrame:
     return df.sort_values("Data").reset_index(drop=True)
 
 
+def _camadas_serie(alt, df, eixo_x, eixo_y, base, unidade):
+    """Área com gradiente suave, linha fina e, ao passar o rato, guia vertical, ponto e etiqueta com data e valor."""
+    cor = "#7C1F3E"
+    try:
+        grad = alt.Gradient(gradient="linear", x1=1, x2=1, y1=1, y2=0,
+                            stops=[alt.GradientStop(color="rgba(124,31,62,0.0)", offset=0), alt.GradientStop(color="rgba(124,31,62,0.30)", offset=1)])
+        area = alt.Chart(df).mark_area(color=grad, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
+    except Exception:
+        area = alt.Chart(df).mark_area(opacity=0.12, color=cor, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
+    camadas = area + base.mark_line(color=cor, strokeWidth=1.5, interpolate="monotone")
+    try:
+        try:
+            sel = alt.selection_point(fields=["Data"], nearest=True, on="mouseover", empty=False)
+            juntar = lambda ch: ch.add_params(sel)
+        except AttributeError:
+            sel = alt.selection(type="single", fields=["Data"], nearest=True, on="mouseover", empty="none")
+            juntar = lambda ch: ch.add_selection(sel)
+        pontos = juntar(base.mark_point(opacity=0, size=140))
+        destaque = base.mark_circle(color=cor, size=55).encode(opacity=alt.condition(sel, alt.value(1), alt.value(0)))
+        guia = alt.Chart(df).mark_rule(color="#94A3B8", strokeDash=[4, 4], strokeWidth=1).encode(
+            x=eixo_x, opacity=alt.condition(sel, alt.value(0.9), alt.value(0)))
+        camadas = camadas + guia + pontos + destaque
+    except Exception:
+        traceback.print_exc()
+    try:
+        camadas.to_dict()   # valida a especificação na versão de Altair instalada; se falhar, usa o estilo simples
+    except Exception:
+        traceback.print_exc()
+        simples = alt.Chart(df).mark_area(opacity=0.12, color=cor, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
+        camadas = simples + base.mark_line(color=cor, strokeWidth=1.5, interpolate="monotone")
+    return camadas
+
+
+def grafico_area_simples(df: pd.DataFrame, rotulo: str, altura: int = 260):
+    """Série temporal simples (índice = data, uma coluna de valores) no mesmo estilo dos painéis de cotação."""
+    import altair as alt
+    d = df.reset_index().iloc[:, :2].copy()
+    d.columns = ["Data", "Valor"]
+    d["Data"] = pd.to_datetime(d["Data"])
+    d = d.dropna().sort_values("Data")
+    if len(d) < 2:
+        st.info("Ainda não há pontos suficientes para desenhar o gráfico.")
+        return
+    vmin, vmax = float(d["Valor"].min()), float(d["Valor"].max())
+    pad = (vmax - vmin) * 0.15 or abs(vmax) * 0.05 or 1.0
+    d["_base"] = vmin - pad
+    eixo_x = alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y", labelColor="#6B6B6B", grid=False))
+    eixo_y = alt.Y("Valor:Q", title=None, scale=alt.Scale(domain=[vmin - pad, vmax + pad], zero=False),
+                   axis=alt.Axis(orient="right", labelColor="#6B6B6B", gridColor="#EADFE4", format=",.2f"))
+    base = alt.Chart(d).encode(x=eixo_x, y=eixo_y, tooltip=[alt.Tooltip("Data:T", format="%d/%m/%Y", title="Data"),
+                                                           alt.Tooltip("Valor:Q", format=",.2f", title=str(rotulo))])
+    st.altair_chart(_camadas_serie(alt, d, eixo_x, eixo_y, base, str(rotulo)).properties(height=altura), use_container_width=True)
+
+
 def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: str, periodo: str, nota: str = "", referencia=None):
     """Painel no estilo do home broker: cabeçalho, indicadores do período e gráfico de área na cor do Clube."""
     import html as _h
@@ -1488,10 +1542,7 @@ def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: st
             tooltip=[alt.Tooltip("Data:T", format="%d/%m/%Y", title="Data"),
                      alt.Tooltip("Valor:Q", format=",.2f", title=unidade)])
         # a área fecha na base visível do gráfico (y2), e não no zero, que está fora do eixo
-        area = alt.Chart(df).mark_area(opacity=0.12, color="#7C1F3E", interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
-        camadas = area + base.mark_line(color="#7C1F3E", strokeWidth=2.2, interpolate="monotone")
-        if len(df) <= 40:
-            camadas = camadas + base.mark_circle(color="#7C1F3E", size=28)
+        camadas = _camadas_serie(alt, df, eixo_x, eixo_y, base, unidade)
         if referencia:
             ref_df = pd.DataFrame({"y": [float(referencia[1])], "txt": [referencia[0]]})
             esc_y = alt.Scale(domain=[vmin - pad, vmax + pad], zero=False)
@@ -1658,7 +1709,7 @@ Valores de Angola (BODIVA).
 5. **Literacia financeira como pilar**
 6. **Decisões colectivas**
 7. **Gestão de risco activa**
-8. **Regra 50/30/20** — 50% consumo, 30% investimento, 20% entesouramento.
+8. **Princípio 50/30/20** — 50% consumo, 30% investimento, 20% entesouramento.
 9. **Nenhuma posição sem tese registada**
 """
 
@@ -1781,7 +1832,7 @@ def inicializar_bd():
                     total NUMERIC NOT NULL,
                     criado_em TIMESTAMP NOT NULL DEFAULT NOW()
                 )""")
-    # Orçamento pessoal/familiar de cada sócio (Regra 50/30/20) — guardado como JSON
+    # Orçamento pessoal/familiar de cada sócio (Princípio 50/30/20) — guardado como JSON
     executar("""CREATE TABLE IF NOT EXISTS orcamento_pessoal (
                     conta_email TEXT PRIMARY KEY,
                     dados TEXT NOT NULL,
@@ -1938,6 +1989,17 @@ def exigir_participante():
 
 # ---- Portais de Educação: Iniciante e Investidor (resultam do Perfil de Investidor; o nível NÃO é o Premium) ----
 NIVEIS = {"iniciante": "Iniciante", "investidor": "Investidor"}
+
+
+def aviso_discreto(texto: str):
+    """Aviso informativo ou legal em letra pequena e cinzento claro (não compete com o conteúdo)."""
+    render_html(f'<p class="appo-aviso">{_esc(texto)}</p>')
+
+
+def nota_interna(texto: str):
+    """Nota para a equipa: só o administrador a vê."""
+    if eh_admin():
+        st.caption("🔒 " + texto)
 
 
 def nivel_actual() -> str:
@@ -2817,7 +2879,7 @@ def gerar_xlsx_orcamento(df_rec, df_desp, categorias) -> bytes:
     n = len(larg)
     for i, w in enumerate(larg, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
-    r = _xlsx_banner(ws, n, "Orçamento Mensal Pessoal ou Familiar - Regra 50/30/20",
+    r = _xlsx_banner(ws, n, "Orçamento Mensal Pessoal ou Familiar - Princípio 50/30/20",
                      f"Gerado em {_dt.now():%d/%m/%Y %H:%M}  |  Pode editar os valores a azul: as somas e comparações actualizam-se sozinhas.")
     FMT = '#,##0'
     entrada = e["Font"](name="Calibri", size=10, color="1F4E9E")
@@ -2953,7 +3015,7 @@ def orcamento_modelo_inicial() -> dict:
         ],
         "despesas": [
             {"Categoria": ORC_CATEGORIAS[0], "Descrição": d, "Valor (Kz)": 0.0}
-            for d in ["Renda / habitação", "Alimentação", "Transporte", "Energia e água",
+            for d in ["Renda de casa", "Alimentação", "Transporte", "Energia e água",
                       "Telecomunicações", "Saúde", "Educação", "Lazer e outros"]
         ] + [
             {"Categoria": ORC_CATEGORIAS[1], "Descrição": "Acções / investimentos (BODIVA)", "Valor (Kz)": 0.0},
@@ -3971,7 +4033,7 @@ def pagina_educacao_servicos():
     st.markdown("### 🎓 APPO — Educação Financeira")
     st.write("O APPO nasceu em Benguela, em 2024, como um grupo de estudo e prática de investimento. Aqui encontra formação, guias e ferramentas educativas "
              "sobre o mercado angolano: BODIVA, acções, dividendos, riscos e comissões, leitura de demonstrações financeiras, valuation com exercícios e planeamento financeiro (regra 50/30/20).")
-    st.caption(AVISO_EDUCACAO)
+    aviso_discreto(AVISO_EDUCACAO)
     st.markdown("#### Formação e workshops")
     try:
         df = obter_servicos_publicos()
@@ -3994,7 +4056,10 @@ def pagina_educacao_servicos():
             rotulo = "Pedir inscrição" if bool(s["contratavel"]) else "Pedir informações"
             with st.expander(rotulo):
                 with st.form(f"form_pedido_{sid}", clear_on_submit=True):
-                    nome = st.text_input("Nome", key=f"ped_nome_{sid}", max_chars=120)
+                    _pn, _ap = st.columns(2)
+                    _nome_p = _pn.text_input("Nome próprio", key=f"ped_nome_{sid}", max_chars=60)
+                    _apelido = _ap.text_input("Apelido(s)", key=f"ped_apel_{sid}", max_chars=60)
+                    nome = f"{_nome_p.strip()} {_apelido.strip()}".strip()
                     c1, c2 = st.columns(2)
                     email = c1.text_input("E-mail", key=f"ped_email_{sid}", max_chars=200)
                     tel = c2.text_input("Telefone", key=f"ped_tel_{sid}", max_chars=30)
@@ -4003,7 +4068,7 @@ def pagina_educacao_servicos():
                     ok = st.checkbox("Autorizo o APPO a usar estes dados apenas para responder a este pedido.", key=f"ped_ok_{sid}")
                     enviar = st.form_submit_button(rotulo)
                 if enviar:
-                    erro = validar_contacto(nome, email, tel)
+                    erro = "Indique o nome próprio e o apelido." if not (_nome_p.strip() and _apelido.strip()) else validar_contacto(nome, email, tel)
                     if erro:
                         st.error(erro)
                     elif not ok:
@@ -4016,15 +4081,18 @@ def pagina_educacao_servicos():
                             st.success(MSG_INSCRICAO)
                         except Exception as e:
                             st.error(f"Não foi possível registar o pedido: {e}")
-    st.caption("Os valores são propostas editáveis e podem mudar. Nenhum pagamento é pedido nesta página.")
+    aviso_discreto("Valores indicativos, sujeitos a alteração. Nenhum pagamento é pedido nesta página.")
 
 
 def pagina_manifestacao_interesse():
     st.markdown("### 🤝 Manifestação de interesse")
     st.info(TEXTO_MANIFESTACAO)
-    st.caption("Nesta fase não pedimos capital, documentos de identificação nem comprovativos.")
+    aviso_discreto("Nesta fase não pedimos capital, documentos de identificação nem comprovativos.")
     with st.form("form_manifestacao", clear_on_submit=True):
-        nome = st.text_input("Nome", max_chars=120)
+        _pn, _ap = st.columns(2)
+        _nome_p = _pn.text_input("Nome próprio", max_chars=60)
+        _apelido = _ap.text_input("Apelido(s)", max_chars=60)
+        nome = f"{_nome_p.strip()} {_apelido.strip()}".strip()
         c1, c2 = st.columns(2)
         email = c1.text_input("E-mail", max_chars=200)
         tel = c2.text_input("Telefone", max_chars=30)
@@ -4032,7 +4100,7 @@ def pagina_manifestacao_interesse():
         ok = st.checkbox("Compreendo que isto não é uma admissão e autorizo o APPO a usar estes dados apenas para me contactar sobre este assunto.")
         enviar = st.form_submit_button("Enviar manifestação de interesse")
     if enviar:
-        erro = validar_contacto(nome, email, tel)
+        erro = "Indique o nome próprio e o apelido." if not (_nome_p.strip() and _apelido.strip()) else validar_contacto(nome, email, tel)
         if erro:
             st.error(erro)
         elif not ok:
@@ -4330,8 +4398,8 @@ ACOES_CF = {
     ("D1", "A"): ("Treine com números: calcule o seu rendimento prudente e veja que o essencial fica coberto mesmo no pior mês.", "Orçamento com rendimento variável"),
     ("D1", "B"): ("Defina um «ordenado» mensal estável a partir do rendimento prudente e guarde o excedente dos meses melhores.", "Orçamento com rendimento variável"),
     ("D2", "K"): ("Reveja juros simples e compostos e veja o efeito do tempo no simulador de juros compostos.", "Simulador de Investimento"),
-    ("D2", "A"): ("Faça 30 dias de registo de todas as despesas: a confiança vem de conhecer os números.", "Regra 50/30/20 (orçamento mensal)"),
-    ("D2", "B"): ("Dedique 10 minutos por semana a registar receitas e despesas e pague as contas no dia em que recebe.", "Regra 50/30/20 (orçamento mensal)"),
+    ("D2", "A"): ("Faça 30 dias de registo de todas as despesas: a confiança vem de conhecer os números.", "Princípio 50/30/20 (orçamento mensal)"),
+    ("D2", "B"): ("Dedique 10 minutos por semana a registar receitas e despesas e pague as contas no dia em que recebe.", "Princípio 50/30/20 (orçamento mensal)"),
     ("D3", "K"): ("Estude diversificação e a relação risco–retorno e aplique-as na carteira virtual.", "Simulador de Investimento"),
     ("D3", "A"): ("Defina um objectivo concreto (valor e prazo) e divida-o em metas mensais.", "Reserva de emergência e inflação"),
     ("D3", "B"): ("Construa a reserva de emergência por etapas e automatize a poupança no dia do recebimento.", "Reserva de emergência e inflação"),
@@ -4570,7 +4638,7 @@ def diagnostico_cf(prefixo: str, guardar: bool):
 
 
 def ferramenta_orcamento_variavel(prefixo: str):
-    st.markdown("**Orçamento com rendimento variável.** Indique o que recebeu nos últimos meses e as suas despesas essenciais mensais (renda, alimentação, transporte, saúde, dívidas).")
+    st.markdown("**Orçamento com rendimento variável.** Indique o que recebeu nos últimos meses e as suas despesas essenciais mensais (renda de casa, alimentação, transporte, saúde, dívidas).")
     cols = st.columns(3)
     vals = []
     for i in range(6):
@@ -4657,7 +4725,7 @@ def ferramenta_comparador(prefixo: str):
         st.warning("Com estes pressupostos, o rendimento real é negativo em: " + ", ".join(pior) + ". O dinheiro perde poder de compra.")
     st.markdown("**Características qualitativas**")
     st.dataframe(CARACTERISTICAS_INSTRUMENTOS, hide_index=True, use_container_width=True)
-    st.caption("Uma acção tem risco de preço e os dividendos não são garantidos; o rendimento mostrado é uma hipótese, não uma previsão.")
+    aviso_discreto("Uma acção tem risco de preço e os dividendos não são garantidos; o rendimento mostrado é uma hipótese, não uma previsão.")
 
 
 def pagina_capacidade_financeira(autenticado: bool):
@@ -4687,7 +4755,7 @@ def pagina_capacidade_financeira(autenticado: bool):
         if autenticado:
             st.divider()
             b1, b2, b3 = st.columns(3)
-            b1.button("Orçamento mensal 50/30/20", on_click=_ir_para, args=("🧮 Regra 50/30/20",), key=f"go_r50_{pref}")
+            b1.button("Orçamento mensal 50/30/20", on_click=_ir_para, args=("🧮 Princípio 50/30/20",), key=f"go_r50_{pref}")
             b2.button("Simulador e Home Broker virtual", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key=f"go_sim_{pref}")
             b3.button("Cotações da BODIVA", on_click=_ir_para, args=("📈 Cotações & Activos",), key=f"go_cot_{pref}")
     with abas[3]:
@@ -4734,7 +4802,7 @@ def pagina_capacidade_financeira(autenticado: bool):
             "- OECD/INFE (2023). *OECD/INFE 2023 International Survey of Adult Financial Literacy* (39 países; conhecimento, comportamento e atitudes).\n"
             "- Money and Pensions Service (2020). *UK Strategy for Financial Wellbeing 2020–2030*; Money Advice Service (2015). *Financial Capability Strategy for the UK*.\n"
             "- Casaco (2023), Molossande (2026) e Costa (2026): estudos e síntese na FE-UKB sobre capacidade financeira e mercado de capitais angolano.")
-        st.caption("O diagnóstico é um instrumento educativo inspirado nestes modelos; não é uma escala psicometricamente validada nem substitui aconselhamento financeiro.")
+        aviso_discreto("O diagnóstico é um instrumento educativo inspirado nestes modelos; não é uma escala psicometricamente validada nem substitui aconselhamento financeiro.")
 
 
 # =========================================================
@@ -4964,6 +5032,7 @@ CSS_PERFIL = """
 .appo-adeq-A { background: #DCFCE7; color: #166534; }
 .appo-adeq-C { background: #FEF3C7; color: #92400E; }
 .appo-adeq-N { background: #FEE2E2; color: #991B1B; }
+.appo-aviso { font-size: 0.72rem; line-height: 1.4; color: #94A3B8; margin: 0.5rem 0 0 0; }
 """
 st.markdown(f"<style>{CSS_PERFIL}</style>", unsafe_allow_html=True)
 
@@ -4979,16 +5048,16 @@ def _cartao_portal_lateral():
     else:
         cls, nome = "appo-portal-ini", "Portal Iniciante"
         sub = f"Perfil {st.session_state.get('perfil')}" if tem_perfil() else "Perfil por fazer"
-    render_html(f'<div class="appo-portal {cls}"><p class="appo-portal-rot">O teu portal</p><div class="appo-portal-nome">{_esc(nome)}</div><p class="appo-portal-sub">{_esc(sub)}</p></div>')
-    st.button("🧭 Rever o meu perfil" if tem_perfil() else "🧭 Fazer o meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",),
-              key="lat_perfil", use_container_width=True, type="secondary" if tem_perfil() else "primary")
+    render_html(f'<div class="appo-portal {cls}"><div class="appo-portal-nome">{_esc(nome)}</div><p class="appo-portal-sub">{_esc(sub)}</p></div>')
+    if not tem_perfil() and not (eh_admin() or eh_participante()):
+        st.button("🧭 Fazer o meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="lat_perfil", use_container_width=True, type="primary")
 
 
 def _cartoes_portais(portal_rec: str):
     c1, c2 = st.columns(2)
     for col, chave, titulo, texto in [
         (c1, "ini", "Portal Iniciante", "Fundamentos, Biblioteca e diagnóstico de capacidade financeira. Constrói a base antes de assumir risco."),
-        (c2, "inv", "Portal Investidor", "Cotações, avaliação de activos, simulador, conversor e Regra 50/30/20."),
+        (c2, "inv", "Portal Investidor", "Cotações, avaliação de activos, simulador, conversor e Princípio 50/30/20."),
     ]:
         recomendado = (("ini" if portal_rec == "iniciante" else "inv") == chave)
         fita = '<span class="appo-fita">O TEU PORTAL</span><br>' if recomendado else ""
@@ -5023,7 +5092,7 @@ def _mostrar_resultado_perfil(u: dict):
         st.caption(f"Perfil calculado em {u['criado_em']:%d/%m/%Y}.")
     except Exception:
         pass
-    st.caption(AVISO_PERFIL)
+    aviso_discreto(AVISO_PERFIL)
 
 
 def _pode_refazer_perfil(u) -> bool:
@@ -5069,10 +5138,14 @@ def _verificador_objectivo(u):
     if not u:
         st.info("Faz primeiro o teu perfil, no separador «O meu perfil»: o verificador usa o teu perfil de risco.")
         return
-    objectivos = ["Viagem ou despesa com data marcada", "Propinas ou educação", "Reserva de emergência", "Comprar casa ou terreno",
-                  "Reforma ou futuro dos filhos", "Fazer crescer poupança a longo prazo"]
+    objectivos = ["Viagem ou férias", "Propinas ou educação", "Reserva de emergência", "Comprar casa ou terreno", "Comprar viatura",
+                  "Casamento ou evento familiar", "Abrir ou reforçar um negócio", "Saúde ou imprevistos",
+                  "Reforma ou futuro dos filhos", "Fazer crescer poupança a longo prazo", "Outro (especifica)"]
     c1, c2 = st.columns(2)
     objectivo = c1.selectbox("Objectivo do dinheiro", objectivos, key="ver_obj")
+    if objectivo == "Outro (especifica)":
+        _outro = c1.text_input("Qual é o objectivo?", key="ver_outro", max_chars=80)
+        objectivo = (_outro or "").strip() or "Outro objectivo"
     horizonte = c2.selectbox("Quando vais precisar dele?", HORIZONTES, index=1, key="ver_hor")
     h = HORIZONTES.index(horizonte)
     bloq = bool((u["res"] or {}).get("bloq_risco"))
@@ -5081,7 +5154,7 @@ def _verificador_objectivo(u):
         st.caption("A reserva de emergência deve estar sempre disponível, qualquer que seja o prazo.")
     st.markdown(f"##### «{objectivo}» · {horizonte} · perfil {u['perfil']}")
     render_html(_tabela_adequacao_html(adequacao_instrumentos(h, u["perfil"], bloq)))
-    st.caption(AVISO_PERFIL)
+    aviso_discreto(AVISO_PERFIL)
 
 
 def pagina_perfil_investidor():
@@ -5104,47 +5177,47 @@ def pagina_perfil_investidor():
         else:
             st.markdown("Responde com sinceridade: não há respostas certas, só respostas úteis. Demora cerca de 4 minutos e ajusta o teu portal ao teu momento.")
             _formulario_perfil(conta_id)
-            st.caption(AVISO_PERFIL)
+            aviso_discreto(AVISO_PERFIL)
     with aba_ver:
         _verificador_objectivo(u)
 
 
 
 def _painel_inicio_aluno():
-    """Início para contas sem acesso ao módulo patrimonial: progresso de capacidade financeira, atalhos e mercado."""
+    """Início simples: um único próximo passo, atalhos essenciais e o mercado só quando é pedido."""
     nome = str(st.session_state.get("conta_nome") or "").split(" ")[0]
     st.markdown(f"### Bem-vindo, {_html_pub.escape(nome)}" if nome else "### Bem-vindo")
-    if not tem_perfil():
-        render_html('<div class="appo-perfil-topo"><span class="appo-perfil-rotulo">Primeiro passo</span><div class="appo-perfil-nome" style="font-size:1.4rem;">Faz o teu perfil de investidor</div>'
-                    '<p>Em cerca de 4 minutos, o APPO ajusta o teu portal ao teu perfil de risco e à tua experiência.</p></div>')
-        st.button("🧭 Fazer o meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="ini_perfil", type="primary")
     try:
         dfd = obter_diagnosticos_cf()
     except Exception:
         dfd = pd.DataFrame()
-    c1, c2, c3 = st.columns(3)
-    if dfd.empty:
-        c1.metric("Capacidade financeira", "—", help="Ainda sem diagnóstico")
+    if not tem_perfil():
+        render_html('<div class="appo-perfil-topo"><span class="appo-perfil-rotulo">Primeiro passo</span><div class="appo-perfil-nome" style="font-size:1.4rem;">Faz o teu perfil de investidor</div>'
+                    '<p>Em cerca de 4 minutos, o APPO ajusta o teu portal ao teu perfil de risco e à tua experiência.</p></div>')
+        st.button("🧭 Fazer o meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="ini_perfil", type="primary")
+    elif dfd.empty:
+        render_html('<div class="appo-perfil-topo"><span class="appo-perfil-rotulo">Próximo passo</span><div class="appo-perfil-nome" style="font-size:1.4rem;">Mede a tua capacidade financeira</div>'
+                    '<p>Um diagnóstico curto mostra onde estás e que treino te ajuda mais.</p></div>')
+        st.button("🔎 Fazer o diagnóstico", on_click=_ir_para, args=("🧠 Capacidade Financeira",), key="ini_cf", type="primary")
     else:
         import json as _json
         ult = dfd.iloc[-1]["resultados"]
         ult = _json.loads(ult) if isinstance(ult, str) else ult
-        c1.metric("Capacidade financeira", f"{ult.get('geral', 0):.0f}/100")
-        c2.metric("Diagnósticos feitos", len(dfd))
-    c3.metric("Índice APPO (hoje)", pct_bruto(calcular_indice_mercado(_df_activos_ticker)))
-    st.markdown("##### Por onde começar")
+        st.metric("A tua capacidade financeira", f"{ult.get('geral', 0):.0f}/100")
+        st.button("🧠 Continuar a treinar", on_click=_ir_para, args=("🧠 Capacidade Financeira",), key="ini_cf", type="primary")
+    st.markdown("##### Atalhos")
     b1, b2, b3 = st.columns(3)
-    b1.button("🔎 Fazer o diagnóstico", on_click=_ir_para, args=("🧠 Capacidade Financeira",), key="ini_cf", type="primary")
+    b1.button("📚 Biblioteca", on_click=_ir_para, args=("📚 Biblioteca Educativa",), key="ini_bib")
     if eh_investidor():
-        b2.button("🧮 Montar o meu orçamento", on_click=_ir_para, args=("🧮 Regra 50/30/20",), key="ini_r50")
-        b3.button("🧪 Treinar no Home Broker virtual", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key="ini_sim")
+        b2.button("🧮 Princípio 50/30/20", on_click=_ir_para, args=("🧮 Princípio 50/30/20",), key="ini_r50")
+        b3.button("🧪 Simulador", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key="ini_sim")
     else:
-        b2.button("📚 Ler a Biblioteca", on_click=_ir_para, args=("📚 Biblioteca Educativa",), key="ini_bib")
-        b3.button("🧭 Rever o meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="ini_rev")
-    st.markdown("##### Mercado")
-    if not _df_activos_ticker.empty:
-        st.dataframe(tabela_cotacoes_estilizada(_df_activos_ticker), hide_index=True)
-    st.caption("Dados de mercado de referência actualizados pelo administrador; não são cotações em tempo real.")
+        b2.button("🧭 O meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="ini_rev")
+        b3.button("🎓 Educação & Serviços", on_click=_ir_para, args=("🎓 Educação & Serviços",), key="ini_edu")
+    with st.expander("📈 Cotações de referência"):
+        if not _df_activos_ticker.empty:
+            st.dataframe(tabela_cotacoes_estilizada(_df_activos_ticker), hide_index=True)
+        aviso_discreto("Dados de mercado de referência actualizados pelo administrador; não são cotações em tempo real.")
 
 
 
@@ -5212,7 +5285,7 @@ PAGINAS = ["🏠 Início & Análises", "🧭 Perfil de Investidor", "🧠 Capaci
 if eh_participante():
     PAGINAS += ["💰 Contabilidade & Finanças", "📊 Histórico & Relatórios"]   # área patrimonial restrita
 if eh_investidor():   # Portal Investidor (níveis avançados)
-    PAGINAS += ["📈 Cotações & Activos", "📐 Avaliação de Activos", "🧪 Simulador de Investimento", "🧮 Regra 50/30/20", "💱 Conversor de Moeda"]
+    PAGINAS += ["📈 Cotações & Activos", "📐 Avaliação de Activos", "🧪 Simulador de Investimento", "🧮 Princípio 50/30/20", "💱 Conversor de Moeda"]
 PAGINAS += ["📚 Biblioteca Educativa", "🎓 Educação & Serviços", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos"]
 if st.session_state["is_admin"]:
     PAGINAS.append("🔐 Painel do Administrador")
@@ -5300,14 +5373,14 @@ try:
             with col_i2:
                 if len(df_hist_indice) >= 2:
                     df_hist_indice["registado_em"] = pd.to_datetime(df_hist_indice["registado_em"])
-                    st.line_chart(df_hist_indice.set_index("registado_em")[["indice_variacao"]].rename(columns={"indice_variacao": tx["cot_indice_hist_label"]}))
+                    grafico_area_simples(df_hist_indice.set_index("registado_em")[["indice_variacao"]], tx["cot_indice_hist_label"])
                 else:
                     st.info(tx["cot_indice_hist_info"])
             st.markdown(tx["cot_tendencia_semanal"])
             if len(df_hist_indice) >= 2:
                 df_semanal = df_hist_indice.set_index("registado_em").resample("W")[["indice_variacao"]].mean().rename(columns={"indice_variacao": tx["cot_indice_hist_label"]})
                 if len(df_semanal) >= 2:
-                    st.line_chart(df_semanal)
+                    grafico_area_simples(df_semanal, tx["cot_indice_hist_label"])
                 else:
                     st.caption(tx["cot_tendencia_sem_caption1"])
             else:
@@ -5361,7 +5434,10 @@ try:
                         _ops.append((("★ " if _t in _tk_cart else "") + str(_a["nome"]), _t, str(_a["nome"])))
                 _ops.sort(key=lambda x: (not x[0].startswith("★"), x[0]))
                 if not _ops:
-                    st.info("Registe os tickers dos activos em Painel do Administrador → Cotações & Activos.")
+                    if eh_admin():
+                        st.info("Registe os tickers dos activos em Painel do Administrador → Cotações & Activos.")
+                    else:
+                        st.caption("As cotações de referência ainda estão a ser preparadas.")
                 else:
                     gc1, gc2 = st.columns([2, 3])
                     _rot = gc1.selectbox("Título (★ = em carteira do Clube)", [o[0] for o in _ops], key="graf_titulo")
@@ -5402,7 +5478,7 @@ try:
             st.info(tx["hist_poucos_pontos"])
         else:
             st.caption(tx["hist_caption"])
-            st.line_chart(df_historico.set_index("registado_em")[["total"]].rename(columns={"total": tx["hist_patrimonio_label"]}))
+            grafico_area_simples(df_historico.set_index("registado_em")[["total"]], tx["hist_patrimonio_label"])
 
         st.divider()
         st.subheader(tx["hist_movimentos"])
@@ -5806,8 +5882,8 @@ try:
                             "tk": a["tk"], "qtd": qtd_op, "preco": a["preco"]}
                         st.rerun()
 
-                st.caption("Ambiente de treino pedagógico com dados de mercado de referência, actualizados pelo administrador (não em tempo real). "
-                           "As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.")
+                aviso_discreto("Ambiente de treino pedagógico com dados de mercado de referência, actualizados pelo administrador (não em tempo real). "
+                               "As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.")
 
         # ══════════════════════════════════════════════════════════════
         # ABA 2 — CARTEIRA (estilo BFA Capital Markets)
@@ -5925,11 +6001,11 @@ try:
     # =========================================================
     # PÁGINA: REGRA 50/30/20
     # =========================================================
-    elif pagina == "🧮 Regra 50/30/20":
+    elif pagina == "🧮 Princípio 50/30/20":
         tx = t()
-        hero("🧮 " + tx["nav_map"]["🧮 Regra 50/30/20"].replace("🧮 ", ""), tx["r50_hero_sub"], "📐 " + tx["r50_rendimento"])
-        st.caption("A regra 50/30/20 é uma referência educativa, não uma regra adequada a todas as pessoas. Para medir o seu ponto de partida, faça o diagnóstico em Capacidade Financeira.")
-        tab_regra, tab_orc = st.tabs(["🧮 Regra 50/30/20", "📒 Meu Orçamento Mensal"])
+        hero("🧮 " + tx["nav_map"]["🧮 Princípio 50/30/20"].replace("🧮 ", ""), tx["r50_hero_sub"], "📐 " + tx["r50_rendimento"])
+        aviso_discreto("O princípio 50/30/20 é uma referência educativa, não uma regra adequada a todas as pessoas. Para medir o seu ponto de partida, faça o diagnóstico em Capacidade Financeira.")
+        tab_regra, tab_orc = st.tabs(["🧮 Princípio 50/30/20", "📒 Meu Orçamento Mensal"])
 
         with tab_regra:
             rendimento = st.number_input(tx["r50_rendimento"], min_value=0.0, step=5000.0, value=250000.0, format="%.2f")
@@ -5966,7 +6042,7 @@ try:
             _email_orc = st.session_state.get("conta_email", "")
             st.subheader("📒 Orçamento mensal pessoal ou familiar")
             st.caption("Preencha as receitas e os gastos do mês (em kwanzas inteiros). A app compara automaticamente "
-                       "com a Regra 50/30/20 e mostra quanto está a poupar e a investir. O orçamento fica gravado na sua conta.")
+                       "com a Princípio 50/30/20 e mostra quanto está a poupar e a investir. O orçamento fica gravado na sua conta.")
 
             if st.session_state.get("orc_carregado_para") != _email_orc:
                 _d0 = obter_orcamento(_email_orc)
@@ -6002,7 +6078,7 @@ try:
             if sem_cat:
                 st.warning(f"{sem_cat} linha(s) com valor mas sem categoria foram ignoradas no cálculo.")
             if rec_total <= 0:
-                st.info("Introduza as suas receitas para ver a comparação com a Regra 50/30/20.")
+                st.info("Introduza as suas receitas para ver a comparação com a Princípio 50/30/20.")
             else:
                 alvos = {ORC_CATEGORIAS[0]: rec_total * 0.50, ORC_CATEGORIAS[1]: rec_total * 0.30, ORC_CATEGORIAS[2]: rec_total * 0.20}
                 k1, k2, k3, k4 = st.columns(4)
@@ -6030,7 +6106,7 @@ try:
                         st.info(f"Para chegar aos 20% de entesouramento (reserva) faltam {kz(alvos[ORC_CATEGORIAS[2]] - tot_cat[ORC_CATEGORIAS[2]])} por mês.")
                     if (tot_cat[ORC_CATEGORIAS[0]] <= alvos[ORC_CATEGORIAS[0]] and tot_cat[ORC_CATEGORIAS[1]] >= alvos[ORC_CATEGORIAS[1]]
                             and tot_cat[ORC_CATEGORIAS[2]] >= alvos[ORC_CATEGORIAS[2]]):
-                        st.success("Parabéns — o seu orçamento cumpre a Regra 50/30/20.")
+                        st.success("Parabéns — o seu orçamento cumpre a Princípio 50/30/20.")
                     if saldo_livre > 0:
                         st.info(f"Tem {kz(saldo_livre)} ainda por alocar: distribua-os pelas linhas de investimento e entesouramento.")
                 if poup_total > 0:
@@ -6147,7 +6223,7 @@ try:
             st.markdown(f"**📜 {_est['titulo']}**")
             st.caption(f"{_est['criado_em']} · {_est['tamanho'] / 1048576:.1f} MB")
             bloco_documento_pdf(int(_est["id"]), _est["nome_ficheiro"], f"estatuto_{int(_est['id'])}", altura=820)
-        st.caption(tx["sobre_nota"])
+        nota_interna(tx["sobre_nota"])
 
     # =========================================================
     # PÁGINA: PAINEL DO ADMINISTRADOR (mantém-se em PT)
@@ -6866,13 +6942,16 @@ try:
         with aba_contas:
             st.subheader("Criar conta de acesso para um sócio")
             with st.form("form_nova_conta", clear_on_submit=True):
-                nome_conta     = st.text_input("Nome completo")
+                _np_c, _ap_c   = st.columns(2)
+                _nome_c        = _np_c.text_input("Nome próprio")
+                _apelido_c     = _ap_c.text_input("Apelido(s)")
+                nome_conta     = f"{_nome_c.strip()} {_apelido_c.strip()}".strip()
                 email_conta    = st.text_input("E-mail (usado para entrar)")
                 password_conta = st.text_input("Palavra-passe inicial", type="password")
                 admin_conta    = st.checkbox("Esta conta é administradora")
                 criar_conta    = st.form_submit_button("Criar conta")
             if criar_conta:
-                if not nome_conta or not email_conta or not password_conta:
+                if not (_nome_c.strip() and _apelido_c.strip()) or not email_conta or not password_conta:
                     st.error("Preenche todos os campos.")
                 else:
                     try:
