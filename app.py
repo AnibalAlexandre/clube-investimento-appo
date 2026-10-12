@@ -1113,9 +1113,18 @@ CORES_CATEGORIA = {"Institucional": COR_MARCA, "Educação": "#1F6F5C", "Anális
 ICONES_CATEGORIA = {"Institucional": "🏛️", "Educação": "📖", "Análise de Mercado": "📊", "Referência": "📎"}
 
 
+IMAGENS_CATEGORIA = {"Institucional": IMG_REUNIAO, "Educação": IMG_LIVROS, "Análise de Mercado": IMG_GRAFICO, "Referência": IMG_SKYLINE}
+
+
 def banner_categoria(categoria: str):
     icone = ICONES_CATEGORIA.get(categoria, "📄")
     cor = CORES_CATEGORIA.get(categoria, COR_MARCA)
+    url = IMAGENS_CATEGORIA.get(categoria)
+    if url:
+        render_html(f'<div style="position:relative;height:150px;border-radius:12px;overflow:hidden;margin-bottom:10px;background:{cor} url(\'{url}\') center/cover no-repeat;">'
+                    f'<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,5,12,0.02) 35%,rgba(20,5,12,0.62) 100%);"></div>'
+                    f'<span style="position:absolute;left:18px;bottom:12px;color:#fff;font-weight:700;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;">{icone} {_esc(categoria)}</span></div>')
+        return
     render_html(f'<div class="appo-categoria-banner" style="background:{cor};"><span style="font-size:1.1rem;">{icone}</span><span>{_esc(categoria)}</span></div>')
 
 
@@ -1856,6 +1865,7 @@ def inicializar_bd():
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_abertura_dia NUMERIC")
     executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS data_abertura_dia DATE")
     executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("ALTER TABLE artigos ADD COLUMN IF NOT EXISTS nivel TEXT")   # NULL = automático, pela categoria
     executar("""CREATE TABLE IF NOT EXISTS unidades_movimentos (id SERIAL PRIMARY KEY, data DATE NOT NULL, socio TEXT NOT NULL, socio_email TEXT, tipo TEXT NOT NULL, montante NUMERIC NOT NULL, vup NUMERIC NOT NULL, unidades NUMERIC NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS cotas_config (id INTEGER PRIMARY KEY CHECK (id = 1), valor_nominal NUMERIC NOT NULL DEFAULT 100000, limite_cotas NUMERIC, entrada_minima NUMERIC NOT NULL DEFAULT 100000)""")
     executar("INSERT INTO cotas_config (id, limite_cotas) VALUES (1, 100) ON CONFLICT (id) DO NOTHING")
@@ -1868,6 +1878,7 @@ def inicializar_bd():
     executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS nivel TEXT NOT NULL DEFAULT 'iniciante'")
     executar("""CREATE TABLE IF NOT EXISTS perfil_investidor (id SERIAL PRIMARY KEY, conta_id INTEGER NOT NULL, versao INTEGER NOT NULL DEFAULT 1, respostas TEXT NOT NULL, pontuacoes TEXT NOT NULL, perfil TEXT NOT NULL, portal TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("CREATE INDEX IF NOT EXISTS idx_perfil_conta ON perfil_investidor (conta_id, criado_em)")
+    executar("""CREATE TABLE IF NOT EXISTS pedidos_recuperacao (id SERIAL PRIMARY KEY, email TEXT NOT NULL, contacto TEXT, estado TEXT NOT NULL DEFAULT 'pendente', criado_em TIMESTAMP NOT NULL DEFAULT NOW(), resolvido_em TIMESTAMP, resolvido_por TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS auditoria (id SERIAL PRIMARY KEY, quando TIMESTAMP NOT NULL DEFAULT NOW(), utilizador TEXT, accao TEXT NOT NULL, entidade TEXT, entidade_id TEXT, antes TEXT, depois TEXT, motivo TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS balanco_privado (id SERIAL PRIMARY KEY, data_ref DATE NOT NULL, dinheiro_disponivel NUMERIC NOT NULL DEFAULT 0, outros_activos NUMERIC NOT NULL DEFAULT 0, passivos NUMERIC NOT NULL DEFAULT 0, fonte TEXT, titularidade TEXT, estado TEXT NOT NULL DEFAULT 'Provisório', origem TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), validado_por TEXT, validado_em TIMESTAMP)""")
     for _col, _tipo in [("classe", "TEXT"), ("estado", "TEXT"), ("origem", "TEXT"), ("referencia", "TEXT"), ("fundamento", "TEXT"),
@@ -1953,6 +1964,9 @@ def inicializar_bd():
     for titulo, categoria, conteudo in ARTIGOS_INICIAIS:
         if not consultar_um("SELECT 1 FROM artigos WHERE titulo = %s", (titulo,)):
             executar("INSERT INTO artigos (titulo, categoria, conteudo) VALUES (%s, %s, %s)", (titulo, categoria, conteudo))
+    # o artigo antigo mantém o nome «Regra 50/30/20» na base de dados: actualiza-o para «Princípio» (idempotente)
+    executar("UPDATE artigos SET conteudo = REPLACE(REPLACE(conteudo, 'Regra 50/30/20', 'Princípio 50/30/20'), 'regra 50/30/20', 'princípio 50/30/20') "
+             "WHERE POSITION('egra 50/30/20' IN conteudo) > 0")
 
     if consultar_um("SELECT COUNT(*) FROM premissas_macro")[0] == 0:
         executar("INSERT INTO premissas_macro (id, inflacao, taxa_livre_risco, premio_risco, beta_banca, beta_telecom, beta_outros) VALUES (1, 0.135, 0.18, 0.055, 1.0, 0.9, 1.0)")
@@ -1993,7 +2007,7 @@ NIVEIS = {"iniciante": "Iniciante", "investidor": "Investidor"}
 
 def aviso_discreto(texto: str):
     """Aviso informativo ou legal em letra pequena e cinzento claro (não compete com o conteúdo)."""
-    render_html(f'<p class="appo-aviso">{_esc(texto)}</p>')
+    render_html(f'<p class="appo-aviso" style="font-size:0.58rem;line-height:1.3;color:#A3AEBD;margin:0.35rem 0 0 0;">{_esc(texto)}</p>')
 
 
 def nota_interna(texto: str):
@@ -2105,6 +2119,56 @@ def repor_password(conta_id: int) -> str:
     nova_password = secrets.token_urlsafe(9)
     executar("UPDATE contas SET password_hash = %s WHERE id = %s", (hash_password(nova_password), conta_id))
     return nova_password
+
+def registar_pedido_recuperacao(email: str, contacto: str):
+    """Pedido público (sem sessão), tratado pelo administrador. Não revela se a conta existe; ignora repetições nas últimas 24 h."""
+    email = (email or "").strip().lower()
+    ja = consultar_um("SELECT 1 FROM pedidos_recuperacao WHERE email = %s AND estado = 'pendente' AND criado_em > NOW() - INTERVAL '24 hours'", (email,))
+    if not ja:
+        executar("INSERT INTO pedidos_recuperacao (email, contacto) VALUES (%s, %s)", (email, (contacto or "").strip()))
+
+
+def obter_pedidos_recuperacao() -> pd.DataFrame:
+    exigir_admin()
+    return consultar_df("SELECT id, email, contacto, estado, criado_em, resolvido_em, resolvido_por FROM pedidos_recuperacao "
+                        "ORDER BY (estado = 'pendente') DESC, criado_em DESC LIMIT 100")
+
+
+def resolver_pedido_recuperacao(pedido_id: int, repor: bool):
+    """Repõe a palavra-passe (devolve a provisória) ou ignora o pedido. Tudo fica auditado."""
+    exigir_admin()
+    p = consultar_um("SELECT email, estado FROM pedidos_recuperacao WHERE id = %s", (int(pedido_id),))
+    if not p or p[1] != "pendente":
+        raise ValueError("Este pedido já foi tratado ou não existe.")
+    nova = None
+    if repor:
+        c = consultar_um("SELECT id FROM contas WHERE email = %s", (p[0],))
+        if not c:
+            raise ValueError("Não existe nenhuma conta com este e-mail. Confirma o e-mail com a pessoa ou ignora o pedido.")
+        nova = repor_password(int(c[0]))
+    estado = "resolvido" if repor else "ignorado"
+    executar("UPDATE pedidos_recuperacao SET estado = %s, resolvido_em = NOW(), resolvido_por = %s WHERE id = %s", (estado, utilizador_actual(), int(pedido_id)))
+    registar_auditoria("recuperacao_password_" + estado, "pedido_recuperacao", pedido_id, depois={"email": p[0]})
+    return nova
+
+
+def alterar_password_propria(conta_id, actual: str, nova: str, repetida: str):
+    """Devolve uma mensagem de erro, ou None se a palavra-passe foi alterada."""
+    if not conta_id:
+        return "Sessão inválida."
+    if len(nova or "") < 8:
+        return "A nova palavra-passe deve ter pelo menos 8 caracteres."
+    if nova != repetida:
+        return "A repetição não coincide com a nova palavra-passe."
+    r = consultar_um("SELECT password_hash FROM contas WHERE id = %s", (int(conta_id),))
+    if not r or not verificar_password(actual or "", r[0]):
+        return "A palavra-passe actual não está correcta."
+    if nova == actual:
+        return "A nova palavra-passe tem de ser diferente da actual."
+    executar("UPDATE contas SET password_hash = %s WHERE id = %s", (hash_password(nova), int(conta_id)))
+    registar_auditoria("password_alterada", "conta", conta_id)
+    return None
+
 
 def eliminar_conta(conta_id: int):
     exigir_admin()
@@ -3248,14 +3312,45 @@ def obter_historico_cambio() -> pd.DataFrame:
 
 
 # ---------------- Artigos ----------------
+_NIVEL_POR_CATEGORIA = {"Educação": "iniciante", "Institucional": "iniciante", "Análise de Mercado": "investidor", "Referência": "investidor"}
+
+
+def nivel_efectivo_artigo(categoria, nivel) -> str:
+    """Nível escolhido pelo administrador; se não houver, decide-se pela categoria."""
+    if nivel in NIVEIS:
+        return nivel
+    return _NIVEL_POR_CATEGORIA.get(str(categoria), "iniciante")
+
+
 def obter_artigos(categoria: str = None) -> pd.DataFrame:
     if categoria and categoria != "Todas":
-        return consultar_df("SELECT id, titulo, categoria, conteudo, criado_em FROM artigos WHERE categoria = %s ORDER BY criado_em DESC", (categoria,))
-    return consultar_df("SELECT id, titulo, categoria, conteudo, criado_em FROM artigos ORDER BY criado_em DESC")
+        df = consultar_df("SELECT id, titulo, categoria, conteudo, criado_em, nivel FROM artigos WHERE categoria = %s ORDER BY criado_em DESC", (categoria,))
+    else:
+        df = consultar_df("SELECT id, titulo, categoria, conteudo, criado_em, nivel FROM artigos ORDER BY criado_em DESC")
+    df["nivel_efectivo"] = [nivel_efectivo_artigo(c, n) for c, n in zip(df["categoria"], df["nivel"])]
+    return df
 
-def inserir_artigo(titulo, categoria, conteudo):
+def inserir_artigo(titulo, categoria, conteudo, nivel=None):
     exigir_admin()
-    executar("INSERT INTO artigos (titulo, categoria, conteudo) VALUES (%s, %s, %s)", (titulo, categoria, conteudo))
+    executar("INSERT INTO artigos (titulo, categoria, conteudo, nivel) VALUES (%s, %s, %s, %s)", (titulo, categoria, conteudo, nivel if nivel in NIVEIS else None))
+
+def definir_nivel_artigo(artigo_id: int, nivel):
+    """nivel = 'iniciante', 'investidor' ou None (automático, pela categoria)."""
+    exigir_admin()
+    antes = consultar_um("SELECT nivel FROM artigos WHERE id = %s", (int(artigo_id),))
+    executar("UPDATE artigos SET nivel = %s WHERE id = %s", (nivel if nivel in NIVEIS else None, int(artigo_id)))
+    registar_auditoria("nivel_artigo", "artigo", artigo_id, antes={"nivel": antes[0] if antes else None}, depois={"nivel": nivel})
+
+
+def _mostrar_artigos(df: pd.DataFrame, tx: dict):
+    if df.empty:
+        st.info("Ainda não há artigos neste nível e categoria.")
+        return
+    for _, artigo in df.iterrows():
+        with st.expander(f"{ICONES_CATEGORIA.get(artigo['categoria'], '📄')} {artigo['titulo']}", key=f"artigo_exp_{artigo['id']}"):
+            banner_categoria(artigo["categoria"])
+            st.caption(f"{tx['bib_publicado']} {artigo['criado_em']}")
+            st.markdown(artigo["conteudo"])   # conteúdo mantém-se em PT conforme acordado
 
 def eliminar_artigo(artigo_id: int):
     exigir_admin()
@@ -5032,7 +5127,7 @@ CSS_PERFIL = """
 .appo-adeq-A { background: #DCFCE7; color: #166534; }
 .appo-adeq-C { background: #FEF3C7; color: #92400E; }
 .appo-adeq-N { background: #FEE2E2; color: #991B1B; }
-.appo-aviso { font-size: 0.72rem; line-height: 1.4; color: #94A3B8; margin: 0.5rem 0 0 0; }
+.appo-aviso { font-size: 0.58rem !important; line-height: 1.3; color: #A3AEBD; margin: 0.35rem 0 0 0; }
 """
 st.markdown(f"<style>{CSS_PERFIL}</style>", unsafe_allow_html=True)
 
@@ -5234,6 +5329,24 @@ def pagina_login():
             email    = st.text_input(tx["email"])
             password = st.text_input(tx["password"], type="password")
             submeter = st.form_submit_button(tx["entrar"])
+        with st.expander("Esqueci-me da palavra-passe"):
+            st.caption("Indica o e-mail da tua conta e um telemóvel ou WhatsApp. O administrador contacta-te para confirmar que és tu e repor o acesso.")
+            with st.form("form_recuperar_pw", clear_on_submit=True):
+                rec_email = st.text_input("E-mail da conta", key="rec_email", max_chars=200)
+                rec_tel = st.text_input("Telemóvel ou WhatsApp", key="rec_tel", max_chars=30)
+                rec_enviar = st.form_submit_button("Pedir ajuda")
+            if rec_enviar:
+                _e = (rec_email or "").strip()
+                if not _REGEX_EMAIL.match(_e) or len((rec_tel or "").strip()) < 6:
+                    st.error("Indica um e-mail válido e um telemóvel para te podermos contactar.")
+                elif not _pode_enviar("ultimo_pedido_recup", 30):
+                    st.warning("Aguarda alguns segundos antes de enviar outro pedido.")
+                else:
+                    try:
+                        registar_pedido_recuperacao(_e, rec_tel)
+                    except Exception:
+                        traceback.print_exc()
+                    st.success("Pedido enviado. Se existir uma conta com este e-mail, o administrador vai contactar-te em breve.")
         if submeter:
             conta = obter_conta_por_email(email.strip().lower())
             if conta and verificar_password(password, conta[3]):
@@ -5299,6 +5412,18 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
 st.sidebar.divider()
+with st.sidebar.expander("🔑 Alterar palavra-passe"):
+    with st.form("form_alterar_pw", clear_on_submit=True):
+        _pw_a = st.text_input("Palavra-passe actual", type="password")
+        _pw_n = st.text_input("Nova palavra-passe (mín. 8 caracteres)", type="password")
+        _pw_r = st.text_input("Repetir a nova palavra-passe", type="password")
+        _pw_ok = st.form_submit_button("Guardar")
+    if _pw_ok:
+        _err_pw = alterar_password_propria(st.session_state.get("conta_id"), _pw_a, _pw_n, _pw_r)
+        if _err_pw:
+            st.error(_err_pw)
+        else:
+            st.success("Palavra-passe alterada.")
 if st.sidebar.button(tx["terminar_sessao"]):
     for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium", "is_participante", "nivel", "perfil", "perfil_data", "_perfil_visto"]:
         st.session_state.pop(chave, None)
@@ -5995,7 +6120,7 @@ try:
             saldo_real_f = df_sim["Saldo Real"].iloc[-1]
             st.caption(f"Saldo final em poder de compra de hoje (inflação {inflacao_sim:.1f}%/ano): {kz(saldo_real_f)}")
             nota_indicador(f"Com inflação de {inflacao_sim:.1f}%/ano, o teu saldo nominal de {kz(saldo_c)} equivale apenas a {kz(saldo_real_f)} em poder de compra actual.")
-            st.caption("Ambiente de treino pedagógico. As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.")
+            aviso_discreto("Ambiente de treino pedagógico. As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.")
             botoes_partilha(f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo_c)} — Clube de Investimento APPO")
 
     # =========================================================
@@ -6173,11 +6298,17 @@ try:
             categorias  = [todas_label] + sorted(df_artigos["categoria"].unique().tolist())
             filtro      = st.selectbox(tx["bib_filtrar"], categorias)
             filtro_bd   = None if filtro == todas_label else filtro
-            for _, artigo in obter_artigos(filtro_bd).iterrows():
-                with st.expander(f"{ICONES_CATEGORIA.get(artigo['categoria'], '📄')} {artigo['titulo']}", key=f"artigo_exp_{artigo['id']}"):
-                    banner_categoria(artigo["categoria"])
-                    st.caption(f"{tx['bib_publicado']} {artigo['criado_em']}")
-                    st.markdown(artigo["conteudo"])   # conteúdo mantém-se em PT conforme acordado
+            _df_f = obter_artigos(filtro_bd)
+            if eh_investidor():
+                _t_ini, _t_inv = st.tabs(["🌱 Para iniciantes", "📈 Para investidores"])
+                with _t_ini:
+                    _mostrar_artigos(_df_f[_df_f["nivel_efectivo"] == "iniciante"], tx)
+                with _t_inv:
+                    _mostrar_artigos(_df_f[_df_f["nivel_efectivo"] == "investidor"], tx)
+            else:
+                _mostrar_artigos(_df_f[_df_f["nivel_efectivo"] == "iniciante"], tx)
+                if (_df_f["nivel_efectivo"] == "investidor").any():
+                    st.caption("Há mais artigos, de nível avançado, no portal Investidor. O teu perfil indica quando se abre.")
 
     # =========================================================
     # PÁGINA: CAPACIDADE FINANCEIRA
@@ -6846,13 +6977,14 @@ try:
             with st.form("form_novo_artigo", clear_on_submit=True):
                 titulo_artigo   = st.text_input("Título do artigo")
                 categoria_artigo= st.selectbox("Categoria", ["Institucional", "Educação", "Análise de Mercado", "Referência"])
+                nivel_artigo    = st.selectbox("Nível", ["Automático (pela categoria)", "Iniciante", "Investidor"])
                 conteudo_artigo = st.text_area("Conteúdo (Markdown suportado)", value=texto_extraido, height=280)
                 publicar        = st.form_submit_button("Publicar artigo")
             if publicar:
                 if not titulo_artigo or not conteudo_artigo:
                     st.error("Preenche o título e o conteúdo do artigo.")
                 else:
-                    inserir_artigo(titulo_artigo, categoria_artigo, conteudo_artigo)
+                    inserir_artigo(titulo_artigo, categoria_artigo, conteudo_artigo, {"Iniciante": "iniciante", "Investidor": "investidor"}.get(nivel_artigo))
                     st.success("Artigo publicado.")
                     st.rerun()
             st.divider()
@@ -6860,10 +6992,22 @@ try:
             for _, artigo in obter_artigos().iterrows():
                 col_a, col_b, col_c = st.columns([3, 1.5, 1])
                 col_a.write(artigo["titulo"])
-                col_b.write(artigo["categoria"])
+                col_b.write(f"{artigo['categoria']} · {NIVEIS[artigo['nivel_efectivo']]}")
                 if col_c.button("Eliminar", key=f"eliminar_artigo_{artigo['id']}"):
                     eliminar_artigo(int(artigo["id"]))
                     st.rerun()
+            with st.expander("Ajustar o nível de um artigo"):
+                _df_art = obter_artigos()
+                if _df_art.empty:
+                    st.info("Sem artigos.")
+                else:
+                    _mapa_art = {f"{r['titulo']} (#{r['id']})": int(r["id"]) for _, r in _df_art.iterrows()}
+                    _esc_art = st.selectbox("Artigo", list(_mapa_art.keys()), key="niv_art_sel")
+                    _esc_niv = st.selectbox("Nível", ["Automático (pela categoria)", "Iniciante", "Investidor"], key="niv_art_niv")
+                    if st.button("Aplicar nível", key="niv_art_aplicar"):
+                        definir_nivel_artigo(_mapa_art[_esc_art], {"Iniciante": "iniciante", "Investidor": "investidor"}.get(_esc_niv))
+                        st.success("Nível actualizado.")
+                        st.rerun()
 
             st.divider()
             st.subheader("📄 Publicar documento PDF (com gráficos e imagens)")
@@ -6984,6 +7128,30 @@ try:
                 if col_e.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
                     eliminar_conta(int(conta["id"]))
                     st.rerun()
+
+            st.divider()
+            _ped = obter_pedidos_recuperacao()
+            _pend = _ped[_ped["estado"] == "pendente"] if not _ped.empty else _ped
+            st.subheader(f"Pedidos de recuperação de palavra-passe ({len(_pend)} pendente(s))")
+            st.caption("Confirma a identidade da pessoa (chamada ou WhatsApp) antes de repor. A palavra-passe provisória aparece uma só vez: envia-a por canal seguro e pede à pessoa para a alterar na barra lateral.")
+            if _pend.empty:
+                st.info("Sem pedidos pendentes.")
+            for _, _p in _pend.iterrows():
+                _c1, _c2, _c3, _c4 = st.columns([2.4, 1.6, 1, 1])
+                _c1.write(f"**{_p['email']}**")
+                _c2.write(str(_p["contacto"] or "—"))
+                if _c3.button("Repor", key=f"rec_repor_{_p['id']}"):
+                    try:
+                        _nova = resolver_pedido_recuperacao(int(_p["id"]), True)
+                        st.success(f"Palavra-passe provisória para {_p['email']}: **{_nova}**")
+                    except ValueError as _err:
+                        st.error(str(_err))
+                if _c4.button("Ignorar", key=f"rec_ign_{_p['id']}"):
+                    try:
+                        resolver_pedido_recuperacao(int(_p["id"]), False)
+                        st.rerun()
+                    except ValueError as _err:
+                        st.error(str(_err))
 
             st.divider()
             st.subheader("Perfis e portais")
