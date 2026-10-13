@@ -11,6 +11,10 @@ import textwrap
 import time
 import traceback
 import urllib.parse
+import smtplib
+import socket
+import ssl
+from email.message import EmailMessage
 from datetime import datetime
 from pathlib import Path
 
@@ -1279,10 +1283,10 @@ def obter_taxas_cambio(base: str) -> dict:
 
 
 # ---------------- Painéis de gráficos (estilo home broker) ----------------
-PERIODOS_GRAFICO = ["Hoje", "7d", "1m", "3m", "6m", "1a", "5a"]
-_PERIODO_DIAS = {"Hoje": 1, "7d": 7, "1m": 30, "3m": 91, "6m": 182, "1a": 365, "5a": 1826}
-_PERIODO_PASSO = {"Hoje": 1, "7d": 1, "1m": 1, "3m": 3, "6m": 7, "1a": 7, "5a": 30}
-_PERIODO_NOME = {"Hoje": "último dia face ao anterior", "7d": "últimos 7 dias", "1m": "último mês", "3m": "últimos 3 meses",
+PERIODOS_GRAFICO = ["1d", "7d", "1m", "3m", "6m", "1a", "5a"]
+_PERIODO_DIAS = {"1d": 1, "7d": 7, "1m": 30, "3m": 91, "6m": 182, "1a": 365, "5a": 1826}
+_PERIODO_PASSO = {"1d": 1, "7d": 1, "1m": 1, "3m": 3, "6m": 7, "1a": 7, "5a": 30}
+_PERIODO_NOME = {"1d": "último dia face ao anterior", "7d": "últimos 7 dias", "1m": "último mês", "3m": "últimos 3 meses",
                  "6m": "último semestre", "1a": "último ano", "5a": "últimos 5 anos"}
 CAMBIO_DADOS_DESDE = "2024-03-02"  # primeiro dia disponível na fonte aberta de câmbio
 
@@ -1351,7 +1355,7 @@ def obter_serie_cotacao(ticker: str, periodo: str) -> pd.DataFrame:
     from datetime import timedelta
     base = ("SELECT DISTINCT ON (dia) dia AS \"Data\", preco AS \"Valor\" FROM historico_cotacoes "
             "WHERE RTRIM(ticker, 'A') = RTRIM(%s, 'A') {filtro} ORDER BY dia, LENGTH(ticker) DESC")
-    if periodo == "Hoje":
+    if periodo == "1d":
         df = consultar_df("SELECT * FROM (" + base.format(filtro="") + ") t ORDER BY \"Data\" DESC LIMIT 2", (ticker,))
         df = df.sort_values("Data").reset_index(drop=True)
     else:
@@ -1522,7 +1526,7 @@ def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: st
     from datetime import timedelta
     inicio_janela = datetime.now().date() - timedelta(days=_PERIODO_DIAS[periodo])
     d0 = df["Data"].iloc[0].date()
-    rotulo_var = (f"Variação (desde {d0:%d/%m/%y})" if periodo != "Hoje" and d0 > inicio_janela + timedelta(days=10)
+    rotulo_var = (f"Variação (desde {d0:%d/%m/%y})" if periodo != "1d" and d0 > inicio_janela + timedelta(days=10)
                   else f"Variação ({_PERIODO_NOME[periodo]})")
     m2.metric(rotulo_var, pct_bruto(var), delta=pct_bruto(var) if len(df) > 1 else None)
     m3.metric("Máximo do período", f"{df['Valor'].max():,.2f}")
@@ -1876,9 +1880,20 @@ def inicializar_bd():
     # ---- Actualização "Educação e Serviços / Área privada": migrações apenas aditivas (nada é apagado) ----
     executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS is_participante BOOLEAN NOT NULL DEFAULT FALSE")
     executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS nivel TEXT NOT NULL DEFAULT 'iniciante'")
+    executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS trocar_password BOOLEAN NOT NULL DEFAULT FALSE")
     executar("""CREATE TABLE IF NOT EXISTS perfil_investidor (id SERIAL PRIMARY KEY, conta_id INTEGER NOT NULL, versao INTEGER NOT NULL DEFAULT 1, respostas TEXT NOT NULL, pontuacoes TEXT NOT NULL, perfil TEXT NOT NULL, portal TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("CREATE INDEX IF NOT EXISTS idx_perfil_conta ON perfil_investidor (conta_id, criado_em)")
     executar("""CREATE TABLE IF NOT EXISTS pedidos_recuperacao (id SERIAL PRIMARY KEY, email TEXT NOT NULL, contacto TEXT, estado TEXT NOT NULL DEFAULT 'pendente', criado_em TIMESTAMP NOT NULL DEFAULT NOW(), resolvido_em TIMESTAMP, resolvido_por TEXT)""")
+    executar("""CREATE TABLE IF NOT EXISTS base_indice_appo (ticker TEXT PRIMARY KEY, preco_base NUMERIC NOT NULL, fonte TEXT, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    # único preço de 19/08/2026 confirmado por documento: o da compra de UNITEL (nota de execução), às 14:49
+    executar("INSERT INTO base_indice_appo (ticker, preco_base, fonte) VALUES ('UNTLAAAA', 36000, 'Nota de Execução de 19/08/2026 (negócio das 14:49, BFA CM)') ON CONFLICT (ticker) DO NOTHING")
+    # restantes preços-base, segundo as cotações da BODIVA indicadas pelo administrador; só entram se o título ainda não tiver base
+    for _tk, _pb, _fonte in [("BAIAAAAA", 97200, "BODIVA, cotações de 19/08/2026"), ("BCGAAAAA", 20000, "BODIVA, cotações de 19/08/2026"),
+                             ("BDVAAAAA", 84000, "BODIVA, cotações de 19/08/2026"), ("BFAAAAAA", 100000, "BODIVA, cotações de 19/08/2026"),
+                             ("ENSAAAAA", 29000, "BODIVA, cotações de 19/08/2026"),
+                             ("SBAOAAAA", 62500, "BODIVA, primeiro preço em bolsa (30/09/2026): não estava cotada a 19/08/2026")]:
+        executar("INSERT INTO base_indice_appo (ticker, preco_base, fonte) SELECT %s, %s, %s WHERE NOT EXISTS "
+                 "(SELECT 1 FROM base_indice_appo WHERE RTRIM(ticker, 'A') = RTRIM(%s, 'A'))", (_tk, _pb, _fonte, _tk))
     executar("""CREATE TABLE IF NOT EXISTS auditoria (id SERIAL PRIMARY KEY, quando TIMESTAMP NOT NULL DEFAULT NOW(), utilizador TEXT, accao TEXT NOT NULL, entidade TEXT, entidade_id TEXT, antes TEXT, depois TEXT, motivo TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS balanco_privado (id SERIAL PRIMARY KEY, data_ref DATE NOT NULL, dinheiro_disponivel NUMERIC NOT NULL DEFAULT 0, outros_activos NUMERIC NOT NULL DEFAULT 0, passivos NUMERIC NOT NULL DEFAULT 0, fonte TEXT, titularidade TEXT, estado TEXT NOT NULL DEFAULT 'Provisório', origem TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), validado_por TEXT, validado_em TIMESTAMP)""")
     for _col, _tipo in [("classe", "TEXT"), ("estado", "TEXT"), ("origem", "TEXT"), ("referencia", "TEXT"), ("fundamento", "TEXT"),
@@ -2087,7 +2102,7 @@ def transaccao():
 
 # ---------------- Contas ----------------
 def obter_conta_por_email(email: str):
-    return consultar_um("SELECT id, nome, email, password_hash, is_admin, is_premium, is_participante, nivel FROM contas WHERE email = %s", (email,))
+    return consultar_um("SELECT id, nome, email, password_hash, is_admin, is_premium, is_participante, nivel, trocar_password FROM contas WHERE email = %s", (email,))
 
 def inserir_conta(nome, email, password, is_admin):
     exigir_admin()
@@ -2117,7 +2132,7 @@ def definir_participante(conta_id: int, valor: bool):
 def repor_password(conta_id: int) -> str:
     exigir_admin()
     nova_password = secrets.token_urlsafe(9)
-    executar("UPDATE contas SET password_hash = %s WHERE id = %s", (hash_password(nova_password), conta_id))
+    executar("UPDATE contas SET password_hash = %s, trocar_password = TRUE WHERE id = %s", (hash_password(nova_password), conta_id))
     return nova_password
 
 def registar_pedido_recuperacao(email: str, contacto: str):
@@ -2165,9 +2180,133 @@ def alterar_password_propria(conta_id, actual: str, nova: str, repetida: str):
         return "A palavra-passe actual não está correcta."
     if nova == actual:
         return "A nova palavra-passe tem de ser diferente da actual."
-    executar("UPDATE contas SET password_hash = %s WHERE id = %s", (hash_password(nova), int(conta_id)))
+    executar("UPDATE contas SET password_hash = %s, trocar_password = FALSE WHERE id = %s", (hash_password(nova), int(conta_id)))
     registar_auditoria("password_alterada", "conta", conta_id)
     return None
+
+
+# ---- Envio de e-mail (smtplib). A palavra-passe de aplicação do Gmail NUNCA vai no código: define SMTP_PASSWORD na Render ----
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "465") or 465)
+SMTP_USER = os.environ.get("SMTP_USER", "clube.investimento.appo@gmail.com")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+APP_URL = os.environ.get("APP_URL", "https://clube-investimento-appo.onrender.com")
+# Envio por HTTPS através de um script do Gmail do Clube (Google Apps Script): não usa portas SMTP, por isso funciona no plano gratuito da Render
+EMAIL_RELAY_URL = os.environ.get("EMAIL_RELAY_URL", "")
+EMAIL_RELAY_TOKEN = os.environ.get("EMAIL_RELAY_TOKEN", "")
+
+
+def smtp_configurado() -> bool:
+    return bool(SMTP_USER and SMTP_PASSWORD)
+
+
+def email_configurado() -> bool:
+    return bool(EMAIL_RELAY_URL and EMAIL_RELAY_TOKEN) or smtp_configurado()
+
+
+def estado_email() -> str:
+    if EMAIL_RELAY_URL and EMAIL_RELAY_TOKEN:
+        return "✅ Envio de e-mail activo (script do Gmail do Clube, por HTTPS)."
+    if smtp_configurado():
+        return "✅ Envio de e-mail por SMTP (não funciona no plano gratuito da Render)."
+    return "⚠️ Envio de e-mail por configurar: até lá, usa o botão de WhatsApp."
+
+
+def _enviar_via_relay(destinatario: str, assunto: str, texto: str):
+    try:
+        r = requests.post(EMAIL_RELAY_URL, json={"token": EMAIL_RELAY_TOKEN, "to": destinatario, "subject": assunto, "body": texto}, timeout=25)
+    except requests.RequestException:
+        return False, "Não foi possível contactar o script de envio de e-mail. Tenta novamente dentro de instantes."
+    try:
+        dados = r.json()
+    except ValueError:
+        return False, "O script de envio respondeu de forma inesperada: confirma que está publicado como «Aplicação Web», com acesso para «Qualquer pessoa»."
+    if not isinstance(dados, dict):
+        return False, "Resposta inválida do script de envio."
+    if dados.get("ok"):
+        return True, None
+    return False, "O script de envio recusou o pedido: " + str(dados.get("erro") or "motivo desconhecido")
+
+
+def enviar_email(destinatario: str, assunto: str, texto: str):
+    """Devolve (True, None) se o e-mail foi entregue ao servidor, ou (False, mensagem de erro em português)."""
+    destinatario = (destinatario or "").strip()
+    if not email_configurado():
+        return False, ("O envio de e-mail ainda não está configurado: define EMAIL_RELAY_URL e EMAIL_RELAY_TOKEN (script do Gmail do Clube) "
+                       "ou, num plano pago da Render, SMTP_PASSWORD, nas variáveis de ambiente.")
+    if not _REGEX_EMAIL.match(destinatario):
+        return False, "O endereço de e-mail é inválido."
+    if EMAIL_RELAY_URL and EMAIL_RELAY_TOKEN:
+        return _enviar_via_relay(destinatario, assunto, texto)
+    msg = EmailMessage()
+    msg["From"] = f"Clube de Investimento APPO <{SMTP_USER}>"
+    msg["To"] = destinatario
+    msg["Subject"] = assunto
+    msg.set_content(texto)
+    try:
+        contexto = ssl.create_default_context()
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=contexto, timeout=12) as srv:
+                srv.login(SMTP_USER, SMTP_PASSWORD)
+                srv.send_message(msg)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as srv:
+                srv.starttls(context=contexto)
+                srv.login(SMTP_USER, SMTP_PASSWORD)
+                srv.send_message(msg)
+        return True, None
+    except smtplib.SMTPAuthenticationError:
+        return False, "O Gmail recusou o início de sessão: SMTP_PASSWORD tem de ser uma palavra-passe de aplicação (com verificação em 2 passos activa), não a palavra-passe normal."
+    except (socket.timeout, TimeoutError, ConnectionError, OSError):
+        return False, ("Não foi possível ligar ao servidor de e-mail. Se a app corre num plano gratuito da Render, as portas SMTP (465 e 587) estão bloqueadas: "
+                       "usa o script do Gmail do Clube (EMAIL_RELAY_URL e EMAIL_RELAY_TOKEN) ou passa a um plano pago.")
+    except Exception as exc:
+        traceback.print_exc()
+        return False, f"Não foi possível enviar o e-mail ({type(exc).__name__})."
+
+
+def texto_email_nova_password(email: str, password: str):
+    assunto = "Clube de Investimento APPO: nova palavra-passe"
+    corpo = (f"Olá,\n\nO administrador do Clube de Investimento APPO repôs o acesso à tua conta ({email}).\n\n"
+             f"Palavra-passe provisória: {password}\n\n"
+             f"Entra em {APP_URL} e escolhe logo uma palavra-passe só tua: a app pede-o no primeiro acesso.\n\n"
+             "Se não fizeste este pedido, avisa o administrador.\n\nClube de Investimento APPO")
+    return assunto, corpo
+
+
+def ligacao_whatsapp(contacto: str, texto: str):
+    """Ligação wa.me com a mensagem já escrita (o administrador só carrega em enviar). Devolve None se o número não for utilizável."""
+    import re as _re_w
+    digitos = _re_w.sub(r"\D", "", contacto or "")
+    if digitos.startswith("00"):
+        digitos = digitos[2:]
+    if len(digitos) == 9 and digitos.startswith("9"):
+        digitos = "244" + digitos
+    if len(digitos) < 11:
+        return None
+    return f"https://wa.me/{digitos}?text={urllib.parse.quote(texto)}"
+
+
+def botao_ligacao(rotulo: str, url: str):
+    if hasattr(st, "link_button"):
+        st.link_button(rotulo, url)
+    else:
+        st.markdown(f"[{rotulo}]({url})")
+
+
+def repor_e_enviar_por_email(email: str, contacto: str, repor_fn):
+    """Repõe a palavra-passe (repor_fn devolve a provisória) e tenta enviá-la por e-mail; se falhar, mostra-a ao administrador com envio alternativo."""
+    nova = repor_fn()
+    assunto, corpo = texto_email_nova_password(email, nova)
+    ok, erro = enviar_email(email, assunto, corpo)
+    if ok:
+        st.success(f"Nova palavra-passe enviada para {email}. Pede à pessoa para confirmar a receção (e para ver o spam).")
+        return
+    st.warning(erro)
+    st.info(f"A palavra-passe de {email} já foi reposta. Provisória (envia por outro canal): **{nova}**")
+    url = ligacao_whatsapp(contacto, f"Olá! A tua palavra-passe provisória do APPO é: {nova}. Entra em {APP_URL} e escolhe logo uma só tua.")
+    if url:
+        botao_ligacao("📲 Enviar por WhatsApp", url)
 
 
 def eliminar_conta(conta_id: int):
@@ -2397,7 +2536,7 @@ def registar_vup_hoje():
 def obter_serie_vup(periodo: str) -> pd.DataFrame:
     exigir_participante()
     from datetime import timedelta
-    if periodo == "Hoje":
+    if periodo == "1d":
         df = consultar_df('SELECT dia AS "Data", vup AS "Valor" FROM historico_vup ORDER BY dia DESC LIMIT 2')
         df = df.sort_values("Data").reset_index(drop=True)
     else:
@@ -4053,7 +4192,7 @@ except Exception as _erro_bd:
 # =========================================================
 # AUTENTICAÇÃO
 # =========================================================
-for _k, _v in [("autenticado", False), ("login_timestamp", None), ("conta_nome", ""), ("conta_email", ""), ("is_admin", False), ("is_premium", False), ("is_participante", False), ("nivel", "iniciante"), ("perfil", None), ("perfil_data", None)]:
+for _k, _v in [("autenticado", False), ("login_timestamp", None), ("conta_nome", ""), ("conta_email", ""), ("is_admin", False), ("is_premium", False), ("is_participante", False), ("nivel", "iniciante"), ("perfil", None), ("perfil_data", None), ("trocar_password", False)]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
@@ -5278,6 +5417,161 @@ def pagina_perfil_investidor():
 
 
 
+# =========================================================
+# ÍNDICES: «Índice BODIVA» (cotação média) e «Índice APPO» (variação média desde 19/08/2026, base 100)
+# =========================================================
+DATA_BASE_APPO = pd.Timestamp("2026-08-19")
+
+
+def _tk_norm(t) -> str:
+    """Mesma regra de comparação dos tickers que o resto da app (sem os 'A' finais)."""
+    return str(t or "").strip().upper().rstrip("A")
+
+
+def obter_bases_indice_appo(com_fonte: bool = False):
+    df = consultar_df("SELECT ticker, preco_base, fonte FROM base_indice_appo")
+    if com_fonte:
+        return df
+    return {_tk_norm(r["ticker"]): float(r["preco_base"]) for _, r in df.iterrows()} if not df.empty else {}
+
+
+def guardar_bases_indice_appo(df: pd.DataFrame):
+    exigir_admin()
+    n = 0
+    for _, r in df.iterrows():
+        tk = str(r.get("ticker") or "").strip().upper()
+        pb = r.get("preco_base")
+        if not tk:
+            continue
+        if pb is None or pd.isna(pb) or float(pb) <= 0:
+            executar("DELETE FROM base_indice_appo WHERE ticker = %s", (tk,))
+        else:
+            executar("INSERT INTO base_indice_appo (ticker, preco_base, fonte) VALUES (%s, %s, %s) ON CONFLICT (ticker) DO UPDATE SET "
+                     "preco_base = EXCLUDED.preco_base, fonte = EXCLUDED.fonte, actualizado_em = NOW()", (tk, float(pb), str(r.get("fonte") or "").strip()))
+            n += 1
+    registar_auditoria("bases_indice_appo", "indice", "APPO", depois={"precos_base": n})
+
+
+def obter_painel_precos(tickers_norm: set) -> pd.DataFrame:
+    """Preço diário (linhas = datas, colunas = títulos). Dias sem registo mantêm o último preço conhecido."""
+    df = consultar_df("SELECT DISTINCT ON (dia, RTRIM(ticker, 'A')) dia, RTRIM(ticker, 'A') AS tk, preco FROM historico_cotacoes "
+                      "ORDER BY dia, RTRIM(ticker, 'A'), LENGTH(ticker) DESC")
+    if df.empty:
+        return pd.DataFrame()
+    df = df[df["tk"].isin(tickers_norm)].copy()
+    if df.empty:
+        return pd.DataFrame()
+    df["dia"] = pd.to_datetime(df["dia"])
+    df["preco"] = df["preco"].astype(float)
+    return df.pivot_table(index="dia", columns="tk", values="preco", aggfunc="last").sort_index().ffill()
+
+
+def calcular_indice_bodiva(painel: pd.DataFrame) -> pd.Series:
+    """Cotação média (Kz) das acções cotadas em cada dia."""
+    return painel.mean(axis=1, skipna=True).dropna()
+
+
+def calcular_indice_appo(painel: pd.DataFrame, bases: dict, data_base=DATA_BASE_APPO):
+    """Variação média (peso igual) de todas as acções face ao preço-base de 19/08/2026, base 100.
+    Quando entra uma acção nova, encadeia-se a série, para a entrada não causar um salto artificial."""
+    pb = painel[painel.index >= data_base]
+    if pb.empty:
+        return None, {}
+    rel, sem_base = {}, []
+    for tk in pb.columns:
+        s_tk = pb[tk].dropna()
+        if s_tk.empty:
+            continue
+        base = bases.get(tk)
+        if not base or base <= 0:
+            base = float(s_tk.iloc[0])
+            sem_base.append(tk)
+        rel[tk] = pb[tk] / base
+    R = pd.DataFrame(rel).dropna(how="all")
+    if R.empty:
+        return None, {}
+    valores = {R.index[0]: 100.0 * float(R.iloc[0].mean())}
+    for i in range(1, len(R)):
+        ant, act = R.iloc[i - 1], R.iloc[i]
+        conj = [c for c in R.columns if pd.notna(ant[c]) and pd.notna(act[c])]
+        m_ant = float(ant[conj].mean()) if conj else 0.0
+        razao = (float(act[conj].mean()) / m_ant) if m_ant else 1.0
+        valores[R.index[i]] = valores[R.index[i - 1]] * razao
+    return pd.Series(valores).sort_index(), {"sem_base": sem_base, "inicio": R.index[0]}
+
+
+def janela_periodo(serie: pd.Series, periodo: str):
+    """(janela, variação %, janela completa?) para 1d, 7d, 1m, 3m, 6m, 1a, 5a."""
+    if len(serie) < 2:
+        return serie, None, False
+    fim = serie.index[-1]
+    if periodo == "1d":
+        janela, completa = serie.iloc[-2:], True
+    else:
+        ini = fim - pd.Timedelta(days=_PERIODO_DIAS[periodo])
+        antes = serie[serie.index <= ini]
+        completa = len(antes) > 0
+        janela = serie[serie.index >= antes.index[-1]] if completa else serie
+    base = float(janela.iloc[0])
+    return janela, ((float(serie.iloc[-1]) / base - 1) * 100 if base else None), completa
+
+
+def resumo_indice_appo(df_activos: pd.DataFrame):
+    """(valor, variação 1d %) do Índice APPO, ou None se ainda não há dados suficientes."""
+    try:
+        acoes = df_activos[df_activos["tipo"].apply(_eh_accao)] if not df_activos.empty else df_activos
+        tickers = {_tk_norm(t) for t in acoes["ticker"] if str(t or "").strip()} if not acoes.empty else set()
+        painel = obter_painel_precos(tickers) if tickers else pd.DataFrame()
+        if painel.empty:
+            return None
+        serie, _ = calcular_indice_appo(painel, obter_bases_indice_appo())
+        if serie is None or len(serie) < 2:
+            return None
+        _, var1d, _ = janela_periodo(serie, "1d")
+        return float(serie.iloc[-1]), var1d
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _painel_indices(df_activos: pd.DataFrame):
+    acoes = df_activos[df_activos["tipo"].apply(_eh_accao)] if not df_activos.empty else df_activos
+    nomes = {_tk_norm(r["ticker"]): str(r["nome"]) for _, r in acoes.iterrows() if str(r["ticker"] or "").strip()} if not acoes.empty else {}
+    if not nomes:
+        st.info("Ainda não há acções registadas.")
+        return
+    painel = obter_painel_precos(set(nomes))
+    if painel.empty or len(painel) < 2:
+        st.info("Ainda não há histórico de cotações suficiente. O administrador pode importar a série de cada título em Cotações & Activos.")
+        return
+    periodo = st.radio("Período", PERIODOS_GRAFICO, index=PERIODOS_GRAFICO.index("1m"), horizontal=True, key="per_indices", label_visibility="collapsed")
+    aba_appo, aba_bodiva = st.tabs(["Índice APPO", "Índice BODIVA"])
+    with aba_appo:
+        serie, info = calcular_indice_appo(painel, obter_bases_indice_appo())
+        if serie is None or len(serie) < 2:
+            st.info("O Índice APPO começa em 19/08/2026: ainda não há cotações desde essa data.")
+        else:
+            janela, var, completa = janela_periodo(serie, periodo)
+            c1, c2 = st.columns(2)
+            c1.metric("Índice APPO (100 = 19/08/2026)", f"{serie.iloc[-1]:.2f}", delta=(f"{var:+.2f}% em {periodo}" if var is not None else None))
+            c2.metric("Desde 19/08/2026", f"{serie.iloc[-1] - 100:+.2f}%")
+            grafico_area_simples(janela.to_frame("Índice APPO"), "Índice APPO")
+            st.caption("Variação média de todas as acções cotadas face ao seu preço em 19/08/2026, o dia em que o Clube começou a investir (todas com o mesmo peso).")
+            if not completa:
+                st.caption(f"Histórico disponível só desde {serie.index[0]:%d/%m/%Y}; o período escolhido é mais longo.")
+            if info.get("sem_base"):
+                lista = ", ".join(nomes.get(t, t) for t in info["sem_base"])
+                st.caption(f"Sem preço-base de 19/08/2026 para: {lista}. Para estas usa-se o primeiro preço disponível; o administrador pode completar em Cotações & Activos.")
+    with aba_bodiva:
+        serie_b = calcular_indice_bodiva(painel)
+        janela_b, var_b, completa_b = janela_periodo(serie_b, periodo)
+        st.metric("Índice BODIVA (cotação média)", kz(serie_b.iloc[-1]), delta=(f"{var_b:+.2f}% em {periodo}" if var_b is not None else None))
+        grafico_area_simples(janela_b.to_frame("Cotação média (Kz)"), "Cotação média (Kz)")
+        st.caption(f"Média simples das cotações das {painel.shape[1]} acções cotadas em cada dia. Muda também quando entra uma nova acção; para medir a variação, usa o Índice APPO.")
+        if not completa_b:
+            st.caption(f"Histórico disponível só desde {serie_b.index[0]:%d/%m/%Y}; o período escolhido é mais longo.")
+
+
 def _painel_inicio_aluno():
     """Início simples: um único próximo passo, atalhos essenciais e o mercado só quando é pedido."""
     nome = str(st.session_state.get("conta_nome") or "").split(" ")[0]
@@ -5360,6 +5654,7 @@ def pagina_login():
                 st.session_state["is_premium"]      = bool(conta[5])
                 st.session_state["is_participante"] = bool(conta[6])
                 st.session_state["nivel"]           = str(conta[7] or "iniciante")
+                st.session_state["trocar_password"] = bool(conta[8])
                 try:
                     _carregar_perfil_sessao(conta[0])
                 except Exception:
@@ -5380,6 +5675,28 @@ if not st.session_state["autenticado"]:
         pagina_educacao_servicos()
     with _aba_int:
         pagina_manifestacao_interesse()
+    st.stop()
+
+# Palavra-passe reposta pelo administrador: a pessoa tem de escolher uma só sua antes de continuar
+if st.session_state.get("trocar_password"):
+    st.markdown("### Escolhe a tua nova palavra-passe")
+    st.info("O administrador repôs o teu acesso. Por segurança, define agora uma palavra-passe só tua.")
+    with st.form("form_troca_obrigatoria"):
+        _tp_a = st.text_input("Palavra-passe provisória (a que recebeste)", type="password")
+        _tp_n = st.text_input("Nova palavra-passe (mín. 8 caracteres)", type="password")
+        _tp_r = st.text_input("Repetir a nova palavra-passe", type="password")
+        _tp_ok = st.form_submit_button("Guardar e continuar", type="primary")
+    if _tp_ok:
+        _tp_err = alterar_password_propria(st.session_state.get("conta_id"), _tp_a, _tp_n, _tp_r)
+        if _tp_err:
+            st.error(_tp_err)
+        else:
+            st.session_state["trocar_password"] = False
+            st.rerun()
+    if st.button("Terminar sessão", key="troca_sair"):
+        for _ch in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium", "is_participante", "nivel", "perfil", "perfil_data", "_perfil_visto", "trocar_password"]:
+            st.session_state.pop(_ch, None)
+        st.rerun()
     st.stop()
 
 # =========================================================
@@ -5425,7 +5742,7 @@ with st.sidebar.expander("🔑 Alterar palavra-passe"):
         else:
             st.success("Palavra-passe alterada.")
 if st.sidebar.button(tx["terminar_sessao"]):
-    for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium", "is_participante", "nivel", "perfil", "perfil_data", "_perfil_visto"]:
+    for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium", "is_participante", "nivel", "perfil", "perfil_data", "_perfil_visto", "trocar_password"]:
         st.session_state.pop(chave, None)
     st.rerun()
 
@@ -5459,9 +5776,14 @@ try:
         col4.metric(tx["inicio_reservas"],        kz(resumo["reservas"]))
         col5.metric(tx["inicio_patrimonio_total"], kz(total_patrimonio))
 
-        indice = calcular_indice_mercado(_df_activos_ticker)
-        st.metric(tx["inicio_indice_label"], pct_bruto(indice), delta=pct_bruto(indice))
-        st.caption(tx["inicio_indice_caption"])
+        _res_idx = resumo_indice_appo(_df_activos_ticker)
+        if _res_idx:
+            st.metric("📊 Índice APPO (100 = 19/08/2026)", f"{_res_idx[0]:.2f}", delta=(f"{_res_idx[1]:+.2f}% em 1d" if _res_idx[1] is not None else None))
+            st.caption("Variação média de todas as acções cotadas desde o dia em que o Clube começou a investir.")
+        else:
+            indice = calcular_indice_mercado(_df_activos_ticker)
+            st.metric(tx["inicio_indice_label"], pct_bruto(indice), delta=pct_bruto(indice))
+            st.caption(tx["inicio_indice_caption"])
         st.divider()
 
         st.subheader(tx["inicio_distribuicao"])
@@ -5489,27 +5811,8 @@ try:
         if df_activos.empty:
             st.info(tx["cot_fav_info"])
         else:
-            st.subheader(tx["cot_indice_titulo"])
-            indice = calcular_indice_mercado(df_activos)
-            col_i1, col_i2 = st.columns([1, 2])
-            col_i1.metric(tx["cot_indice_metric"], pct_bruto(indice), delta=pct_bruto(indice))
-            col_i1.caption(tx["cot_indice_caption"])
-            df_hist_indice = obter_historico_indice()
-            with col_i2:
-                if len(df_hist_indice) >= 2:
-                    df_hist_indice["registado_em"] = pd.to_datetime(df_hist_indice["registado_em"])
-                    grafico_area_simples(df_hist_indice.set_index("registado_em")[["indice_variacao"]], tx["cot_indice_hist_label"])
-                else:
-                    st.info(tx["cot_indice_hist_info"])
-            st.markdown(tx["cot_tendencia_semanal"])
-            if len(df_hist_indice) >= 2:
-                df_semanal = df_hist_indice.set_index("registado_em").resample("W")[["indice_variacao"]].mean().rename(columns={"indice_variacao": tx["cot_indice_hist_label"]})
-                if len(df_semanal) >= 2:
-                    grafico_area_simples(df_semanal, tx["cot_indice_hist_label"])
-                else:
-                    st.caption(tx["cot_tendencia_sem_caption1"])
-            else:
-                st.caption(tx["cot_tendencia_sem_caption2"])
+            st.subheader("📊 Índices")
+            _painel_indices(df_activos)
             st.divider()
 
             aba_fav, aba_todos, aba_graf = st.tabs([tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos"])
@@ -6900,6 +7203,29 @@ try:
                     st.success("Carteira real actualizada. O relatório PDF passa já a reflectir estes valores.")
                     st.rerun()
 
+            with st.expander("Preços-base do Índice APPO (19/08/2026)"):
+                st.caption("O Índice APPO mede a variação média de todas as acções cotadas desde o dia em que o Clube começou a investir (19/08/2026). "
+                           "Indica o preço de cada acção nesse dia (resumo de mercado da BODIVA, Kitadinvest ou histórico do homebroker). "
+                           "As notas de execução só mostram os teus próprios negócios, não o mercado. Sem preço-base, usa-se o primeiro preço disponível no histórico.")
+                _acoes_adm = df_activos_admin[df_activos_admin["tipo"].apply(_eh_accao)]
+                _bases_df = obter_bases_indice_appo(com_fonte=True)
+                _bases_d = {_tk_norm(r["ticker"]): r for _, r in _bases_df.iterrows()} if not _bases_df.empty else {}
+                _linhas_b = [{"ticker": r["ticker"], "nome": r["nome"],
+                              "preco_base": (float(_bases_d[_tk_norm(r["ticker"])]["preco_base"]) if _tk_norm(r["ticker"]) in _bases_d else None),
+                              "fonte": (str(_bases_d[_tk_norm(r["ticker"])]["fonte"] or "") if _tk_norm(r["ticker"]) in _bases_d else "")}
+                             for _, r in _acoes_adm.iterrows()]
+                if not _linhas_b:
+                    st.info("Ainda não há acções registadas.")
+                else:
+                    _bases_ed = st.data_editor(pd.DataFrame(_linhas_b), key="editor_bases_appo", hide_index=True, disabled=["ticker", "nome"],
+                                               column_config={"ticker": "Ticker", "nome": "Acção",
+                                                              "preco_base": st.column_config.NumberColumn("Preço em 19/08/2026 (Kz)", min_value=0.0, step=0.01, format="%.2f"),
+                                                              "fonte": st.column_config.TextColumn("Fonte")})
+                    if st.button("Guardar preços-base", key="guardar_bases_appo"):
+                        guardar_bases_indice_appo(_bases_ed)
+                        st.success("Preços-base guardados. O Índice APPO foi recalculado.")
+                        st.rerun()
+
         with aba_aval:
             st.subheader("Premissas Macro (CAPM)")
             premissas = obter_premissas_macro()
@@ -7110,7 +7436,7 @@ try:
             st.caption("Activa o acesso Premium depois de confirmares o pagamento do sócio.")
             df_contas = listar_contas()
             for _, conta in df_contas.iterrows():
-                col_a, col_b, col_c, col_d, col_e = st.columns([2.3, 0.9, 1.1, 1.1, 1.1])
+                col_a, col_b, col_c, col_d, col_m, col_e = st.columns([2.1, 0.8, 1.0, 1.0, 1.3, 0.9])
                 col_a.write(f"{conta['nome']} — {conta['email']}")
                 col_b.write("Admin" if conta["is_admin"] else "Sócio")
                 if conta["is_premium"]:
@@ -7124,6 +7450,8 @@ try:
                 if col_d.button("Repor password", key=f"repor_{conta['id']}"):
                     nova = repor_password(int(conta["id"]))
                     st.info(f"Nova palavra-passe para {conta['email']}: **{nova}**")
+                if col_m.button("✉️ Enviar nova por e-mail", key=f"mail_{conta['id']}"):
+                    repor_e_enviar_por_email(str(conta["email"]), "", lambda cid=int(conta["id"]): repor_password(cid))
                 pode_eliminar = not (conta["is_admin"] and contar_admins() <= 1)
                 if col_e.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
                     eliminar_conta(int(conta["id"]))
@@ -7133,20 +7461,29 @@ try:
             _ped = obter_pedidos_recuperacao()
             _pend = _ped[_ped["estado"] == "pendente"] if not _ped.empty else _ped
             st.subheader(f"Pedidos de recuperação de palavra-passe ({len(_pend)} pendente(s))")
+            st.caption(estado_email())
             st.caption("Confirma a identidade da pessoa (chamada ou WhatsApp) antes de repor. A palavra-passe provisória aparece uma só vez: envia-a por canal seguro e pede à pessoa para a alterar na barra lateral.")
             if _pend.empty:
                 st.info("Sem pedidos pendentes.")
             for _, _p in _pend.iterrows():
-                _c1, _c2, _c3, _c4 = st.columns([2.4, 1.6, 1, 1])
+                _c1, _c2, _c3, _c4, _c5 = st.columns([2.2, 1.3, 1.9, 1.1, 0.9])
                 _c1.write(f"**{_p['email']}**")
                 _c2.write(str(_p["contacto"] or "—"))
-                if _c3.button("Repor", key=f"rec_repor_{_p['id']}"):
+                if _c3.button("✉️ Enviar nova palavra-passe por e-mail", key=f"rec_mail_{_p['id']}", type="primary"):
+                    try:
+                        repor_e_enviar_por_email(str(_p["email"]), str(_p["contacto"] or ""), lambda pid=int(_p["id"]): resolver_pedido_recuperacao(pid, True))
+                    except ValueError as _err:
+                        st.error(str(_err))
+                if _c4.button("Repor e mostrar", key=f"rec_repor_{_p['id']}"):
                     try:
                         _nova = resolver_pedido_recuperacao(int(_p["id"]), True)
                         st.success(f"Palavra-passe provisória para {_p['email']}: **{_nova}**")
+                        _url_wa = ligacao_whatsapp(str(_p["contacto"] or ""), f"Olá! A tua palavra-passe provisória do APPO é: {_nova}. Entra em {APP_URL} e escolhe logo uma só tua.")
+                        if _url_wa:
+                            botao_ligacao("📲 Enviar por WhatsApp", _url_wa)
                     except ValueError as _err:
                         st.error(str(_err))
-                if _c4.button("Ignorar", key=f"rec_ign_{_p['id']}"):
+                if _c5.button("Ignorar", key=f"rec_ign_{_p['id']}"):
                     try:
                         resolver_pedido_recuperacao(int(_p["id"]), False)
                         st.rerun()
