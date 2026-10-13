@@ -1064,15 +1064,82 @@ div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
 """
 
 
+# ---------------------------------------------------------
+# Camada visual executiva (fundos claros; gradientes roxo -> vermelho -> laranja; sombras suaves).
+# É sempre aplicada DEPOIS do CSS base (e do appo.css, se existir), por isso prevalece.
+# ---------------------------------------------------------
+CSS_APPO_FINCITE = """
+:root {
+  --fx-roxo: #6D28D9; --fx-vermelho: #E11D48; --fx-laranja: #F97316; --fx-tinta: #1B1033;
+  --fx-grad: linear-gradient(100deg, #6D28D9 0%, #E11D48 55%, #F97316 100%);
+  --fx-sombra: 0 10px 30px rgba(76, 29, 149, 0.10);
+  --fx-sombra-suave: 0 4px 14px rgba(27, 16, 51, 0.07);
+}
+[data-testid="stAppViewContainer"] {
+  background:
+    radial-gradient(900px 380px at 100% -8%, rgba(249, 115, 22, 0.10), transparent 62%),
+    radial-gradient(800px 360px at -8% 0%, rgba(109, 40, 217, 0.08), transparent 62%),
+    #FBFAFE;
+}
+.stApp h1, .stApp h2, .stApp h3 { color: var(--fx-tinta); font-weight: 800; letter-spacing: -0.02em; }
+
+/* Cabeçalho de página: claro, com barra e brilho em gradiente */
+.appo-hero { position: relative; overflow: hidden; background: linear-gradient(120deg, #FFFFFF 0%, #F6F1FF 48%, #FFF1EA 100%);
+  color: var(--fx-tinta); border: 1px solid #EEE7FA; border-left: 0; border-radius: 18px; padding: 24px 30px 24px 34px; box-shadow: var(--fx-sombra); }
+.appo-hero::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; background: linear-gradient(180deg, #6D28D9, #E11D48 55%, #F97316); }
+.appo-hero::after { content: ""; position: absolute; right: -60px; top: -80px; width: 260px; height: 260px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.22), rgba(225, 29, 72, 0.12) 45%, transparent 70%); pointer-events: none; }
+.appo-hero h1 { background: var(--fx-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  font-weight: 800; font-size: 1.75rem; letter-spacing: -0.02em; }
+.appo-hero p { color: #475569; font-size: 0.95rem; }
+.appo-badge { border: 1px solid #E4D4FB; color: #6D28D9; background: #FAF5FF; font-weight: 600; }
+.appo-capa { background: linear-gradient(120deg, #FFFFFF, #F6F1FF 55%, #FFF1EA); border: 1px solid #EEE7FA; border-left: 6px solid var(--fx-vermelho); box-shadow: var(--fx-sombra-suave); }
+.appo-capa span { color: var(--fx-tinta); }
+
+/* Cartões e indicadores */
+.appo-card, .fx-card { background: #FFFFFF; border: 1px solid #EFE9FA; border-radius: 18px; box-shadow: var(--fx-sombra-suave); padding: 18px 20px; }
+div[data-testid="stMetric"] { border: 1px solid #EFE9FA; border-radius: 16px; box-shadow: var(--fx-sombra-suave); }
+div[data-testid="stMetricValue"] { font-weight: 800; }
+button[kind="primary"], button[data-testid="stBaseButton-primary"] { background: var(--fx-grad); border: 0; border-radius: 12px; }
+button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover { filter: brightness(1.06); background: var(--fx-grad); border: 0; }
+button[data-baseweb="tab"][aria-selected="true"] { color: var(--fx-roxo); }
+div[data-baseweb="tab-highlight"] { background: var(--fx-grad); height: 3px; }
+
+/* Faixas de estado e etiquetas */
+.fx-estado { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; font-size: 0.82rem; font-weight: 600; border: 1px solid #E5E7EB; background: #FFFFFF; }
+.fx-estado.ok { color: #166534; border-color: #BBF7D0; background: #F0FDF4; }
+.fx-estado.aviso { color: #9A3412; border-color: #FED7AA; background: #FFF7ED; }
+.fx-estado.erro { color: #9F1239; border-color: #FECDD3; background: #FFF1F2; }
+.fx-kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; color: var(--fx-roxo); }
+.fx-titulo-secao { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; background: var(--fx-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin: 4px 0 2px 0; }
+.fx-aviso-membros { background: #FFFFFF; border: 1px solid #EFE9FA; border-left: 5px solid var(--fx-laranja); border-radius: 12px; padding: 10px 14px; font-size: 0.85rem; color: #334155; margin: 8px 0 12px 0; }
+
+/* Biblioteca: dois níveis bem visíveis */
+.fx-nivel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 6px 0 18px 0; }
+.fx-nivel-card { border-radius: 20px; padding: 22px 24px; box-shadow: var(--fx-sombra); position: relative; overflow: hidden; }
+.fx-nivel-card .fx-nivel-kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700; opacity: 0.85; }
+.fx-nivel-card .fx-nivel-titulo { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 6px 0; line-height: 1.15; }
+.fx-nivel-card p { margin: 0 0 10px 0; font-size: 0.92rem; line-height: 1.45; }
+.fx-nivel-card .fx-nivel-n { display: inline-block; font-size: 0.78rem; font-weight: 700; padding: 4px 12px; border-radius: 999px; }
+.fx-nivel-ini { background: linear-gradient(135deg, #FFFFFF 0%, #F3F8FF 100%); border: 1px solid #DCE8FB; color: #1B1033; }
+.fx-nivel-ini .fx-nivel-n { background: #E8F0FE; color: #1D4ED8; }
+.fx-nivel-inv { background: linear-gradient(120deg, #6D28D9 0%, #E11D48 58%, #F97316 100%); color: #FFFFFF; }
+.fx-nivel-inv .fx-nivel-n { background: rgba(255, 255, 255, 0.22); color: #FFFFFF; }
+.fx-cta { background: linear-gradient(120deg, #FFF7ED, #FDF2F8 55%, #F5F3FF); border: 1px solid #F9D8C2; border-radius: 18px; padding: 18px 22px; margin: 10px 0; box-shadow: var(--fx-sombra-suave); }
+.fx-cta b { font-size: 1.15rem; letter-spacing: -0.01em; }
+@media (max-width: 760px) { .fx-nivel { grid-template-columns: 1fr; } .fx-nivel-card .fx-nivel-titulo { font-size: 1.35rem; } }
+"""
+
+
 def _carregar_css() -> str:
     """Usa appo.css (ao lado do app.py) se existir; caso contrário, o CSS incluído acima."""
     try:
         f = Path(__file__).with_name("appo.css")
         if f.exists():
-            return f.read_text(encoding="utf-8")
+            return f.read_text(encoding="utf-8") + CSS_APPO_FINCITE
     except Exception:
         pass
-    return CSS_APPO_BASE
+    return CSS_APPO_BASE + CSS_APPO_FINCITE
 
 
 st.markdown(f"<style>{_carregar_css()}</style>", unsafe_allow_html=True)
@@ -1105,7 +1172,7 @@ def _esc(v) -> str:
 def hero(titulo: str, subtitulo: str, badge: str = None):
     if badge is None:
         badge = t().get("bodiva_badge", "🇦🇴 Kwanzas (Kz)")
-    render_html(f'<div class="appo-hero">{logo_svg(48, "#FFFFFF")}<div><h1>{_esc(titulo)}</h1><p>{_esc(subtitulo)}</p><span class="appo-badge">{_esc(badge)}</span></div></div>')
+    render_html(f'<div class="appo-hero">{logo_svg(48, COR_MARCA)}<div><h1>{_esc(titulo)}</h1><p>{_esc(subtitulo)}</p><span class="appo-badge">{_esc(badge)}</span></div></div>')
 
 
 def banner_capa(imagem_url: str, texto: str, altura: int = 170, escurecimento: float = 0.5):
@@ -3200,9 +3267,12 @@ def _xlsx_seguro(funcao):
     """Corre a geração do Excel sem nunca deixar a página falhar: devolve bytes ou None."""
     try:
         if not xlsx_disponivel():
+            st.warning("Excel indisponível: falta a biblioteca openpyxl no servidor (adiciona 'openpyxl' ao requirements.txt). Usa o CSV como alternativa.")
             return None
         return funcao()
-    except Exception:
+    except Exception as _e_xl:
+        traceback.print_exc()
+        st.warning(f"Não foi possível gerar o Excel agora ({type(_e_xl).__name__}: {_e_xl}). Usa o CSV como alternativa.")
         return None
 
 
@@ -3860,9 +3930,343 @@ def _pdf_barras_duplas(pdf, titulo, itens, x0, y0, w):
     return top + len(itens) * linha_h + 2
 
 
+# =========================================================
+# INFRA-ESTRUTURA EXTRA + COMPONENTES DO RELATÓRIO PDF INSTITUCIONAL
+# =========================================================
+@st.cache_resource
+def _garantir_tabelas_extra() -> bool:
+    """Tabelas/colunas novas (mercado BODIVA, configuração, inflação). Idempotente; corre uma vez por processo."""
+    executar("""CREATE TABLE IF NOT EXISTS mercado_bodiva (
+        ticker TEXT PRIMARY KEY, nome TEXT, tipo TEXT, preco NUMERIC, variacao NUMERIC, volume NUMERIC,
+        fonte TEXT, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("CREATE TABLE IF NOT EXISTS config_mercado (chave TEXT PRIMARY KEY, valor TEXT)")
+    for _col, _tp in (("inflacao_homologa", "NUMERIC"), ("inflacao_vigente_m", "NUMERIC"), ("inflacao_projectada", "NUMERIC"),
+                      ("inflacao_ref", "TEXT"), ("inflacao_data", "DATE")):
+        executar(f"ALTER TABLE premissas_macro ADD COLUMN IF NOT EXISTS {_col} {_tp}")
+    return True
+
+
+# ---------- Texto seguro para o PDF (fonte Helvetica = Latin-1) ----------
+_PDF_TROCAS = {"\u2013": "-", "\u2014": "-", "\u2212": "-", "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+               "\u2026": "...", "\u2022": "-", "\u2192": "->", "\u2190": "<-", "\u2265": ">=", "\u2264": "<=",
+               "\u2605": "*", "\u20ac": "EUR", "\u00a0": " ", "\u2248": "~", "\u0394": "Delta", "\u03c3": "sigma",
+               "\u03b1": "alpha", "\u03b2": "beta"}
+
+
+def _pdf_txt(s) -> str:
+    """Troca pontuação Unicode e remove o que a fonte base não suporta (emojis, etc.), para o PDF nunca falhar."""
+    s = "" if s is None else str(s)
+    for k, v in _PDF_TROCAS.items():
+        s = s.replace(k, v)
+    return "".join(c for c in s if ord(c) < 256)
+
+
+class _FPDFSeguro(FPDF):
+    """FPDF que limpa o texto antes de o escrever: um carácter fora de Latin-1 (ex.: '–' numa descrição)
+    já não faz falhar o relatório inteiro."""
+    def cell(self, *args, **kwargs):
+        args = list(args)
+        if len(args) >= 3:
+            args[2] = _pdf_txt(args[2])
+        for k in ("text", "txt"):
+            if k in kwargs:
+                kwargs[k] = _pdf_txt(kwargs[k])
+        return super().cell(*args, **kwargs)
+
+    def multi_cell(self, *args, **kwargs):
+        args = list(args)
+        if len(args) >= 3:
+            args[2] = _pdf_txt(args[2])
+        for k in ("text", "txt"):
+            if k in kwargs:
+                kwargs[k] = _pdf_txt(kwargs[k])
+        return super().multi_cell(*args, **kwargs)
+
+
+_PDF_PALETA_FX = [(109, 40, 217), (225, 29, 72), (249, 115, 22), (124, 31, 62), (168, 85, 247),
+                  (251, 146, 60), (244, 63, 94), (99, 102, 241), (190, 24, 93), (180, 83, 9)]
+
+
+def _pdf_fmt(v, casas: int = 2, sinal: bool = True, sufixo: str = "%") -> str:
+    if v is None or (isinstance(v, float) and v != v):
+        return "n/d"
+    try:
+        return (f"{float(v):+.{casas}f}" if sinal else f"{float(v):.{casas}f}") + sufixo
+    except (TypeError, ValueError):
+        return "n/d"
+
+
+def _pdf_corta(pdf, txt: str, largura: float) -> str:
+    txt = _pdf_txt(txt)
+    while len(txt) > 1 and pdf.get_string_width(txt) > largura - 2:
+        txt = txt[:-1]
+    return txt
+
+
+def _pdf_paragrafo(pdf, titulo: str, texto: str):
+    larg = pdf.w - pdf.l_margin - pdf.r_margin
+    if pdf.get_y() > pdf.h - 48:
+        pdf.add_page("L")
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+    pdf.set_font("Helvetica", "B", 9.5)
+    pdf.set_text_color(109, 40, 217)
+    pdf.cell(larg, 6, titulo, ln=True)
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(40, 40, 40)
+    pdf.multi_cell(larg, 4.8, texto)
+    pdf.set_xy(pdf.l_margin, pdf.get_y() + 2)
+    pdf.set_text_color(0, 0, 0)
+
+
+def _pdf_tabela(pdf, cab, linhas, larg, alinh=None, h=6.0, negrito=(), sinal_cols=(), tam=7.5):
+    """Tabela com cabeçalho repetido em nova página; verde/vermelho nas colunas de sinal."""
+    alinh = alinh or (["L"] + ["R"] * (len(cab) - 1))
+
+    def _cab():
+        pdf.set_xy(pdf.l_margin, pdf.get_y())
+        pdf.set_font("Helvetica", "B", tam)
+        pdf.set_fill_color(236, 222, 227)
+        pdf.set_text_color(0, 0, 0)
+        for i, (c, w) in enumerate(zip(cab, larg)):
+            pdf.cell(w, h + 1.5, _pdf_corta(pdf, c, w), border="B", fill=True, ln=(i == len(cab) - 1), align="C")
+
+    _cab()
+    for k, linha in enumerate(linhas):
+        if pdf.get_y() + h > pdf.h - 22:
+            pdf.add_page("L")
+            _cab()
+        pdf.set_xy(pdf.l_margin, pdf.get_y())
+        pdf.set_fill_color(250, 248, 246) if k % 2 == 0 else pdf.set_fill_color(255, 255, 255)
+        for i, (v, w) in enumerate(zip(linha, larg)):
+            txt = _pdf_txt(v)
+            pdf.set_font("Helvetica", "B" if k in negrito else "", tam)
+            cor = (0, 0, 0)
+            if i in sinal_cols and txt not in ("n/d", "") and txt[:1] in "+-":
+                cor = (22, 163, 74) if txt[:1] == "+" else (220, 38, 38)
+            pdf.set_text_color(*cor)
+            pdf.cell(w, h, _pdf_corta(pdf, txt, w), border="B", fill=True, ln=(i == len(linha) - 1), align=alinh[i])
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_xy(pdf.l_margin, pdf.get_y() + 1)
+
+
+def _pdf_donut(pdf, itens, cx, cy, r, r_int, titulo, centro=""):
+    """Gráfico de anel desenhado com polígonos (sem bibliotecas extra). `itens` = [(rótulo, valor, texto_valor)].
+    Se o FPDF não tiver `polygon`, desenha só a legenda."""
+    import math
+    itens = [(n, float(v), tv) for n, v, tv in itens if v and float(v) > 0]
+    pdf.set_xy(cx - r - 6, cy - r - 9)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(60, 30, 90)
+    pdf.cell(2 * r + 12, 6, titulo, align="C")
+    total = sum(v for _, v, _ in itens)
+    if total <= 0:
+        return cy + r
+    ang = -math.pi / 2
+    pdf.set_draw_color(255, 255, 255)
+    pdf.set_line_width(0.5)
+    for i, (_, v, _) in enumerate(itens):
+        fim = ang + 2 * math.pi * v / total
+        passos = max(3, int((fim - ang) / (2 * math.pi) * 120))
+        ext = [(cx + r * math.cos(ang + (fim - ang) * j / passos), cy + r * math.sin(ang + (fim - ang) * j / passos)) for j in range(passos + 1)]
+        inte = [(cx + r_int * math.cos(fim - (fim - ang) * j / passos), cy + r_int * math.sin(fim - (fim - ang) * j / passos)) for j in range(passos + 1)]
+        pdf.set_fill_color(*_PDF_PALETA_FX[i % len(_PDF_PALETA_FX)])
+        try:
+            pdf.polygon(ext + inte, style="DF")
+        except Exception:
+            break
+        ang = fim
+    pdf.set_line_width(0.2)
+    pdf.set_draw_color(0, 0, 0)
+    if centro:
+        pdf.set_xy(cx - r_int, cy - 4)
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(27, 16, 51)
+        pdf.cell(2 * r_int, 4, centro, align="C")
+    # legenda
+    ly = cy + r + 5
+    pdf.set_font("Helvetica", "", 7)
+    for i, (n, v, tv) in enumerate(itens[:9]):
+        pdf.set_fill_color(*_PDF_PALETA_FX[i % len(_PDF_PALETA_FX)])
+        pdf.rect(cx - r - 4, ly + 0.9, 2.6, 2.6, style="F")
+        pdf.set_xy(cx - r, ly)
+        pdf.set_text_color(40, 40, 40)
+        pdf.cell(2 * r + 8, 4.4, _pdf_corta(pdf, f"{n}: {v / total * 100:.1f}%  {tv}", 2 * r + 8))
+        ly += 4.4
+    pdf.set_text_color(0, 0, 0)
+    return ly
+
+
+def _rotulo_horiz(a: dict, p: str, curto: bool = True) -> str:
+    nomes_c = {"1d": "Intradia", "7d": "Semanal 7D", "3m": "Trimestral", "6m": "Semestral", "1a": "Anual YoY", "5a": "Longo prazo 5A"}
+    nomes_l = dict(HORIZONTES)
+    if p == "5a" and a.get("acumulado") and a.get("inicio_comum") is not None:
+        return f"Acum. {a['inicio_comum']:%d/%m/%y}"
+    return nomes_c[p] if curto else nomes_l[p]
+
+
+def _pdf_bloco_executivo(pdf, a: dict, resumo: dict, mercado, linhas_carteira: list):
+    """Sumário executivo, matriz multitemporal (com Alpha), inflação real, risco e composição em anéis."""
+    larg = pdf.w - pdf.l_margin - pdf.r_margin
+    ps = [p for p, _ in HORIZONTES]
+    # ---- 1. Sumário executivo e teses ----
+    pdf.add_page("L")
+    _pdf_secao(pdf, "SUMARIO EXECUTIVO E TESES DE INVESTIMENTO")
+    for titulo, texto in gerar_comentario_executivo(a, resumo, mercado):
+        _pdf_paragrafo(pdf, titulo, texto)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+    pdf.multi_cell(larg, 3.8, "Comentario gerado automaticamente a partir dos dados da plataforma (cotacoes, carteira e premissas macro). "
+                              "Tem natureza informativa e nao constitui recomendacao personalizada de investimento.")
+    pdf.set_text_color(0, 0, 0)
+
+    # ---- 2. Matriz comparativa ----
+    pdf.add_page("L")
+    _pdf_secao(pdf, "MATRIZ COMPARATIVA DE DESEMPENHO - CARTEIRA vs INDICES vs INFLACAO")
+    cab = ["Indicador"] + [_rotulo_horiz(a, p) for p in ps]
+    W = [58] + [round((larg - 58) / 6, 2)] * 6
+    f = lambda d: [_pdf_fmt(d.get(p)) for p in ps]
+    fpp = lambda d: [_pdf_fmt(d.get(p), sufixo=" p.p.") for p in ps]
+    inf = a["inflacao"]
+    real = a["real"]
+    lin = [
+        ["Carteira do Clube (nominal)"] + f(a["ret_carteira"]),
+        ["Indice APPO"] + f(a["ret_appo"]),
+        ["Indice BODIVA"] + f(a["ret_bodiva"]),
+        ["Alpha vs Indice APPO"] + fpp(a["alpha_appo"]),
+        ["Alpha vs Indice BODIVA"] + fpp(a["alpha_bodiva"]),
+        ["Inflacao homologa (YoY) no periodo"] + [_pdf_fmt(inf[p]["yoy"], sinal=False) for p in ps],
+        ["Inflacao vigente no periodo"] + [_pdf_fmt(inf[p]["vig"], sinal=False) for p in ps],
+        ["Inflacao projectada no periodo"] + [_pdf_fmt(inf[p]["proj"], sinal=False) for p in ps],
+        ["Rentab. real (deflac. YoY)"] + [_pdf_fmt(real[p]["yoy"]) if real.get(p) else "n/d" for p in ps],
+        ["Rentab. real (deflac. vigente)"] + [_pdf_fmt(real[p]["vig"]) if real.get(p) else "n/d" for p in ps],
+        ["Rentab. real (deflac. projectada)"] + [_pdf_fmt(real[p]["proj"]) if real.get(p) else "n/d" for p in ps],
+    ]
+    _pdf_tabela(pdf, cab, lin, W, negrito=(0, 3, 4, 8), sinal_cols=tuple(range(1, 7)))
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(120, 120, 120)
+    nota = ("Rentabilidade de preco (sem dividendos nem custos de transaccao); alpha = excesso de retorno da carteira face ao indice, em pontos percentuais, "
+            "na mesma janela temporal. Janelas sem historico completo aparecem como n/d. ")
+    if a.get("acumulado"):
+        nota += f"A coluna de longo prazo e acumulada desde {a['inicio_comum']:%d/%m/%Y}, a data comum das tres series. "
+    nota += "Indice BODIVA: cotacao media encadeada (entradas de novos titulos nao geram saltos). Carteira: quantidades actuais mantidas durante o periodo."
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+    pdf.multi_cell(larg, 3.8, nota)
+    pdf.set_text_color(0, 0, 0)
+
+    _pdf_secao(pdf, "RENTABILIDADE MULTITEMPORAL POR TITULO (em vez de uma unica coluna Var.%)")
+    cab2 = ["Titulo", "Peso"] + [_rotulo_horiz(a, p) for p in ps]
+    W2 = [52, 18] + [round((larg - 70) / 6, 2)] * 6
+    lin2 = [[_pdf_nome_curto(t["nome"]), f"{t['peso'] * 100:.1f}%"] + [_pdf_fmt(t["ret"].get(p)) for p in ps] for t in a["titulos"]]
+    lin2.append(["CARTEIRA", "100%"] + f(a["ret_carteira"]))
+    _pdf_tabela(pdf, cab2, lin2, W2, alinh=["L", "R"] + ["R"] * 6, negrito=(len(lin2) - 1,), sinal_cols=tuple(range(2, 8)))
+
+    # ---- 3. Inflação e poder de compra ----
+    pdf.add_page("L")
+    _pdf_secao(pdf, "AJUSTE MACROECONOMICO - INFLACAO REAL DE ANGOLA E PODER DE COMPRA")
+    pr = a["premissas"]
+    vig_anual = ((1 + pr["inflacao_vigente_m"]) ** 12 - 1) * 100
+    ref = pr.get("inflacao_ref") or "valores por defeito - por confirmar com o INE"
+    lin3 = [
+        ["Inflacao homologa (YoY)", f"{pr['inflacao_homologa'] * 100:.2f}%", "Ganho/perda real de poder de compra nos ultimos 12 meses"],
+        ["Inflacao vigente (ultima leitura mensal)", f"{pr['inflacao_vigente_m'] * 100:.2f}% m/m  (~{vig_anual:.1f}% anualizada)", "Pulso conjuntural imediato"],
+        ["Inflacao projectada (proximos 12 meses)", f"{pr['inflacao_projectada'] * 100:.2f}%", "Teste de stress e preservacao de capital a medio/longo prazo"],
+    ]
+    _pdf_tabela(pdf, ["Dimensao", "Valor", "Leitura"], lin3, [75, 75, larg - 150], alinh=["L", "L", "L"], h=6.5, tam=8)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+    pdf.cell(larg, 4, f"Fonte/data das premissas: {ref}", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(2)
+    cab4 = ["Rentabilidade real"] + [_rotulo_horiz(a, p) for p in ps]
+    lin4 = [["Carteira - nominal"] + f(a["ret_carteira"]),
+            ["Real (deflacionada pela inflacao YoY)"] + [_pdf_fmt(real[p]["yoy"]) if real.get(p) else "n/d" for p in ps],
+            ["Real (inflacao vigente)"] + [_pdf_fmt(real[p]["vig"]) if real.get(p) else "n/d" for p in ps],
+            ["Real (inflacao projectada)"] + [_pdf_fmt(real[p]["proj"]) if real.get(p) else "n/d" for p in ps],
+            ["Poder de compra (YoY)"] + [("Ganho" if real[p]["yoy"] > 0 else "Perda") if real.get(p) else "n/d" for p in ps]]
+    _pdf_tabela(pdf, cab4, lin4, W, negrito=(1,), sinal_cols=tuple(range(1, 7)))
+    pdf.ln(2)
+    _pdf_paragrafo(pdf, "Teste de stress - poder de compra de 100 000 Kz mantidos sem rendimento",
+                   "Mostra quanto valeria hoje o capital se ficasse parado, e que retorno nominal acumulado seria preciso para o preservar.")
+    base_inf = pr["inflacao_projectada"]
+    stress = []
+    for nome_c, ip in (("Projectada", base_inf), ("Projectada + 5 p.p. (stress)", base_inf + 0.05)):
+        stress.append([f"Poder de compra em {nome_c}"] + [f"{100000 / (1 + ip) ** n:,.0f} Kz".replace(",", " ") for n in (1, 3, 5)])
+        stress.append([f"Retorno nominal necessario ({nome_c})"] + [f"{((1 + ip) ** n - 1) * 100:.1f}%" for n in (1, 3, 5)])
+    _pdf_tabela(pdf, ["Cenario", "1 ano", "3 anos", "5 anos"], stress, [100, 49, 49, larg - 198], alinh=["L", "R", "R", "R"], h=6)
+
+    # ---- 4. Risco ----
+    pdf.add_page("L")
+    _pdf_secao(pdf, "ANALISE DE RISCO E DESVIO PADRAO")
+    rk = a["risco"]
+    def _g(nome, chave, casas=2, suf="%", sinal=False):
+        return [_pdf_fmt(rk[x].get(chave), casas, sinal, suf) if rk.get(x) else "n/d" for x in ("carteira", "appo", "bodiva")]
+    lin5 = [["Observacoes (retornos)"] + [str(rk[x]["n"]) if rk.get(x) else "n/d" for x in ("carteira", "appo", "bodiva")],
+            ["Desvio padrao diario (sigma)"] + _g("", "sigma_d"),
+            ["Volatilidade anualizada (sigma x raiz de 252)"] + _g("", "sigma_a"),
+            ["Drawdown maximo"] + _g("", "dd_max"),
+            ["VaR historico 95% (1 dia)"] + _g("", "var95"),
+            ["Tracking error vs Indice APPO (anualizado)"] + [_pdf_fmt(rk["carteira"].get("te"), 2, False, "%"), "-", "-"],
+            ["Information ratio vs Indice APPO"] + [_pdf_fmt(rk["carteira"].get("ir"), 2, False, ""), "-", "-"],
+            ["Beta vs Indice BODIVA"] + [_pdf_fmt(rk["carteira"].get("beta"), 2, False, ""), "-", "-"],
+            ["Sharpe (Rf das premissas)"] + [_pdf_fmt(rk["carteira"].get("sharpe"), 2, False, ""), "-", "-"]]
+    _pdf_tabela(pdf, ["Metrica", "Carteira", "Indice APPO", "Indice BODIVA"], lin5, [95, 50, 50, larg - 195], alinh=["L", "R", "R", "R"], h=6.2, tam=8)
+    pdf.ln(2)
+    cab6 = ["Titulo", "Peso", "Volat. anual.", "Drawdown max.", "Contrib. p/ risco total", "Peso / Risco"]
+    lin6, alertas = [], []
+    for t_ in a["titulos"]:
+        c_ = t_.get("contrib")
+        rel = (f"{c_ / t_['peso']:.2f}x" if c_ is not None and t_["peso"] > 0 else "n/d")
+        lin6.append([_pdf_nome_curto(t_["nome"]), f"{t_['peso'] * 100:.1f}%", _pdf_fmt(t_.get("sigma_a"), 2, False),
+                     _pdf_fmt(t_.get("dd_max"), 2, False), _pdf_fmt(c_ * 100 if c_ is not None else None, 1, False), rel])
+        if c_ is not None and t_["peso"] > 0 and c_ / t_["peso"] > 1.25:
+            alertas.append(f"{_pdf_nome_curto(t_['nome'])} contribui {c_ * 100:.1f}% do risco com {t_['peso'] * 100:.1f}% do peso")
+    _pdf_tabela(pdf, cab6, lin6, [62, 28, 34, 36, 45, larg - 205], alinh=["L", "R", "R", "R", "R", "R"], h=6)
+    cc = a["concentracao"]
+    txt_ef = (f"Numero efectivo de activos (1/HHI): {cc['n_efectivo']:.1f} em {len(a['titulos'])} posicoes. "
+              + ("Desalinhamento peso/risco: " + "; ".join(alertas) + "." if alertas else "A contribuicao para o risco esta alinhada com os pesos da carteira."))
+    pdf.set_font("Helvetica", "", 8.5)
+    pdf.set_text_color(40, 40, 40)
+    pdf.set_xy(pdf.l_margin, pdf.get_y() + 1)
+    pdf.multi_cell(larg, 4.6, txt_ef)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_xy(pdf.l_margin, pdf.get_y() + 1)
+    n_obs = rk["carteira"]["n"] if rk.get("carteira") else 0
+    pdf.multi_cell(larg, 3.8, f"Metricas calculadas sobre {n_obs} retornos observados (preco de fecho registado). Com amostras curtas (<30) os valores sao indicativos. "
+                              "Contribuicao para o risco = peso x covariancia com a carteira / variancia total.")
+    pdf.set_text_color(0, 0, 0)
+
+    # ---- 5. Composição em anéis ----
+    if linhas_carteira:
+        pdf.add_page("L")
+        _pdf_secao(pdf, "COMPOSICAO DA CARTEIRA (GRAFICOS DE ANEL)")
+        y0 = pdf.get_y() + 14
+        r, ri = 24, 14
+        cxs = [pdf.l_margin + larg / 6, pdf.l_margin + larg / 2, pdf.l_margin + 5 * larg / 6]
+        por_val = [(_pdf_nome_curto(l["nome"]), max(l["val_act"], 0), kz(l["val_act"])) for l in linhas_carteira]
+        por_qtd = [(_pdf_nome_curto(l["nome"]), max(l["qtd"], 0), f"{l['qtd']:,.0f} tit.".replace(",", " ")) for l in linhas_carteira]
+        sect = {}
+        for l in linhas_carteira:
+            sect[_pdf_sector(l)] = sect.get(_pdf_sector(l), 0.0) + max(l["val_act"], 0)
+        por_sec = [(k, v, kz(v)) for k, v in sorted(sect.items(), key=lambda x: -x[1])]
+        tot = sum(max(l["val_act"], 0) for l in linhas_carteira)
+        _pdf_donut(pdf, por_val, cxs[0], y0 + r, r, ri, "Por activo (valor actual)", kz(tot))
+        _pdf_donut(pdf, por_qtd, cxs[1], y0 + r, r, ri, "Por activo (quantidade de titulos)", "")
+        _pdf_donut(pdf, por_sec, cxs[2], y0 + r, r, ri, "Por sector", "")
+        y1 = y0 + r + 5 + 4.4 * 9 + 22
+        if y1 + 70 < pdf.h - 20:
+            res_liq = float(resumo.get("reservas", 0) or 0)
+            por_rea = float(resumo.get("capital_subscrito", 0) or 0) - float(resumo.get("capital_realizado", 0) or 0)
+            fundo = [("Carteira de acoes", tot, kz(tot)), ("Reservas de liquidez", res_liq, kz(res_liq)), ("Capital por realizar", max(por_rea, 0), kz(max(por_rea, 0)))]
+            _pdf_donut(pdf, fundo, cxs[1], y1 + r, r, ri, "Estrutura do fundo global", "")
+
+
 def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
     tx  = t()
-    pdf = FPDF()
+    pdf = _FPDFSeguro()
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page("L")  # Landscape
     pdf.set_margins(left=20, top=30, right=30)  # esq 2cm, sup 3cm, dir 3cm
@@ -3953,7 +4357,7 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         # Landscape A4 útil = 297 - 20(esq) - 30(dir) = 247mm
         # [20+48+10+28+28+32+32+30+19] = 247 exacto
         W = [20, 48, 10, 28, 28, 32, 32, 30, 19]
-        headers = ["Ticker","Nome","Qtd","P. Aquis.(Kz)","P. Actual(Kz)","V. Aquis.(Kz)","V. Actual(Kz)","Mais-Valia","Var.%"]
+        headers = ["Ticker","Nome","Qtd","P. Aquis.(Kz)","P. Actual(Kz)","V. Aquis.(Kz)","V. Actual(Kz)","Mais-Valia","Mais-V.%"]
         for h, w in zip(headers[:-1], W[:-1]):
             pdf.cell(w, 7, h, border="B", fill=True, ln=False, align="C")
         pdf.cell(0, 7, headers[-1], border="B", fill=True, ln=True, align="C")
@@ -4009,6 +4413,24 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
         pdf.cell(30, 7, kz(mais_valias_total), border="B", fill=True, align="R", ln=False)
         pdf.cell(19, 7, pct_bruto(round(mv_total_pct, 2)), border="B", fill=True, align="R", ln=True)
         pdf.set_text_color(0,0,0)
+    # ---- Relatório executivo: sumário, matriz multitemporal + Alpha, inflação real, risco e gráficos de anel ----
+    if linhas_carteira:
+        try:
+            _analise_pdf = calcular_analise_completa(df_activos)
+            try:
+                _mercado_pdf = ler_mercado_guardado()
+            except Exception:
+                _mercado_pdf = None
+            if _analise_pdf.get("ok"):
+                _pdf_bloco_executivo(pdf, _analise_pdf, resumo, _mercado_pdf, linhas_carteira)
+            else:
+                pdf.add_page("L")
+                _pdf_secao(pdf, "RELATORIO EXECUTIVO")
+                pdf.set_font("Helvetica", "I", 9)
+                pdf.multi_cell(0, 5, "Seccao analitica indisponivel: " + str(_analise_pdf.get("motivo") or "dados insuficientes."))
+        except Exception:
+            traceback.print_exc()
+            pdf.set_text_color(0, 0, 0)
     # Análise gráfica (página própria): composição, mais-valias por activo e evolução do património
     if linhas_carteira:
         try:
@@ -4120,9 +4542,27 @@ def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
 
 # ---------------- Avaliação ----------------
 def obter_premissas_macro() -> dict:
-    linha = consultar_um("SELECT inflacao, taxa_livre_risco, premio_risco, beta_banca, beta_telecom, beta_outros FROM premissas_macro WHERE id = 1")
-    return {"inflacao": float(linha[0]), "taxa_livre_risco": float(linha[1]), "premio_risco": float(linha[2]),
-            "beta_banca": float(linha[3]), "beta_telecom": float(linha[4]), "beta_outros": float(linha[5])}
+    _garantir_tabelas_extra()
+    linha = consultar_um("SELECT inflacao, taxa_livre_risco, premio_risco, beta_banca, beta_telecom, beta_outros, "
+                         "inflacao_homologa, inflacao_vigente_m, inflacao_projectada, inflacao_ref, inflacao_data FROM premissas_macro WHERE id = 1")
+    base = float(linha[0])
+    return {"inflacao": base, "taxa_livre_risco": float(linha[1]), "premio_risco": float(linha[2]),
+            "beta_banca": float(linha[3]), "beta_telecom": float(linha[4]), "beta_outros": float(linha[5]),
+            # três medidas para os relatórios; sem valor guardado, usam-se valores por defeito derivados da inflação anual
+            "inflacao_homologa": float(linha[6]) if linha[6] is not None else base,
+            "inflacao_vigente_m": float(linha[7]) if linha[7] is not None else (1 + base) ** (1 / 12) - 1,
+            "inflacao_projectada": float(linha[8]) if linha[8] is not None else base,
+            "inflacao_ref": linha[9] or "", "inflacao_data": linha[10]}
+
+
+def actualizar_inflacao_macro(homologa: float, vigente_m: float, projectada: float, ref: str):
+    """Valores em fracção (0.135 = 13,5%). `vigente_m` é a variação mensal mais recente."""
+    exigir_admin()
+    _garantir_tabelas_extra()
+    executar("UPDATE premissas_macro SET inflacao_homologa=%s, inflacao_vigente_m=%s, inflacao_projectada=%s, inflacao_ref=%s, inflacao_data=CURRENT_DATE WHERE id = 1",
+             (homologa, vigente_m, projectada, ref.strip()))
+    registar_auditoria("inflacao_macro", "premissas", "1", depois={"homologa": homologa, "vigente_m": vigente_m, "projectada": projectada, "ref": ref.strip()})
+
 
 def actualizar_premissas_macro(inflacao, rf, erp, beta_banca, beta_telecom, beta_outros):
     exigir_admin()
@@ -4180,6 +4620,7 @@ def calcular_metricas_avaliacao(av: dict, premissas: dict) -> dict:
 @st.cache_resource(show_spinner="A preparar a base de dados…")
 def _arranque_bd():
     inicializar_bd()
+    _garantir_tabelas_extra()
     return True
 
 
@@ -5572,6 +6013,1031 @@ def _painel_indices(df_activos: pd.DataFrame):
             st.caption(f"Histórico disponível só desde {serie_b.index[0]:%d/%m/%Y}; o período escolhido é mais longo.")
 
 
+# =========================================================
+# MOTOR ANALÍTICO MULTITEMPORAL
+# Rentabilidade (1D · 7D · 3M · 6M · 1A · 5A/acumulado) da carteira e dos índices APPO e BODIVA,
+# Alpha, ajuste à inflação de Angola (homóloga, vigente, projectada) e métricas de risco.
+# =========================================================
+HORIZONTES = [("1d", "Intradia (1D)"), ("7d", "Semanal (7D)"), ("3m", "Trimestral (3M)"),
+              ("6m", "Semestral (6M)"), ("1a", "Anual (YoY)"), ("5a", "Longo prazo (5A)")]
+
+
+def serie_valor_encadeada(painel: pd.DataFrame, qtds: dict) -> pd.Series:
+    """Série base 100 do valor de um cabaz (quantidade x preço). Quando um título entra no cabaz, a série é
+    encadeada sobre os títulos comuns, para a entrada não criar um salto artificial."""
+    cols = [c for c in painel.columns if qtds.get(c, 0) and qtds[c] > 0]
+    if not cols:
+        return pd.Series(dtype=float)
+    V = painel[cols].mul(pd.Series({c: float(qtds[c]) for c in cols}), axis=1)
+    valores, anterior, ultimo = {}, None, 100.0
+    for dia, linha in V.iterrows():
+        if linha.notna().sum() == 0:
+            continue
+        if anterior is None:
+            valores[dia], ultimo = 100.0, 100.0
+        else:
+            comuns = linha.notna() & anterior.notna()
+            den = float(anterior[comuns].sum()) if comuns.any() else 0.0
+            razao = float(linha[comuns].sum()) / den if den > 0 else 1.0
+            ultimo = ultimo * razao
+            valores[dia] = ultimo
+        anterior = linha
+    return pd.Series(valores).sort_index()
+
+
+def _ret_pct(serie, periodo: str, inicio_comum=None):
+    """Variação % no horizonte. None se a janela não está completa (excepto 5A em modo acumulado)."""
+    if serie is None or len(serie) < 2:
+        return None
+    if periodo == "5a" and inicio_comum is not None:
+        s = serie[serie.index >= inicio_comum]
+        if len(s) < 2 or not float(s.iloc[0]):
+            return None
+        return (float(s.iloc[-1]) / float(s.iloc[0]) - 1) * 100
+    _, var, completa = janela_periodo(serie, periodo)
+    return var if completa else None
+
+
+def _dias_horizonte(serie_ref, periodo: str, inicio_comum=None) -> float:
+    if periodo == "1d":
+        if serie_ref is not None and len(serie_ref) >= 2:
+            return float(max((serie_ref.index[-1] - serie_ref.index[-2]).days, 1))
+        return 1.0
+    if periodo == "5a" and inicio_comum is not None and serie_ref is not None and len(serie_ref):
+        s = serie_ref[serie_ref.index >= inicio_comum]
+        if len(s) >= 2:
+            return float(max((s.index[-1] - s.index[0]).days, 1))
+    return float(_PERIODO_DIAS[periodo])
+
+
+def inflacao_no_periodo(dias: float, yoy: float, vig_m: float, proj: float) -> dict:
+    """Inflação acumulada (%) em `dias`, a partir da taxa homóloga, da variação mensal vigente e da projectada."""
+    return {"yoy": ((1 + yoy) ** (dias / 365.0) - 1) * 100,
+            "vig": ((1 + vig_m) ** (dias / 30.4375) - 1) * 100,
+            "proj": ((1 + proj) ** (dias / 365.0) - 1) * 100,
+            "dias": dias}
+
+
+def retorno_real(nominal, inflacao_pct):
+    if nominal is None or inflacao_pct is None:
+        return None
+    return ((1 + nominal / 100.0) / (1 + inflacao_pct / 100.0) - 1) * 100
+
+
+def metricas_risco(serie, ref=None, rf_anual=None) -> dict:
+    """σ diário/anualizado, drawdown, VaR 95%, e (face a `ref`) tracking error, information ratio e beta."""
+    import numpy as np
+    if serie is None or len(serie) < 3:
+        return {"n": 0}
+    s = serie.dropna()
+    r = s.pct_change().dropna()
+    n = len(r)
+    out = {"n": n}
+    if n >= 2:
+        out["sigma_d"] = float(r.std(ddof=1)) * 100
+        out["sigma_a"] = out["sigma_d"] * (252 ** 0.5)
+    out["dd_max"] = float((s / s.cummax() - 1).min()) * 100
+    if n >= 20:
+        out["var95"] = float(np.percentile(r, 5)) * 100
+    if ref is not None and len(ref) >= 3:
+        rr = ref.dropna().pct_change().dropna()
+        j = pd.concat([r.rename("a"), rr.rename("b")], axis=1, join="inner").dropna()
+        if len(j) >= 5:
+            dif = j["a"] - j["b"]
+            sd = float(dif.std(ddof=1))
+            if sd > 0:
+                out["te"] = sd * (252 ** 0.5) * 100
+                out["ir"] = float(dif.mean()) * 252 / (sd * (252 ** 0.5))
+            vb = float(j["b"].var(ddof=1))
+            if vb > 0:
+                out["beta"] = float(j["a"].cov(j["b"])) / vb
+    if rf_anual is not None and n >= 30 and out.get("sigma_a"):
+        out["sharpe"] = (float(r.mean()) * 252 - rf_anual) / (out["sigma_a"] / 100)
+    return out
+
+
+def calcular_analise_multitemporal(painel, carteira, tk_accoes, premissas, df_activos=None, bases=None) -> dict:
+    """Devolve um dicionário com tudo o que a página e o PDF precisam. `ok` False + `motivo` quando não há dados."""
+    import numpy as np
+    res = {"ok": False, "motivo": "", "avisos": []}
+    if painel is None or painel.empty or len(painel) < 2:
+        res["motivo"] = "Ainda não há histórico de cotações suficiente (são precisos pelo menos 2 dias)."
+        return res
+    if carteira is None or carteira.empty:
+        res["motivo"] = "A carteira real do Clube está vazia (Painel do Administrador › Carteira Real)."
+        return res
+    precos_activos = {}
+    if df_activos is not None and not df_activos.empty:
+        precos_activos = {_tk_norm(r["ticker"]): _num_seguro(r["preco"]) for _, r in df_activos.iterrows() if str(r["ticker"] or "").strip()}
+    posicoes, qtds = [], {}
+    for _, p in carteira.iterrows():
+        tk, qtd = _tk_norm(p["ticker"]), _num_seguro(p["qtd"])
+        if not tk or qtd <= 0:
+            continue
+        s_tk = painel[tk].dropna() if tk in painel.columns else pd.Series(dtype=float)
+        preco = precos_activos.get(tk) or (float(s_tk.iloc[-1]) if len(s_tk) else 0.0)
+        valor, custo = qtd * preco, _num_seguro(p["valor_aquisicao"])
+        if tk in painel.columns and len(s_tk) >= 2:
+            qtds[tk] = qtds.get(tk, 0) + qtd
+        else:
+            res["avisos"].append(f"{p['nome']}: sem histórico de cotações; fica fora das séries de rentabilidade e risco.")
+        posicoes.append({"tk": tk, "ticker": str(p["ticker"] or "").strip().upper(), "nome": str(p["nome"]), "qtd": qtd, "preco_act": preco,
+                         "valor": valor, "custo": custo, "mais_valia": valor - custo,
+                         "mais_valia_pct": ((valor / custo - 1) * 100) if custo else None, "tem_serie": tk in qtds})
+    total = sum(x["valor"] for x in posicoes)
+    if not posicoes or total <= 0:
+        res["motivo"] = "Não foi possível valorizar a carteira (faltam quantidades ou cotações)."
+        return res
+    for x in posicoes:
+        x["peso"] = x["valor"] / total
+    s_cart = serie_valor_encadeada(painel, qtds)
+    if len(s_cart) < 2:
+        res["motivo"] = "Os títulos em carteira ainda não têm histórico suficiente."
+        return res
+    painel_acc = painel[[c for c in painel.columns if c in tk_accoes]]
+    s_appo = None
+    if not painel_acc.empty:
+        s_appo, _ = calcular_indice_appo(painel_acc, bases or {})
+    s_bod = serie_valor_encadeada(painel_acc, {c: 1.0 for c in painel_acc.columns}) if not painel_acc.empty else pd.Series(dtype=float)
+    base_series = [s for s in (s_cart, s_appo, s_bod) if s is not None and len(s) >= 2]
+    usar_acum = not all(janela_periodo(s, "5a")[2] for s in base_series)
+    inicio_comum = max(s.index[0] for s in base_series) if usar_acum else None
+
+    ps = [p for p, _ in HORIZONTES]
+    linha = lambda s: {p: _ret_pct(s, p, inicio_comum) for p in ps}
+    ret_c, ret_a, ret_b = linha(s_cart), linha(s_appo), linha(s_bod)
+    dif = lambda x, y: {p: (x[p] - y[p]) if x[p] is not None and y[p] is not None else None for p in ps}
+
+    yoy, vig, proj = premissas["inflacao_homologa"], premissas["inflacao_vigente_m"], premissas["inflacao_projectada"]
+    infl = {p: inflacao_no_periodo(_dias_horizonte(s_cart, p, inicio_comum), yoy, vig, proj) for p in ps}
+    real = {p: ({k: retorno_real(ret_c[p], infl[p][k]) for k in ("yoy", "vig", "proj")} if ret_c[p] is not None else None) for p in ps}
+
+    for x in posicoes:
+        if x["tem_serie"]:
+            s_t = painel[x["tk"]].dropna()
+            x["ret"] = {p: _ret_pct(s_t, p, inicio_comum) for p in ps}
+            rk = metricas_risco(s_t)
+            x["sigma_a"], x["dd_max"] = rk.get("sigma_a"), rk.get("dd_max")
+        else:
+            x["ret"], x["sigma_a"], x["dd_max"] = {p: None for p in ps}, None, None
+        x["contrib"] = None
+    com_serie = [x for x in posicoes if x["tem_serie"]]
+    try:
+        R = painel[[x["tk"] for x in com_serie]].pct_change().dropna(how="any")
+        if len(com_serie) >= 1 and len(R) >= 10:
+            w = np.array([x["valor"] for x in com_serie], dtype=float)
+            w = w / w.sum()
+            cov = R.cov().values
+            var_p = float(w @ cov @ w)
+            if var_p > 0:
+                mc = w * (cov @ w) / var_p
+                for x, c in zip(com_serie, mc):
+                    x["contrib"] = float(c)
+    except Exception:
+        pass
+    posicoes.sort(key=lambda x: -x["valor"])
+    hhi = sum(x["peso"] ** 2 for x in posicoes)
+    rf = premissas.get("taxa_livre_risco")
+    res.update({
+        "ok": True, "ret_carteira": ret_c, "ret_appo": ret_a, "ret_bodiva": ret_b,
+        "alpha_appo": dif(ret_c, ret_a), "alpha_bodiva": dif(ret_c, ret_b),
+        "inflacao": infl, "real": real, "acumulado": usar_acum, "inicio_comum": inicio_comum,
+        "titulos": posicoes, "premissas": premissas, "valor_total": total, "custo_total": sum(x["custo"] for x in posicoes),
+        "concentracao": {"hhi": hhi, "n_efectivo": (1 / hhi) if hhi else 0.0, "maior": (posicoes[0]["nome"], posicoes[0]["peso"])},
+        "risco": {"carteira": metricas_risco(s_cart, s_appo if s_appo is not None and len(s_appo) >= 3 else None, rf),
+                  "appo": metricas_risco(s_appo) if s_appo is not None else {},
+                  "bodiva": metricas_risco(s_bod)},
+        "datas": {"ini": s_cart.index[0], "fim": s_cart.index[-1], "n_obs": len(s_cart)},
+        "serie_carteira": s_cart, "serie_appo": s_appo, "serie_bodiva": s_bod,
+    })
+    # beta face ao Índice BODIVA (a métrica de risco da carteira só calculou TE/IR face ao APPO)
+    rb = metricas_risco(s_cart, s_bod if len(s_bod) >= 3 else None)
+    if "beta" in rb:
+        res["risco"]["carteira"]["beta"] = rb["beta"]
+    if len(s_cart) < 20:
+        res["avisos"].append(f"Apenas {len(s_cart)} dias de histórico: as métricas de risco são indicativas. Importa o histórico de cotações (Painel do Administrador › Cotações & Activos) para as tornar robustas.")
+    return res
+
+
+def calcular_analise_completa(df_activos: pd.DataFrame) -> dict:
+    """Lê cotações, carteira real e premissas na BD e corre o motor."""
+    carteira = obter_carteira_real()
+    prem = obter_premissas_macro()
+    acoes = df_activos[df_activos["tipo"].apply(_eh_accao)] if not df_activos.empty else df_activos
+    tk_acc = {_tk_norm(x) for x in acoes["ticker"] if str(x or "").strip()} if not acoes.empty else set()
+    tk_cart = {_tk_norm(x) for x in carteira["ticker"] if str(x or "").strip()} if not carteira.empty else set()
+    painel = obter_painel_precos(tk_acc | tk_cart) if (tk_acc | tk_cart) else pd.DataFrame()
+    return calcular_analise_multitemporal(painel, carteira, tk_acc, prem, df_activos, obter_bases_indice_appo())
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _analise_cacheada():
+    return calcular_analise_completa(obter_activos())
+
+
+def obter_analise() -> dict:
+    exigir_participante()
+    try:
+        return _analise_cacheada()
+    except Exception as e:
+        traceback.print_exc()
+        return {"ok": False, "motivo": f"Erro no cálculo analítico: {type(e).__name__}: {e}", "avisos": []}
+
+
+def _melhor_horizonte(a: dict):
+    for p, _ in reversed(HORIZONTES):
+        if a["ret_carteira"].get(p) is not None:
+            return p
+    return None
+
+
+def gerar_comentario_executivo(a: dict, resumo: dict, mercado=None) -> list:
+    """Comentário macro e teses de investimento, gerados por regras a partir dos dados (lista de (título, texto))."""
+    out = []
+    pr = a["premissas"]
+    # 1) Mercado
+    txt = ""
+    if mercado is not None and not mercado.empty and "variacao" in mercado.columns:
+        v = pd.to_numeric(mercado["variacao"], errors="coerce").dropna()
+        if len(v):
+            sobem, descem = int((v > 0).sum()), int((v < 0).sum())
+            m = mercado.assign(_v=pd.to_numeric(mercado["variacao"], errors="coerce")).dropna(subset=["_v"])
+            top, bot = m.loc[m["_v"].idxmax()], m.loc[m["_v"].idxmin()]
+            txt = (f"A BODIVA tem {len(mercado)} titulos cotados na tabela de mercado; na ultima sessao registada {sobem} subiram, {descem} desceram "
+                   f"e {len(v) - sobem - descem} ficaram estaveis. Maior subida: {top['ticker']} ({top['_v']:+.2f}%); maior queda: {bot['ticker']} ({bot['_v']:+.2f}%). ")
+    if a["serie_appo"] is not None and len(a["serie_appo"]) >= 2:
+        txt += f"O Indice APPO esta em {float(a['serie_appo'].iloc[-1]):.2f} pontos (base 100 em 19/08/2026)."
+    out.append(("Panorama do mercado (BODIVA)", txt or "Sem dados de mercado suficientes para um panorama; a leitura baseia-se nos titulos acompanhados pelo Clube."))
+    # 2) Desempenho e alpha
+    p = _melhor_horizonte(a)
+    if p:
+        rc, ra, rb = a["ret_carteira"][p], a["ret_appo"].get(p), a["ret_bodiva"].get(p)
+        rot_h = (f"acumulado desde {a['inicio_comum']:%d/%m/%Y}" if (p == "5a" and a.get("acumulado") and a.get("inicio_comum") is not None)
+                 else _rotulo_horiz(a, p, curto=False))
+        t2 = f"No horizonte {rot_h}, a carteira do Clube rendeu {rc:+.2f}%"
+        if ra is not None and rb is not None:
+            al_a, al_b = rc - ra, rc - rb
+            t2 += (f", contra {ra:+.2f}% do Indice APPO e {rb:+.2f}% do Indice BODIVA: alpha de {al_a:+.2f} p.p. face ao APPO e {al_b:+.2f} p.p. face a BODIVA. "
+                   + ("A carteira supera ambos os indices." if al_a > 0 and al_b > 0 else
+                      "A carteira fica abaixo de ambos os indices." if al_a < 0 and al_b < 0 else "O resultado e misto face aos dois indices."))
+        else:
+            t2 += ". Os indices de referencia ainda nao tem historico comparavel neste horizonte."
+        out.append(("Desempenho e Alpha", t2))
+        # 3) Inflação
+        rr = a["real"].get(p)
+        if rr:
+            t3 = (f"Com a inflacao homologa de {pr['inflacao_homologa'] * 100:.2f}%, a rentabilidade real no mesmo horizonte e {rr['yoy']:+.2f}% "
+                  f"({'ganho' if rr['yoy'] > 0 else 'perda'} de poder de compra). Deflacionada pela inflacao vigente ({pr['inflacao_vigente_m'] * 100:.2f}% m/m) e de {rr['vig']:+.2f}%, "
+                  f"e pela projectada ({pr['inflacao_projectada'] * 100:.2f}% a 12 meses) de {rr['proj']:+.2f}%. "
+                  f"Para preservar o capital nos proximos 12 meses a carteira precisa de render pelo menos {pr['inflacao_projectada'] * 100:.1f}% nominais.")
+            out.append(("Ajuste a inflacao e poder de compra", t3))
+    # 4) Risco
+    rk, cc = a["risco"]["carteira"], a["concentracao"]
+    t4 = f"A maior posicao e {cc['maior'][0]} com {cc['maior'][1] * 100:.1f}% da carteira; o numero efectivo de activos e {cc['n_efectivo']:.1f}. "
+    if rk.get("sigma_a") is not None:
+        t4 += f"A volatilidade anualizada estimada e {rk['sigma_a']:.1f}% e o drawdown maximo observado {rk['dd_max']:.1f}%."
+    else:
+        t4 += "Ainda nao ha observacoes suficientes para estimar a volatilidade."
+    out.append(("Risco e concentracao", t4))
+    # 5) Teses
+    teses = []
+    rr = a["real"].get(p) if p else None
+    if rr and rr["proj"] < 0:
+        teses.append("Tese 1 - Preservacao de capital: o retorno actual nao cobre a inflacao projectada; favorecer titulos com rendimento esperado "
+                     f"acima de {pr['inflacao_projectada'] * 100:.1f}% e rever posicoes de baixa liquidez ou sem dividendo.")
+    else:
+        teses.append("Tese 1 - Preservacao de capital: o retorno actual cobre a inflacao projectada; manter a disciplina e testar a carteira com um cenario de inflacao 5 p.p. mais alta.")
+    if cc["maior"][1] > 0.40:
+        teses.append(f"Tese 2 - Diversificacao: {cc['maior'][0]} pesa mais de 40% da carteira; avaliar reforcos noutros sectores respeitando os limites do Clube (10% por activo, 20% por sector no fundo global).")
+    else:
+        teses.append("Tese 2 - Diversificacao: a concentracao esta em nivel aceitavel; manter a monitorizacao dos limites do Clube (10% por activo, 20% por sector no fundo global).")
+    pior = [t_ for t_ in a["titulos"] if p and t_["ret"].get(p) is not None]
+    if pior:
+        pi = min(pior, key=lambda t_: t_["ret"][p])
+        teses.append(f"Tese 3 - Revisao de posicoes: {_pdf_nome_curto(pi['nome'])} e o pior contributo no horizonte ({pi['ret'][p]:+.2f}%); confirmar se a tese registada continua valida (Principio 9).")
+    out.append(("Teses de investimento e posicionamento tatico da APPO", "\n".join(teses)))
+    return out
+
+
+# =========================================================
+# MERCADO BODIVA — TODOS OS TÍTULOS COTADOS (automático de minuto a minuto + resgate manual do administrador)
+# =========================================================
+def _nk(k) -> str:
+    import unicodedata
+    n = "".join(c for c in unicodedata.normalize("NFKD", str(k)) if not unicodedata.combining(c))
+    return "".join(c for c in n.lower() if c.isalnum())
+
+
+_MK_TICKER = ("ticker", "symbol", "simbolo", "sigla", "codigo", "cod", "isin")
+_MK_NOME = ("nome", "name", "designacao", "descricao", "description", "emitente", "titulo", "security")
+_MK_PRECO = ("ultimopreco", "lastprice", "precofecho", "closeprice", "cotacao", "precoultimo", "preco", "price", "ultimo", "last", "fecho", "close", "valor")
+_MK_PRECO_EXCL = ("anterior", "abertura", "open", "max", "min", "prev", "var", "vol", "quant", "media", "avg", "change", "percent", "pct",
+                  "oferta", "procura", "bid", "ask", "compra", "venda", "qtd", "total")
+_MK_VAR = ("variacao", "variation", "var", "change", "chg", "percent", "pct")
+_MK_ANT = ("precoanterior", "fechoanterior", "anterior", "previous", "prev")
+_MK_VOL = ("volume", "quantidade", "qtd", "negociad", "quantity", "qty")
+_MK_TIPO = ("tipo", "type", "categoria", "classe", "class", "segmento", "mercado", "market")
+
+
+def _valor_por_chaves(d: dict, candidatos, excluir=()):
+    chaves = {_nk(k): k for k in d}
+    for c in candidatos:                               # 1) nome exacto
+        if c in chaves and not any(x in c for x in excluir):
+            v = d[chaves[c]]
+            if v not in (None, "") and not isinstance(v, (dict, list)):
+                return v
+    for c in candidatos:                               # 2) nome que contém o candidato
+        for nk, k in chaves.items():
+            if c in nk and not any(x in nk for x in excluir):
+                v = d[k]
+                if v not in (None, "") and not isinstance(v, (dict, list)):
+                    return v
+    return None
+
+
+def _registos_para_df(registos: list) -> pd.DataFrame:
+    """Converte uma lista de dicionários (JSON da BODIVA, linha de HTML ou de ficheiro) na tabela de mercado."""
+    linhas = []
+    for d in registos:
+        if not isinstance(d, dict):
+            continue
+        tk = _valor_por_chaves(d, _MK_TICKER) or d.get("__chave__")
+        preco = _numero_flex(_valor_por_chaves(d, _MK_PRECO, _MK_PRECO_EXCL))
+        if not tk or preco is None or preco <= 0:
+            continue
+        var = _numero_flex(_valor_por_chaves(d, _MK_VAR, ("abs",)))
+        if var is not None and abs(var) > 100:
+            var = None
+        if var is None:
+            ant = _numero_flex(_valor_por_chaves(d, _MK_ANT))
+            if ant and ant > 0:
+                var = (preco / ant - 1) * 100
+        vol = _numero_flex(_valor_por_chaves(d, _MK_VOL, ("valor",)))
+        linhas.append({"ticker": str(tk).strip().upper(), "nome": str(_valor_por_chaves(d, _MK_NOME) or "").strip(),
+                       "tipo": str(_valor_por_chaves(d, _MK_TIPO) or "").strip(), "preco": preco, "variacao": var, "volume": vol})
+    if not linhas:
+        return pd.DataFrame(columns=["ticker", "nome", "tipo", "preco", "variacao", "volume"])
+    return pd.DataFrame(linhas).drop_duplicates("ticker", keep="last").reset_index(drop=True)
+
+
+def _listas_de_registos(dados, _prof: int = 0):
+    if _prof > 6:
+        return
+    if isinstance(dados, list):
+        if dados and all(isinstance(x, dict) for x in dados[:5]):
+            yield dados
+        for x in dados[:50]:
+            if isinstance(x, (dict, list)):
+                yield from _listas_de_registos(x, _prof + 1)
+    elif isinstance(dados, dict):
+        if len(dados) >= 3 and all(isinstance(v, dict) for v in dados.values()):
+            yield [dict(v, __chave__=k) for k, v in dados.items()]
+        for v in dados.values():
+            if isinstance(v, (dict, list)):
+                yield from _listas_de_registos(v, _prof + 1)
+
+
+def _parsear_resposta_bodiva(resp) -> pd.DataFrame:
+    melhor = pd.DataFrame()
+    try:
+        dados = resp.json()
+    except ValueError:
+        dados = None
+    if dados is not None:
+        for lista in _listas_de_registos(dados):
+            df = _registos_para_df(lista)
+            if len(df) > len(melhor):
+                melhor = df
+    if melhor.empty:   # recurso: tabela HTML
+        try:
+            import io
+            for tab in pd.read_html(io.StringIO(resp.text)):
+                df = _registos_para_df(tab.to_dict("records"))
+                if len(df) > len(melhor):
+                    melhor = df
+        except Exception:
+            pass
+    return melhor
+
+
+def _pedido_bodiva():
+    cabecalhos = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*", "Referer": "https://www.bodiva.ao/",
+    }
+    try:
+        resp = requests.get(URL_BODIVA_RESUMO, headers=cabecalhos, timeout=20)
+    except requests.exceptions.SSLError:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        resp = requests.get(URL_BODIVA_RESUMO, headers=cabecalhos, timeout=20, verify=False)   # dados públicos, só de leitura
+    if resp.status_code != 200:
+        raise ValueError(f"A BODIVA respondeu com o código HTTP {resp.status_code}.")
+    return resp
+
+
+def cfg_mercado_get(chave: str, padrao: str = "") -> str:
+    _garantir_tabelas_extra()
+    linha = consultar_um("SELECT valor FROM config_mercado WHERE chave = %s", (chave,))
+    return linha[0] if linha and linha[0] is not None else padrao
+
+
+def cfg_mercado_set(chave: str, valor: str):
+    exigir_admin()
+    _garantir_tabelas_extra()
+    executar("INSERT INTO config_mercado (chave, valor) VALUES (%s, %s) ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor", (chave, valor))
+
+
+def _guardar_mercado(df: pd.DataFrame, fonte: str):
+    _garantir_tabelas_extra()
+    nn = lambda v: None if v is None or (isinstance(v, float) and v != v) else float(v)
+    linhas = [(r["ticker"], r["nome"], r["tipo"], nn(r["preco"]), nn(r["variacao"]), nn(r["volume"]), fonte) for _, r in df.iterrows()]
+    sql = ("INSERT INTO mercado_bodiva (ticker, nome, tipo, preco, variacao, volume, fonte, actualizado_em) VALUES (%s,%s,%s,%s,%s,%s,%s,NOW()) "
+           "ON CONFLICT (ticker) DO UPDATE SET nome = COALESCE(NULLIF(EXCLUDED.nome, ''), mercado_bodiva.nome), "
+           "tipo = COALESCE(NULLIF(EXCLUDED.tipo, ''), mercado_bodiva.tipo), preco = EXCLUDED.preco, variacao = EXCLUDED.variacao, "
+           "volume = EXCLUDED.volume, fonte = EXCLUDED.fonte, actualizado_em = NOW()")
+
+    def _run(conn):
+        with conn.cursor() as cur:
+            psycopg2.extras.execute_batch(cur, sql, linhas)
+    _com_reconexao(_run)
+
+
+def ler_mercado_guardado() -> pd.DataFrame:
+    _garantir_tabelas_extra()
+    df = consultar_df("SELECT ticker, nome, tipo, preco, variacao, volume, fonte, actualizado_em FROM mercado_bodiva ORDER BY nome, ticker")
+    for c in ("preco", "variacao", "volume"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+
+def _gravar_historico_clube(df: pd.DataFrame):
+    """Opcional (ligado pelo administrador): regista no histórico o último preço do dia dos títulos do Clube."""
+    if cfg_mercado_get("auto_historico", "0") != "1":
+        return
+    activos = obter_activos()
+    mapa = {_tk_norm(r["ticker"]): float(r["preco"]) for _, r in activos.iterrows() if str(r["ticker"] or "").strip()}
+    hoje = datetime.now().date()
+    for _, r in df.iterrows():
+        atual = mapa.get(_tk_norm(r["ticker"]))
+        if atual is None or r["preco"] is None or r["preco"] <= 0:
+            continue
+        if atual > 0 and abs(r["preco"] / atual - 1) > 0.5:      # mesma salvaguarda de ±50% do fluxo manual
+            continue
+        executar("INSERT INTO historico_cotacoes (dia, ticker, preco) VALUES (%s, %s, %s) ON CONFLICT (ticker, dia) DO UPDATE SET preco = EXCLUDED.preco",
+                 (hoje, str(r["ticker"]).strip().upper(), float(r["preco"])))
+
+
+@st.cache_data(ttl=55, show_spinner=False)
+def _mercado_bodiva_remoto() -> dict:
+    """Vai à BODIVA no máximo uma vez por minuto (cache partilhada) e guarda o resultado na base de dados."""
+    ts = datetime.now()
+    try:
+        df = _parsear_resposta_bodiva(_pedido_bodiva())
+        if df.empty:
+            return {"ok": False, "erro": "A resposta da BODIVA não contém títulos reconhecíveis (o formato pode ter mudado).", "ts": ts, "n": 0}
+        _guardar_mercado(df, "Automática (BODIVA)")
+        try:
+            _gravar_historico_clube(df)
+        except Exception:
+            traceback.print_exc()
+        return {"ok": True, "erro": None, "ts": ts, "n": len(df)}
+    except Exception as e:
+        return {"ok": False, "erro": f"{type(e).__name__}: {e}", "ts": ts, "n": 0}
+
+
+def importar_mercado_manual(df_ficheiro: pd.DataFrame) -> tuple:
+    """Resgate manual: grava a tabela de mercado a partir de um CSV/Excel do administrador. (importadas, ignoradas)"""
+    exigir_admin()
+    df = _registos_para_df(df_ficheiro.to_dict("records"))
+    if df.empty:
+        return 0, len(df_ficheiro)
+    _guardar_mercado(df, f"Manual (ficheiro) · {utilizador_actual()}")
+    try:
+        _gravar_historico_clube(df)
+    except Exception:
+        pass
+    registar_auditoria("mercado_manual", "mercado", "BODIVA", depois={"linhas": len(df)})
+    return len(df), max(len(df_ficheiro) - len(df), 0)
+
+
+def gerar_xlsx_mercado(df: pd.DataFrame) -> bytes:
+    linhas = [[r["ticker"], r["nome"], r["tipo"], r["preco"], r["variacao"], r["volume"], r["fonte"],
+               r["actualizado_em"].strftime("%d/%m/%Y %H:%M") if pd.notna(r["actualizado_em"]) else ""] for _, r in df.iterrows()]
+    return gerar_xlsx_tabela("Mercado BODIVA - todos os títulos cotados", f"Gerado em {agora()}",
+                             ["Ticker", "Título", "Tipo", "Preço (Kz)", "Var. %", "Volume", "Fonte", "Actualizado"], linhas,
+                             [14, 38, 16, 16, 10, 14, 26, 18], [None, None, None, "#,##0.00", '+0.00;-0.00;0.00', "#,##0", None, None],
+                             folha="Mercado BODIVA", nota="Dados públicos da BODIVA; confirma sempre no site oficial antes de decidir.", cor_cond=(5,))
+
+
+def _mercado_corpo():
+    estado = _mercado_bodiva_remoto()
+    df = ler_mercado_guardado()
+    admin = eh_admin()
+    if estado["ok"]:
+        render_html(f'<span class="fx-estado ok">🟢 Ligado à BODIVA · actualizado às {estado["ts"]:%H:%M:%S} · {estado["n"]} títulos · nova leitura automática a cada minuto</span>')
+    elif not df.empty:
+        ult = df["actualizado_em"].max()
+        render_html(f'<span class="fx-estado aviso">🟠 Ligação automática indisponível · a mostrar os últimos valores guardados '
+                    f'({ult:%d/%m/%Y %H:%M}, {_esc(str(df.sort_values("actualizado_em").iloc[-1]["fonte"]))})</span>')
+    else:
+        render_html('<span class="fx-estado erro">🔴 Sem dados de mercado de momento. O administrador pode carregar a tabela manualmente.</span>')
+    if admin and estado["erro"]:
+        st.caption(f"Detalhe técnico (só administradores): {estado['erro']}")
+    render_html('<div class="fx-aviso-membros"><b>Nota para os membros:</b> as cotações vêm da BODIVA e são lidas automaticamente de minuto a minuto. '
+                'Se a leitura falhar, mostramos o último valor validado, com a respectiva fonte, data e hora, para que nunca vejas dados sem origem. '
+                'Confirma sempre no site oficial antes de decidir.</div>')
+    if df.empty:
+        st.info("Ainda não há títulos na tabela de mercado.")
+        return
+    v = df["variacao"]
+    sobem, descem = int((v > 0).sum()), int((v < 0).sum())
+    estaveis = len(df) - sobem - descem
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Títulos cotados", len(df))
+    c2.metric("🟢 A subir", sobem)
+    c3.metric("🔴 A descer", descem)
+    c4.metric("⚪ Estáveis / s.d.", estaveis)
+    f1, f2 = st.columns([2, 1])
+    q = f1.text_input("🔎 Procurar título ou ticker", key="mkt_q", placeholder="Ex.: BAI, Unitel…")
+    tipos = ["Todos"] + sorted([t_ for t_ in df["tipo"].dropna().unique().tolist() if str(t_).strip()])
+    tipo_f = f2.selectbox("Tipo", tipos, key="mkt_tipo")
+    vis = df.copy()
+    if q.strip():
+        m = q.strip().lower()
+        vis = vis[vis["ticker"].str.lower().str.contains(m, na=False) | vis["nome"].str.lower().str.contains(m, na=False)]
+    if tipo_f != "Todos":
+        vis = vis[vis["tipo"] == tipo_f]
+    tabela = vis.rename(columns={"ticker": "Ticker", "nome": "Título", "tipo": "Tipo", "preco": "Preço (Kz)", "variacao": "Var. %",
+                                 "volume": "Volume", "fonte": "Fonte", "actualizado_em": "Actualizado"})
+    sty = (tabela.style.format({"Preço (Kz)": kz2, "Var. %": lambda x: "—" if pd.isna(x) else pct_bruto(x),
+                                "Volume": lambda x: "—" if pd.isna(x) else f"{x:,.0f}".replace(",", " "),
+                                "Actualizado": lambda x: x.strftime("%d/%m %H:%M") if pd.notna(x) else "—"})
+           .map(cor_variacao, subset=["Var. %"]))
+    st.dataframe(sty, hide_index=True)
+    with st.expander("🍩 Amplitude e composição do mercado", expanded=True):
+        g1, g2 = st.columns(2)
+        with g1:
+            grafico_anel(pd.DataFrame({"Estado": ["A subir", "A descer", "Estáveis / s.d."], "Títulos": [sobem, descem, estaveis]}),
+                         "Estado", "Títulos", "Amplitude do mercado", centro_valor=str(len(df)), paleta=["#16A34A", "#E11D48", "#94A3B8"], formato="num", chave="anel_amplitude")
+        with g2:
+            tp = df.assign(Tipo=df["tipo"].replace("", "Sem tipo")).groupby("Tipo").size().reset_index(name="Títulos")
+            grafico_anel(tp, "Tipo", "Títulos", "Títulos por tipo", centro_valor=str(len(df)), formato="num", chave="anel_tipos")
+    d1, d2 = st.columns(2)
+    xl = _xlsx_seguro(lambda: gerar_xlsx_mercado(tabela.rename(columns={"Ticker": "ticker", "Título": "nome", "Tipo": "tipo", "Preço (Kz)": "preco",
+                                                                         "Var. %": "variacao", "Volume": "volume", "Fonte": "fonte", "Actualizado": "actualizado_em"})))
+    if xl:
+        d1.download_button("⬇️ Descarregar Excel (mercado)", data=xl, file_name=f"mercado_bodiva_{datetime.now():%Y%m%d}.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_mkt_xlsx")
+    d2.download_button("⬇️ Descarregar CSV (mercado)", data=vis.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                       file_name=f"mercado_bodiva_{datetime.now():%Y%m%d}.csv", mime="text/csv", key="dl_mkt_csv")
+
+
+# Actualização automática: o fragmento volta a correr de 60 em 60 segundos sem recarregar a página toda.
+_mercado_fragmento = st.fragment(run_every=60)(_mercado_corpo) if hasattr(st, "fragment") else _mercado_corpo
+
+
+def _admin_mercado():
+    st.markdown("#### 🛟 Área do administrador · resgate manual e diagnóstico")
+    st.caption("Se a leitura automática falhar, carrega aqui a tabela do teu computador. Os dados ficam guardados e visíveis para todos os membros, com a indicação de fonte manual.")
+    with st.expander("📥 Carregar tabela de mercado (CSV ou Excel)"):
+        st.caption("Colunas aceites (cabeçalhos flexíveis): **ticker**, **nome**, **tipo**, **preço** (ou cotação/último), **variação** e **volume**.")
+        modelo = "ticker;nome;tipo;preco;variacao;volume\nBAIAAAAA;BAI;ACÇÃO;94600;1,25;350\n"
+        st.download_button("Modelo de ficheiro (CSV)", data=modelo.encode("utf-8-sig"), file_name="modelo_mercado_bodiva.csv", mime="text/csv", key="mkt_modelo")
+        f = st.file_uploader("Ficheiro de mercado", type=["csv", "xlsx"], key="mkt_up")
+        if f is not None and st.button("Importar tabela de mercado", key="mkt_imp"):
+            try:
+                dfi = pd.read_csv(f, sep=None, engine="python", encoding="utf-8-sig") if f.name.lower().endswith(".csv") else pd.read_excel(f)
+                if len(dfi) > 5000:
+                    st.error("O ficheiro tem demasiadas linhas (máximo 5 000).")
+                else:
+                    ok, mau = importar_mercado_manual(dfi)
+                    (st.success if ok else st.error)(f"Importados {ok} títulos" + (f"; {mau} linhas ignoradas (ticker ou preço inválidos)." if mau else ".") if ok else
+                                                     "Nenhuma linha válida: confirma os cabeçalhos (ticker, preço…).")
+            except Exception as e:
+                st.error(f"Não foi possível importar: {e}")
+    with st.expander("⚙️ Opções de automatização"):
+        auto_h = st.toggle("Gravar automaticamente no histórico o preço dos títulos do Clube (último preço do dia)",
+                           value=cfg_mercado_get("auto_historico", "0") == "1", key="mkt_auto_hist")
+        if auto_h != (cfg_mercado_get("auto_historico", "0") == "1"):
+            cfg_mercado_set("auto_historico", "1" if auto_h else "0")
+            st.rerun()
+        if st.button("✅ Aplicar estes preços aos activos do Clube (salvaguarda ±50%)", key="mkt_aplicar"):
+            mk = ler_mercado_guardado()
+            mapa = {_tk_norm(r["ticker"]): float(r["preco"]) for _, r in mk.iterrows()}
+            novo = obter_activos()[["ticker", "nome", "tipo", "preco"]].copy()
+            n = 0
+            for i in novo.index:
+                p_nov = mapa.get(_tk_norm(novo.at[i, "ticker"]))
+                p_at = float(novo.at[i, "preco"])
+                if p_nov and not (p_at > 0 and abs(p_nov / p_at - 1) > 0.5):
+                    novo.at[i, "preco"] = p_nov
+                    n += 1
+            substituir_activos(novo)
+            st.success(f"{n} activos actualizados. Índice APPO e variações recalculados.")
+            st.rerun()
+    with st.expander("🧪 Diagnóstico da ligação à BODIVA"):
+        if st.button("Testar ligação agora", key="mkt_diag"):
+            try:
+                resp = _pedido_bodiva()
+                st.write(f"HTTP {resp.status_code} · {resp.headers.get('Content-Type', '?')} · {len(resp.content)} bytes")
+                df = _parsear_resposta_bodiva(resp)
+                st.write(f"Títulos reconhecidos: **{len(df)}**")
+                try:
+                    amostra = next(iter(_listas_de_registos(resp.json())), [])
+                    if amostra:
+                        st.caption("Campos do primeiro registo (para adaptar o leitor, se preciso):")
+                        st.code(", ".join(map(str, amostra[0].keys())))
+                except Exception:
+                    st.caption("A resposta não é JSON.")
+                if not df.empty:
+                    st.dataframe(df.head(15), hide_index=True)
+                else:
+                    st.code(resp.text[:1500])
+            except Exception as e:
+                st.error(f"Falhou: {e}")
+
+
+def painel_mercado_bodiva():
+    """Tabela de mercado completa (todos os títulos cotados), com actualização automática e resgate manual."""
+    _garantir_tabelas_extra()
+    _mercado_fragmento()
+    if eh_admin():
+        st.divider()
+        _admin_mercado()
+
+
+# =========================================================
+# COMPONENTES VISUAIS: gráficos de anel, biblioteca por níveis, Histórico & Relatórios avançado
+# =========================================================
+_PALETA_FX = ["#6D28D9", "#E11D48", "#F97316", "#8B5CF6", "#FB7185", "#FDBA74", "#4F46E5", "#BE185D", "#B45309", "#0EA5E9"]
+
+
+def grafico_anel(df: pd.DataFrame, cat: str, val: str, titulo: str = "", centro_titulo: str = "Total", centro_valor: str = "",
+                 altura: int = 320, formato: str = "kz", paleta=None, chave: str = None):
+    """Gráfico de anel rico: etiquetas de peso nas fatias, legenda, tooltip (valor, peso) e total ao centro."""
+    d = df[[cat, val]].copy()
+    d[val] = pd.to_numeric(d[val], errors="coerce")
+    d = d[d[val] > 0].reset_index(drop=True)
+    if titulo:
+        st.markdown(f"**{titulo}**")
+    if d.empty:
+        st.caption("Sem dados para este gráfico.")
+        return
+    total = float(d[val].sum())
+    d["Peso"] = d[val] / total
+    d["Valor"] = d[val].apply(kz if formato == "kz" else (lambda v: f"{v:,.0f}".replace(",", " ")))
+    try:
+        import altair as alt
+        cores = alt.Scale(domain=d[cat].tolist(), range=(paleta or _PALETA_FX)[:max(len(d), 1)] if paleta else (_PALETA_FX * 3)[:len(d)])
+        base = alt.Chart(d).encode(theta=alt.Theta(f"{val}:Q", stack=True),
+                                   color=alt.Color(f"{cat}:N", scale=cores, legend=alt.Legend(orient="bottom", title=None, columns=2, labelLimit=220)),
+                                   tooltip=[alt.Tooltip(f"{cat}:N", title="Item"), alt.Tooltip("Valor:N", title="Valor"), alt.Tooltip("Peso:Q", format=".1%", title="Peso")])
+        arco = base.mark_arc(innerRadius=78, outerRadius=128, cornerRadius=5, padAngle=0.02, stroke="#FFFFFF", strokeWidth=2)
+        rotulos = base.transform_filter(alt.datum.Peso >= 0.06).mark_text(radius=103, size=11, fontWeight="bold", color="#FFFFFF").encode(text=alt.Text("Peso:Q", format=".0%"))
+        L = 300
+        centro = alt.Chart(pd.DataFrame({"t": [centro_valor or (kz(total) if formato == "kz" else f"{total:,.0f}".replace(",", " "))], "s": [centro_titulo]}))
+        c1 = centro.mark_text(size=20, fontWeight="bold", color="#1B1033", dy=-6).encode(text="t:N", x=alt.value(L / 2), y=alt.value(L / 2))
+        c2 = centro.mark_text(size=11, color="#64748B", dy=14).encode(text="s:N", x=alt.value(L / 2), y=alt.value(L / 2))
+        graf = alt.layer(arco, rotulos, c1, c2).properties(width=L, height=altura - 20).configure_view(strokeWidth=0)
+        st.altair_chart(graf, use_container_width=True)
+    except Exception:
+        st.dataframe(d[[cat, "Valor", "Peso"]].assign(Peso=d["Peso"].map("{:.1%}".format)), hide_index=True)
+
+
+# ---------------------------------------------------------
+# Biblioteca: "Para iniciantes" / "Para investidores" com destaque imediato
+# ---------------------------------------------------------
+def _css_niveis_biblioteca():
+    render_html("""<style>
+    div[data-baseweb="tab-list"] { gap: 12px; border-bottom: 0; padding: 4px 0 10px 0; }
+    button[data-baseweb="tab"] { height: auto; padding: 14px 26px; border-radius: 16px; background: #FFFFFF; border: 2px solid #EDE7F6;
+      box-shadow: 0 6px 18px rgba(76, 29, 149, 0.08); transition: transform .12s ease, box-shadow .12s ease; }
+    button[data-baseweb="tab"]:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(76, 29, 149, 0.16); }
+    button[data-baseweb="tab"] p { font-size: 1.12rem; font-weight: 800; letter-spacing: -0.01em; }
+    button[data-baseweb="tab"]:nth-of-type(1)[aria-selected="true"] { background: linear-gradient(120deg, #1D4ED8, #6D28D9); border-color: transparent; }
+    button[data-baseweb="tab"]:nth-of-type(2)[aria-selected="true"] { background: linear-gradient(120deg, #6D28D9, #E11D48 60%, #F97316); border-color: transparent; }
+    button[data-baseweb="tab"][aria-selected="true"] p { color: #FFFFFF; }
+    div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] { display: none; }
+    </style>""")
+
+
+def biblioteca_por_nivel(df_f: pd.DataFrame, tx: dict):
+    n_ini = int((df_f["nivel_efectivo"] == "iniciante").sum())
+    n_inv = int((df_f["nivel_efectivo"] == "investidor").sum())
+    render_html(
+        '<div class="fx-nivel">'
+        '<div class="fx-nivel-card fx-nivel-ini"><div class="fx-nivel-kicker">Começa aqui</div><div class="fx-nivel-titulo">🌱 Para iniciantes</div>'
+        '<p>Conceitos explicados passo a passo, sem jargão. O melhor ponto de partida para quem está a conhecer o mercado.</p>'
+        f'<span class="fx-nivel-n">{n_ini} artigos</span></div>'
+        '<div class="fx-nivel-card fx-nivel-inv"><div class="fx-nivel-kicker">Nível avançado</div><div class="fx-nivel-titulo">🚀 Para investidores</div>'
+        '<p>Análises de OPV, regras de negociação e leitura de mercado para quem já investe ou está pronto para o fazer.</p>'
+        f'<span class="fx-nivel-n">{n_inv} artigos</span></div></div>')
+    if eh_investidor():
+        _css_niveis_biblioteca()
+        t_ini, t_inv = st.tabs(["🌱 PARA INICIANTES", "🚀 SE ÉS INVESTIDOR, CLICA AQUI →"])
+        with t_ini:
+            _mostrar_artigos(df_f[df_f["nivel_efectivo"] == "iniciante"], tx)
+        with t_inv:
+            _mostrar_artigos(df_f[df_f["nivel_efectivo"] == "investidor"], tx)
+    else:
+        render_html('<div class="fx-titulo-secao">🌱 Para iniciantes</div>')
+        _mostrar_artigos(df_f[df_f["nivel_efectivo"] == "iniciante"], tx)
+        if n_inv:
+            render_html('<div class="fx-cta"><div class="fx-kicker">Já investes?</div><b>🚀 Se és investidor, clica aqui</b><br>'
+                        f'Há {n_inv} artigos avançados no portal Investidor. Faz o teu perfil para desbloquear o acesso.</div>')
+            st.button("🚀 Se és investidor, clica aqui", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="bib_cta_inv", type="primary")
+
+
+# ---------------------------------------------------------
+# Excel multi-folha da análise
+# ---------------------------------------------------------
+def _xlsx_preencher_folha(ws, titulo, subtitulo, colunas, linhas, larguras, formatos, nota="", cor_cond=()):
+    from openpyxl.utils import get_column_letter
+    e = _xlsx_estilos()
+    n = len(colunas)
+    for i, w in enumerate(larguras, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    cab = _xlsx_banner(ws, n, titulo, subtitulo)
+    for j, nome in enumerate(colunas, start=1):
+        c = ws.cell(row=cab, column=j, value=nome)
+        c.font = e["Font"](name="Calibri", size=10, bold=True, color="FFFFFF")
+        c.fill, c.border = e["f_bord"], e["borda"]
+        c.alignment = e["Alignment"](horizontal="center", vertical="center", wrap_text=True)
+    ws.row_dimensions[cab].height = 30
+    for i, linha in enumerate(linhas):
+        r = cab + 1 + i
+        fundo = e["f_creme"] if i % 2 else e["f_branco"]
+        for j, valor in enumerate(linha, start=1):
+            c = ws.cell(row=r, column=j, value=("n/d" if valor is None or (isinstance(valor, float) and valor != valor) else valor))
+            c.fill, c.border = fundo, e["borda"]
+            c.font = e["Font"](name="Calibri", size=10, color="1A1A2E")
+            eh_num = isinstance(valor, (int, float)) and not isinstance(valor, bool) and valor == valor
+            if formatos[j - 1] and eh_num:
+                c.number_format = formatos[j - 1]
+            c.alignment = e["Alignment"](horizontal="right" if eh_num else ("center" if c.value == "n/d" else "left"), vertical="center", indent=0 if eh_num else 1)
+        ws.row_dimensions[r].height = 20
+    ultima = cab + len(linhas)
+    ws.freeze_panes = ws.cell(row=cab + 1, column=2)
+    if linhas:
+        _xlsx_cor_sinal(ws, [f"{get_column_letter(j)}{cab + 1}:{get_column_letter(j)}{ultima}" for j in cor_cond])
+    _xlsx_rodape(ws, ultima + 2, n, nota)
+
+
+def gerar_xlsx_analise(a: dict) -> bytes:
+    import io
+    from openpyxl import Workbook
+    ps = [p for p, _ in HORIZONTES]
+    rot = [_rotulo_horiz(a, p, curto=False) for p in ps]
+    fpp = '+0.00;-0.00;0.00'
+    wb = Workbook()
+    sub = f"Gerado em {agora()} · dados até {a['datas']['fim']:%d/%m/%Y}"
+    inf, real = a["inflacao"], a["real"]
+    L1 = [["Carteira do Clube (nominal, %)"] + [a["ret_carteira"][p] for p in ps],
+          ["Índice APPO (%)"] + [a["ret_appo"][p] for p in ps], ["Índice BODIVA (%)"] + [a["ret_bodiva"][p] for p in ps],
+          ["Alpha vs Índice APPO (p.p.)"] + [a["alpha_appo"][p] for p in ps], ["Alpha vs Índice BODIVA (p.p.)"] + [a["alpha_bodiva"][p] for p in ps],
+          ["Inflação homóloga (YoY) no período (%)"] + [inf[p]["yoy"] for p in ps], ["Inflação vigente no período (%)"] + [inf[p]["vig"] for p in ps],
+          ["Inflação projectada no período (%)"] + [inf[p]["proj"] for p in ps],
+          ["Rentabilidade real (YoY) (%)"] + [real[p]["yoy"] if real.get(p) else None for p in ps],
+          ["Rentabilidade real (vigente) (%)"] + [real[p]["vig"] if real.get(p) else None for p in ps],
+          ["Rentabilidade real (projectada) (%)"] + [real[p]["proj"] if real.get(p) else None for p in ps]]
+    _xlsx_preencher_folha(wb.active, "Matriz comparativa de desempenho", sub, ["Indicador"] + rot, L1, [40] + [17] * 6, [None] + [fpp] * 6,
+                          "Rentabilidade de preço (sem dividendos nem custos). Alpha = excesso de retorno face ao índice, na mesma janela.", cor_cond=tuple(range(2, 8)))
+    wb.active.title = "Matriz comparativa"
+    L2 = [[t_["nome"], t_["peso"], t_["valor"], t_["custo"], t_["mais_valia"]] + [t_["ret"][p] for p in ps] + [t_["sigma_a"], t_["dd_max"], (t_["contrib"] * 100) if t_["contrib"] is not None else None] for t_ in a["titulos"]]
+    _xlsx_preencher_folha(wb.create_sheet("Por título"), "Rentabilidade multitemporal por título", sub,
+                          ["Título", "Peso", "Valor actual (Kz)", "Custo (Kz)", "Mais-valia (Kz)"] + rot + ["Volat. anual. (%)", "Drawdown máx. (%)", "Contrib. risco (%)"], L2,
+                          [30, 9, 18, 18, 18] + [15] * 6 + [15, 15, 15], [None, "0.0%", "#,##0", "#,##0", "#,##0"] + [fpp] * 6 + ["0.00", "0.00", "0.0"],
+                          cor_cond=(5,) + tuple(range(6, 12)))
+    pr = a["premissas"]
+    L3 = [["Inflação homóloga (YoY)", pr["inflacao_homologa"] * 100, "Ganho/perda real de poder de compra (12 meses)"],
+          ["Inflação vigente (variação mensal)", pr["inflacao_vigente_m"] * 100, "Pulso conjuntural imediato"],
+          ["Inflação projectada (12 meses)", pr["inflacao_projectada"] * 100, "Stress e preservação de capital"]]
+    _xlsx_preencher_folha(wb.create_sheet("Inflação"), "Inflação de Angola (premissas)", sub, ["Dimensão", "Valor (%)", "Leitura"], L3, [38, 14, 55], [None, "0.00", None],
+                          nota=f"Fonte/data: {pr.get('inflacao_ref') or 'valores por defeito - por confirmar com o INE'}")
+    rk = a["risco"]
+    g = lambda ch: [rk[x].get(ch) if rk.get(x) else None for x in ("carteira", "appo", "bodiva")]
+    L4 = [["Observações"] + g("n"), ["Desvio padrão diário (%)"] + g("sigma_d"), ["Volatilidade anualizada (%)"] + g("sigma_a"), ["Drawdown máximo (%)"] + g("dd_max"),
+          ["VaR histórico 95% (1 dia, %)"] + g("var95"), ["Tracking error vs APPO (%)", rk["carteira"].get("te"), None, None],
+          ["Information ratio vs APPO", rk["carteira"].get("ir"), None, None], ["Beta vs Índice BODIVA", rk["carteira"].get("beta"), None, None],
+          ["Sharpe", rk["carteira"].get("sharpe"), None, None]]
+    _xlsx_preencher_folha(wb.create_sheet("Risco"), "Análise de risco e desvio padrão", sub, ["Métrica", "Carteira", "Índice APPO", "Índice BODIVA"], L4,
+                          [40, 16, 16, 16], [None, "0.00", "0.00", "0.00"], nota="Com poucas observações (<30) as métricas são indicativas.")
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------
+# Página Histórico & Relatórios
+# ---------------------------------------------------------
+def _df_matriz(a: dict) -> pd.DataFrame:
+    ps = [p for p, _ in HORIZONTES]
+    cols = [_rotulo_horiz(a, p, curto=False) for p in ps]
+    inf, real = a["inflacao"], a["real"]
+    linhas = {
+        "Carteira do Clube (nominal)": a["ret_carteira"], "Índice APPO": a["ret_appo"], "Índice BODIVA": a["ret_bodiva"],
+        "Alpha vs Índice APPO (p.p.)": a["alpha_appo"], "Alpha vs Índice BODIVA (p.p.)": a["alpha_bodiva"],
+        "Inflação homóloga (YoY)": {p: inf[p]["yoy"] for p in ps}, "Inflação vigente": {p: inf[p]["vig"] for p in ps},
+        "Inflação projectada": {p: inf[p]["proj"] for p in ps},
+        "Rentabilidade real (YoY)": {p: real[p]["yoy"] if real.get(p) else None for p in ps},
+        "Rentabilidade real (vigente)": {p: real[p]["vig"] if real.get(p) else None for p in ps},
+        "Rentabilidade real (projectada)": {p: real[p]["proj"] if real.get(p) else None for p in ps}}
+    return pd.DataFrame({k: [v.get(p) for p in ps] for k, v in linhas.items()}, index=cols).T.astype(float)
+
+
+def _fmt_pct_nd(v):
+    return "n/d" if pd.isna(v) else f"{v:+.2f}%"
+
+
+def _aba_rentabilidade(a: dict, tx):
+    ps = [p for p, _ in HORIZONTES]
+    p = _melhor_horizonte(a)
+    c1, c2, c3, c4 = st.columns(4)
+    if p:
+        rot = _rotulo_horiz(a, p, curto=False)
+        c1.metric(f"Carteira · {rot}", _fmt_pct_nd(a["ret_carteira"][p]))
+        aa, ab = a["alpha_appo"].get(p), a["alpha_bodiva"].get(p)
+        c2.metric("Alpha vs APPO", "n/d" if aa is None else f"{aa:+.2f} p.p.", delta=None if aa is None else ("acima" if aa > 0 else "abaixo"))
+        c3.metric("Alpha vs BODIVA", "n/d" if ab is None else f"{ab:+.2f} p.p.", delta=None if ab is None else ("acima" if ab > 0 else "abaixo"))
+        rr = a["real"].get(p)
+        c4.metric("Rentab. real (YoY)", "n/d" if not rr else f"{rr['yoy']:+.2f}%", delta=None if not rr else ("ganho de poder de compra" if rr["yoy"] > 0 else "perda de poder de compra"))
+    st.markdown("##### Matriz comparativa multitemporal")
+    m = _df_matriz(a)
+    linhas_cor = [i for i in m.index if not i.startswith("Inflação")]
+    sty = m.style.format(_fmt_pct_nd).map(cor_variacao, subset=pd.IndexSlice[linhas_cor, :])
+    st.dataframe(sty)
+    st.caption("Alpha = retorno da carteira − retorno do índice na mesma janela (p.p.). Janelas sem histórico completo aparecem como n/d. "
+               + (f"A coluna de longo prazo é acumulada desde {a['inicio_comum']:%d/%m/%Y} (data comum às três séries). " if a.get("acumulado") else "")
+               + "Rentabilidade de preço: não inclui dividendos nem custos. Índice BODIVA = cotação média encadeada.")
+    st.markdown("##### Rentabilidade multitemporal por título")
+    tab = pd.DataFrame([{"Título": _pdf_nome_curto(t_["nome"]), "Peso": t_["peso"] * 100, **{_rotulo_horiz(a, p_, curto=False): t_["ret"].get(p_) for p_ in ps}} for t_ in a["titulos"]])
+    cols_ret = [c for c in tab.columns if c not in ("Título", "Peso")]
+    st.dataframe(tab.style.format({"Peso": "{:.1f}%", **{c: _fmt_pct_nd for c in cols_ret}}).map(cor_variacao, subset=cols_ret), hide_index=True)
+    if a["serie_appo"] is not None and len(a["serie_appo"]) >= 2:
+        st.markdown("##### Carteira vs índices (base 100 na data comum)")
+        ini = max(a["serie_carteira"].index[0], a["serie_appo"].index[0], a["serie_bodiva"].index[0])
+        comp = pd.concat([a["serie_carteira"].rename("Carteira"), a["serie_appo"].rename("Índice APPO"), a["serie_bodiva"].rename("Índice BODIVA")], axis=1).ffill()
+        comp = comp[comp.index >= ini].dropna()
+        if len(comp) >= 2:
+            st.line_chart(comp / comp.iloc[0] * 100)
+
+
+def _aba_inflacao(a: dict):
+    pr = a["premissas"]
+    if not pr.get("inflacao_ref"):
+        st.warning("As três medidas de inflação estão com valores por defeito. O administrador deve inserir os dados do INE em "
+                   "Painel do Administrador › Avaliação › Inflação de Angola.")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Inflação homóloga (YoY)", f"{pr['inflacao_homologa'] * 100:.2f}%", help="Ganho ou perda real de poder de compra nos últimos 12 meses.")
+    c2.metric("Inflação vigente (mensal)", f"{pr['inflacao_vigente_m'] * 100:.2f}% m/m", delta=f"≈ {((1 + pr['inflacao_vigente_m']) ** 12 - 1) * 100:.1f}% anualizada", delta_color="off", help="Pulso conjuntural imediato.")
+    c3.metric("Inflação projectada (12M)", f"{pr['inflacao_projectada'] * 100:.2f}%", help="Teste de stress e preservação de capital.")
+    st.caption(f"Fonte/data: {pr.get('inflacao_ref') or 'por confirmar'}")
+    ps = [p for p, _ in HORIZONTES]
+    cols = [_rotulo_horiz(a, p, curto=False) for p in ps]
+    real = a["real"]
+    tab = pd.DataFrame({"Carteira (nominal)": [a["ret_carteira"][p] for p in ps],
+                        "Real · inflação YoY": [real[p]["yoy"] if real.get(p) else None for p in ps],
+                        "Real · inflação vigente": [real[p]["vig"] if real.get(p) else None for p in ps],
+                        "Real · inflação projectada": [real[p]["proj"] if real.get(p) else None for p in ps]}, index=cols).astype(float)
+    st.markdown("##### Rentabilidade real por horizonte")
+    st.dataframe(tab.T.style.format(_fmt_pct_nd).map(cor_variacao))
+    st.markdown("##### Teste de stress · poder de compra de 100 000 Kz sem rendimento")
+    ip = pr["inflacao_projectada"]
+    linhas = []
+    for nome, i_ in (("Inflação projectada", ip), ("Projectada + 5 p.p. (stress)", ip + 0.05)):
+        linhas.append({"Cenário": nome, **{f"{n} ano(s)": f"{100000 / (1 + i_) ** n:,.0f} Kz".replace(",", " ") for n in (1, 3, 5)}})
+        linhas.append({"Cenário": f"Retorno nominal necessário · {nome}", **{f"{n} ano(s)": f"{((1 + i_) ** n - 1) * 100:.1f}%" for n in (1, 3, 5)}})
+    st.dataframe(pd.DataFrame(linhas), hide_index=True)
+
+
+def _aba_risco(a: dict):
+    rk = a["risco"]
+    cart = rk["carteira"]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Volatilidade anualizada", "n/d" if cart.get("sigma_a") is None else f"{cart['sigma_a']:.2f}%", help="Desvio padrão diário × √252.")
+    c2.metric("Desvio padrão diário", "n/d" if cart.get("sigma_d") is None else f"{cart['sigma_d']:.2f}%")
+    c3.metric("Drawdown máximo", "n/d" if cart.get("dd_max") is None else f"{cart['dd_max']:.2f}%")
+    c4.metric("VaR 95% (1 dia)", "n/d" if cart.get("var95") is None else f"{cart['var95']:.2f}%", help="Precisa de pelo menos 20 observações.")
+    nd = lambda v, c=2, s="": "n/d" if v is None else f"{v:.{c}f}{s}"
+    tab = pd.DataFrame([
+        ["Observações"] + [str(rk[x].get("n", 0)) if rk.get(x) else "n/d" for x in ("carteira", "appo", "bodiva")],
+        ["Volatilidade anualizada"] + [nd(rk[x].get("sigma_a"), 2, "%") if rk.get(x) else "n/d" for x in ("carteira", "appo", "bodiva")],
+        ["Drawdown máximo"] + [nd(rk[x].get("dd_max"), 2, "%") if rk.get(x) else "n/d" for x in ("carteira", "appo", "bodiva")],
+        ["Tracking error vs APPO", nd(cart.get("te"), 2, "%"), "—", "—"], ["Information ratio vs APPO", nd(cart.get("ir")), "—", "—"],
+        ["Beta vs Índice BODIVA", nd(cart.get("beta")), "—", "—"], ["Sharpe (Rf das premissas)", nd(cart.get("sharpe")), "—", "—"]],
+        columns=["Métrica", "Carteira", "Índice APPO", "Índice BODIVA"])
+    st.dataframe(tab, hide_index=True)
+    st.markdown("##### Risco por título")
+    rt = pd.DataFrame([{"Título": _pdf_nome_curto(t_["nome"]), "Peso (%)": t_["peso"] * 100, "Volat. anual. (%)": t_["sigma_a"], "Drawdown máx. (%)": t_["dd_max"],
+                        "Contrib. risco (%)": (t_["contrib"] * 100) if t_["contrib"] is not None else None} for t_ in a["titulos"]])
+    st.dataframe(rt.style.format({c: (lambda v: "n/d" if pd.isna(v) else f"{v:.2f}") for c in rt.columns if c != "Título"}), hide_index=True)
+    cc = a["concentracao"]
+    st.caption(f"Número efectivo de activos (1/HHI): {cc['n_efectivo']:.1f} · maior posição: {cc['maior'][0]} ({cc['maior'][1] * 100:.1f}%). "
+               "Contribuição para o risco = peso × covariância com a carteira ÷ variância total.")
+    if cart.get("n", 0) < 30:
+        st.info("Poucas observações: as métricas de risco são indicativas até haver mais histórico de cotações.")
+
+
+def _aba_composicao(a: dict, resumo: dict):
+    tit = pd.DataFrame([{"Activo": _pdf_nome_curto(t_["nome"]), "Valor": t_["valor"], "Qtd": t_["qtd"],
+                         "Sector": _pdf_sector({"ticker": t_["ticker"], "nome": t_["nome"]})} for t_ in a["titulos"]])
+    c1, c2 = st.columns(2)
+    with c1:
+        grafico_anel(tit, "Activo", "Valor", "Carteira por activo (valor actual)", centro_titulo="Valor da carteira", chave="anel_ativo")
+    with c2:
+        grafico_anel(tit, "Activo", "Qtd", "Carteira por activo (quantidade de títulos)", centro_titulo="Títulos", formato="num", chave="anel_qtd")
+    c3, c4 = st.columns(2)
+    with c3:
+        grafico_anel(tit.groupby("Sector", as_index=False)["Valor"].sum(), "Sector", "Valor", "Carteira por sector", centro_titulo="Valor da carteira", chave="anel_sector")
+    with c4:
+        res_liq = float(resumo.get("reservas", 0) or 0)
+        por_real = max(float(resumo.get("capital_subscrito", 0) or 0) - float(resumo.get("capital_realizado", 0) or 0), 0)
+        fundo = pd.DataFrame({"Componente": ["Carteira de acções", "Reservas de liquidez", "Capital por realizar"], "Valor": [a["valor_total"], res_liq, por_real]})
+        grafico_anel(fundo, "Componente", "Valor", "Estrutura do fundo global", centro_titulo="Fundo global", chave="anel_fundo")
+    mv = pd.DataFrame({"Item": ["Custo de aquisição", "Mais-valia"], "Valor": [min(a["custo_total"], a["valor_total"]), max(a["valor_total"] - a["custo_total"], 0)]})
+    if a["valor_total"] > a["custo_total"] > 0:
+        grafico_anel(mv, "Item", "Valor", "Valor actual: custo vs mais-valia", centro_titulo="Valor actual", paleta=["#6D28D9", "#16A34A"], chave="anel_mv")
+
+
+def _aba_historico_movimentos(tx, df_movimentos):
+    df_historico = obter_historico_patrimonio()
+    if df_historico.empty or len(df_historico) < 2:
+        st.info(tx["hist_poucos_pontos"])
+    else:
+        st.caption(tx["hist_caption"])
+        grafico_area_simples(df_historico.set_index("registado_em")[["total"]], tx["hist_patrimonio_label"])
+    st.divider()
+    st.subheader(tx["hist_movimentos"])
+    if df_movimentos.empty:
+        st.info(tx["hist_sem_movimentos"])
+        return
+    df_exibir = df_movimentos.copy()
+    df_exibir["montante_fmt"] = df_exibir["montante"].apply(kz)
+    st.dataframe(df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "criado_em"]].rename(columns=tx["hist_cols"]), hide_index=True)
+    c1, c2 = st.columns(2)
+    xl = _xlsx_seguro(lambda: gerar_xlsx_tabela(
+        "Movimentos do Clube", f"Gerado em {agora()}", ["Data", "Tipo", "Descrição", "Montante (Kz)"],
+        [[r["data_movimento"], r["tipo"], r["descricao"], float(r["montante"])] for _, r in df_movimentos.iterrows()],
+        [14, 26, 46, 20], ["dd/mm/yyyy", None, None, "#,##0"], folha="Movimentos", cor_cond=(4,)))
+    if xl:
+        c1.download_button("⬇️ Descarregar Excel (movimentos)", data=xl, file_name="movimentos_appo.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_mov_xlsx")
+    c2.download_button(tx["hist_descarregar_mov"], data=df_movimentos.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                       file_name="movimentos_appo.csv", mime="text/csv", key="dl_mov_csv")
+
+
+def _aba_relatorios(tx, a: dict, df_movimentos):
+    st.subheader(tx["hist_exportar"])
+    st.caption("O relatório PDF institucional inclui: sumário executivo e teses, matriz comparativa multitemporal com Alpha, "
+               "ajuste à inflação (homóloga, vigente e projectada), risco e desvio padrão, e gráficos de anel.")
+    if st.button("📄 " + tx["hist_gerar_pdf"], type="primary", key="btn_gerar_pdf"):
+        with st.spinner("A gerar o relatório…"):
+            try:
+                pdf_bytes = gerar_relatorio_pdf(obter_resumo_patrimonial(), obter_activos(), df_movimentos)
+                st.session_state["pdf_relatorio"] = (pdf_bytes, tx["pdf_nome_ficheiro"].format(data=datetime.now().strftime("%Y%m%d")), agora())
+            except Exception as e:
+                st.session_state.pop("pdf_relatorio", None)
+                traceback.print_exc()
+                st.error(f"Não foi possível gerar o PDF: {type(e).__name__}: {e}")
+    # o botão de descarga fica FORA do `if st.button`, senão desaparece no rerun que o próprio clique provoca
+    if st.session_state.get("pdf_relatorio"):
+        dados, nome, quando = st.session_state["pdf_relatorio"]
+        st.download_button(f"⬇️ {tx['hist_descarregar_pdf']} (gerado às {quando[-5:]})", data=dados, file_name=nome, mime="application/pdf", key="dl_relatorio_pdf")
+    st.divider()
+    if a.get("ok"):
+        xl = _xlsx_seguro(lambda: gerar_xlsx_analise(a))
+        if xl:
+            st.download_button("⬇️ Descarregar Excel · análise multitemporal (4 folhas)", data=xl, file_name=f"analise_appo_{datetime.now():%Y%m%d}.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_analise_xlsx")
+        m = _df_matriz(a)
+        st.download_button("⬇️ Descarregar CSV · matriz comparativa", data=m.to_csv(sep=";", decimal=",").encode("utf-8-sig"), file_name="matriz_comparativa_appo.csv", mime="text/csv", key="dl_matriz_csv")
+    else:
+        st.caption("As exportações analíticas ficam disponíveis assim que houver histórico de cotações e carteira registada.")
+
+
+def pagina_historico_relatorios(tx):
+    df_movimentos = obter_movimentos()
+    resumo = obter_resumo_patrimonial()
+    a = obter_analise()
+    abas = st.tabs(["📈 Rentabilidade & Alpha", "🌡️ Inflação real", "⚖️ Risco", "🍩 Composição", "🗂️ Histórico & Movimentos", "📄 Relatórios & Excel"])
+    funcoes = [lambda: _aba_rentabilidade(a, tx), lambda: _aba_inflacao(a), lambda: _aba_risco(a), lambda: _aba_composicao(a, resumo)]
+    for i, funcao in enumerate(funcoes):
+        with abas[i]:
+            if not a.get("ok"):
+                st.info(a.get("motivo") or "Análise indisponível de momento.")
+                continue
+            funcao()
+            if i == 0:
+                for av in a.get("avisos", []):
+                    st.caption("⚠️ " + av)
+    with abas[4]:
+        _aba_historico_movimentos(tx, df_movimentos)
+    with abas[5]:
+        _aba_relatorios(tx, a, df_movimentos)
+
+
+
 def _painel_inicio_aluno():
     """Início simples: um único próximo passo, atalhos essenciais e o mercado só quando é pedido."""
     nome = str(st.session_state.get("conta_nome") or "").split(" ")[0]
@@ -5810,12 +7276,15 @@ try:
         df_activos = _df_activos_ticker
         if df_activos.empty:
             st.info(tx["cot_fav_info"])
+            painel_mercado_bodiva()
         else:
             st.subheader("📊 Índices")
             _painel_indices(df_activos)
             st.divider()
 
-            aba_fav, aba_todos, aba_graf = st.tabs([tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos"])
+            aba_mkt, aba_fav, aba_todos, aba_graf = st.tabs(["🌐 Mercado BODIVA (todos os títulos)", tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos"])
+            with aba_mkt:
+                painel_mercado_bodiva()
             conta_id          = st.session_state["conta_id"]
             favoritos_actuais = obter_favoritos(conta_id)
 
@@ -5901,34 +7370,7 @@ try:
     elif pagina == "📊 Histórico & Relatórios":
         tx = t()
         hero("📊 " + tx["nav_map"]["📊 Histórico & Relatórios"].replace("📊 ", ""), tx["hist_hero_sub"])
-        df_historico = obter_historico_patrimonio()
-        if df_historico.empty or len(df_historico) < 2:
-            st.info(tx["hist_poucos_pontos"])
-        else:
-            st.caption(tx["hist_caption"])
-            grafico_area_simples(df_historico.set_index("registado_em")[["total"]], tx["hist_patrimonio_label"])
-
-        st.divider()
-        st.subheader(tx["hist_movimentos"])
-        df_movimentos = obter_movimentos()
-        if df_movimentos.empty:
-            st.info(tx["hist_sem_movimentos"])
-        else:
-            df_exibir = df_movimentos.copy()
-            df_exibir["montante_fmt"] = df_exibir["montante"].apply(kz)
-            cols_h = tx["hist_cols"]
-            st.dataframe(df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "criado_em"]].rename(columns=cols_h), hide_index=True)
-            st.download_button(tx["hist_descarregar_mov"],
-                               data=df_movimentos.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
-                               file_name="movimentos_appo.csv", mime="text/csv")
-
-        st.divider()
-        st.subheader(tx["hist_exportar"])
-        if st.button(tx["hist_gerar_pdf"]):
-            resumo    = obter_resumo_patrimonial()
-            pdf_bytes = gerar_relatorio_pdf(resumo, obter_activos(), df_movimentos)
-            nome_pdf  = tx["pdf_nome_ficheiro"].format(data=datetime.now().strftime("%Y%m%d"))
-            st.download_button(tx["hist_descarregar_pdf"], data=pdf_bytes, file_name=nome_pdf, mime="application/pdf")
+        pagina_historico_relatorios(tx)
 
     # =========================================================
     # PÁGINA: AVALIAÇÃO DE ACTIVOS
@@ -6602,16 +8044,7 @@ try:
             filtro      = st.selectbox(tx["bib_filtrar"], categorias)
             filtro_bd   = None if filtro == todas_label else filtro
             _df_f = obter_artigos(filtro_bd)
-            if eh_investidor():
-                _t_ini, _t_inv = st.tabs(["🌱 Para iniciantes", "📈 Para investidores"])
-                with _t_ini:
-                    _mostrar_artigos(_df_f[_df_f["nivel_efectivo"] == "iniciante"], tx)
-                with _t_inv:
-                    _mostrar_artigos(_df_f[_df_f["nivel_efectivo"] == "investidor"], tx)
-            else:
-                _mostrar_artigos(_df_f[_df_f["nivel_efectivo"] == "iniciante"], tx)
-                if (_df_f["nivel_efectivo"] == "investidor").any():
-                    st.caption("Há mais artigos, de nível avançado, no portal Investidor. O teu perfil indica quando se abre.")
+            biblioteca_por_nivel(_df_f, tx)
 
     # =========================================================
     # PÁGINA: CAPACIDADE FINANCEIRA
@@ -7242,6 +8675,20 @@ try:
             if guardar_premissas:
                 actualizar_premissas_macro(infl, rf, erp, bb, bt, bo)
                 st.success("Premissas macro actualizadas.")
+                st.rerun()
+
+            st.markdown("**Inflação de Angola (alimenta os relatórios e a análise de rentabilidade real)**")
+            st.caption("Insere as três leituras a partir do INE ou do BNA. Enquanto não o fizeres, os relatórios usam a inflação anual acima como valor por defeito e avisam disso.")
+            with st.form("form_inflacao"):
+                ci1, ci2, ci3 = st.columns(3)
+                _ih = ci1.number_input("Inflação homóloga (YoY, %)", min_value=0.0, max_value=500.0, value=round(premissas["inflacao_homologa"] * 100, 2), step=0.1, format="%.2f")
+                _iv = ci2.number_input("Inflação vigente (variação mensal, %)", min_value=0.0, max_value=50.0, value=round(premissas["inflacao_vigente_m"] * 100, 2), step=0.05, format="%.2f")
+                _ip = ci3.number_input("Inflação projectada (próximos 12 meses, %)", min_value=0.0, max_value=500.0, value=round(premissas["inflacao_projectada"] * 100, 2), step=0.1, format="%.2f")
+                _iref = st.text_input("Fonte e data (ex.: INE, Setembro/2026)", value=premissas["inflacao_ref"])
+                _gi = st.form_submit_button("Guardar inflação")
+            if _gi:
+                actualizar_inflacao_macro(_ih / 100, _iv / 100, _ip / 100, _iref)
+                st.success("Inflação actualizada.")
                 st.rerun()
 
             st.divider()
