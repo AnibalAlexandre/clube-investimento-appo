@@ -1,8 +1,10 @@
-streamlit
-pandas
+streamlit>=1.37          # st.fragment(run_every=...) para a actualização automática de minuto a minuto
+pandas>=2.1              # Styler.map
+altair>=5.0              # gráficos de anel
+fpdf2>=2.7               # relatório PDF (NÃO instalar o pacote antigo "fpdf")
+openpyxl>=3.1            # downloads em Excel
 psycopg2-binary
 bcrypt
-requests
-fpdf2
 pypdf
-openpyxl
+requests
+lxml                     # opcional: leitura de tabelas HTML como recurso do mercado BODIVA
