@@ -1181,7 +1181,7 @@ div[data-testid="stProgress"] div[role="progressbar"] > div { background: var(--
 .fx-servico-topo { height: 8px; }
 .fx-servico.fx-g0 .fx-servico-topo { background: linear-gradient(90deg, #6D28D9, #E11D48); }
 .fx-servico.fx-g1 .fx-servico-topo { background: linear-gradient(90deg, #E11D48, #F97316); }
-.fx-servico.fx-g2 .fx-servico-topo { background: linear-gradient(90deg, #0EA5E9, #6D28D9); }
+.fx-servico.fx-g2 .fx-servico-topo { background: linear-gradient(90deg, #6D28D9, #7C1F3E); }
 .fx-servico.fx-g3 .fx-servico-topo { background: linear-gradient(90deg, #F97316, #FBBF24); }
 .fx-servico-corpo { padding: 14px 20px 16px 20px; }
 .fx-servico-nome { font-size: 1.2rem; font-weight: 800; color: var(--fx-tinta); letter-spacing: -0.01em; }
@@ -1277,6 +1277,38 @@ def nota_indicador(texto: str):
     render_html(f'<div class="appo-indicador-nota">💡 {texto}</div>')
 
 
+# Logótipos das empresas cotadas: coloque os ficheiros em «logos/» ao lado do app.py, com o nome do ticker sem os 'A' finais
+# (ex.: logos/SBAO.png, logos/UNTL.png, logos/BFA.png). Sem ficheiro, mostra-se um selo com as iniciais (nunca falha).
+_PASTA_LOGOS = Path(__file__).resolve().parent / "logos"
+_CACHE_LOGOS = {}
+
+
+def logo_activo_html(ticker, nome="", px: int = 18) -> str:
+    base = str(ticker or "").strip().upper().rstrip("A")
+    chave = (base, px)
+    if chave in _CACHE_LOGOS:
+        return _CACHE_LOGOS[chave]
+    html_logo = ""
+    try:
+        import base64 as _b64
+        for ext, mime in ((".png", "image/png"), (".jpg", "image/jpeg"), (".jpeg", "image/jpeg"), (".webp", "image/webp"), (".svg", "image/svg+xml")):
+            f = _PASTA_LOGOS / f"{base}{ext}"
+            if base and f.is_file() and f.stat().st_size < 400_000:
+                dados = _b64.b64encode(f.read_bytes()).decode()
+                html_logo = (f'<img src="data:{mime};base64,{dados}" alt="" style="height:{px}px;width:{px}px;object-fit:contain;'
+                             f'border-radius:4px;vertical-align:middle;margin-right:6px;">')
+                break
+    except Exception:
+        html_logo = ""
+    if not html_logo:
+        ini = _html_pub.escape((base[:2] or str(nome or "?")[:2]).upper())
+        html_logo = (f'<span style="display:inline-block;height:{px}px;width:{px}px;line-height:{px}px;text-align:center;border-radius:50%;'
+                     f'font-size:{max(px // 2 - 1, 7)}px;font-weight:700;color:#FFFFFF;vertical-align:middle;margin-right:6px;'
+                     f'background:linear-gradient(135deg,#6D28D9,#E11D48 60%,#F97316);">{ini}</span>')
+    _CACHE_LOGOS[chave] = html_logo
+    return html_logo
+
+
 def ticker_tape(df_activos: pd.DataFrame):
     if df_activos.empty:
         return
@@ -1284,7 +1316,7 @@ def ticker_tape(df_activos: pd.DataFrame):
     for _, a in df_activos.iterrows():
         v = float(a["variacao"])
         cor = "#0D9488" if v > 0 else ("#DC2626" if v < 0 else "#6B7280")
-        itens.append(f'<span style="color:{cor}; margin-right:36px;">{_esc(a["ticker"] or a["nome"])} &nbsp;{kz(a["preco"])} &nbsp;({pct_bruto(v)})</span>')
+        itens.append(f'<span style="color:{cor}; margin-right:36px;">{logo_activo_html(a["ticker"], a["nome"])}{_esc(a["ticker"] or a["nome"])} &nbsp;{kz(a["preco"])} &nbsp;({pct_bruto(v)})</span>')
     conteudo = "".join(itens) * 3
     render_html(f'<div class="appo-ticker-wrap"><div class="appo-ticker-move"><span>{conteudo}</span></div></div>')
 
@@ -1596,10 +1628,10 @@ def obter_serie_cambio_aoa(moeda: str, periodo: str = "1m") -> pd.DataFrame:
 
 def _camadas_serie(alt, df, eixo_x, eixo_y, base, unidade):
     """Área com gradiente suave, linha fina e, ao passar o rato, guia vertical, ponto e etiqueta com data e valor."""
-    cor = "#4F6BFF"
+    cor = "#7C1F3E"
     try:
         grad = alt.Gradient(gradient="linear", x1=1, x2=1, y1=1, y2=0,
-                            stops=[alt.GradientStop(color="rgba(34,211,238,0.0)", offset=0), alt.GradientStop(color="rgba(79,107,255,0.32)", offset=1)])
+                            stops=[alt.GradientStop(color="rgba(249,115,22,0.0)", offset=0), alt.GradientStop(color="rgba(225,29,72,0.16)", offset=0.55), alt.GradientStop(color="rgba(109,40,217,0.32)", offset=1)])
         area = alt.Chart(df).mark_area(color=grad, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
     except Exception:
         area = alt.Chart(df).mark_area(opacity=0.12, color=cor, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
@@ -1652,7 +1684,7 @@ def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: st
     """Painel no estilo do home broker: cabeçalho, indicadores do período e gráfico de área na cor do Clube."""
     import html as _h
     import altair as alt
-    render_html(f"""<div style="border-bottom:3px solid #4F6BFF;padding-bottom:6px;margin:6px 0 12px 0;">
+    render_html(f"""<div style="border-bottom:3px solid #E11D48;padding-bottom:6px;margin:6px 0 12px 0;">
     <span style="font-size:1.2rem;font-weight:800;color:#1A1A2E;">{_h.escape(titulo)}</span>
     <span style="color:#8A7B80;font-size:0.8rem;margin-left:10px;">{_h.escape(subtitulo)}</span></div>""")
     if serie is None or serie.empty:
@@ -1878,7 +1910,7 @@ TEXTO_REGRAS_BODIVA       = "Regra BODIVA 2/18: dispersão mínima 5%, lote mín
 
 ACTIVOS_INICIAIS = [
     ("UNTLAAAA", "Unitel",                     "Ação",  38000.0, 0.0),
-    ("SBAAAAAA", "Standard Bank Angola",        "Ação",  45000.0, 0.0),
+    ("SBAOAAAA", "Standard Bank Angola",        "Ação",  45000.0, 0.0),
     ("BFAAAAAA", "Banco de Fomento Angola (BFA)","Ação", 12500.0, 0.0),
     ("BDVAAAAA", "BODIVA",                      "Ação",  82400.0, 0.0),
 ]
@@ -2116,6 +2148,8 @@ def inicializar_bd():
     else:
         for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
             executar("UPDATE activos SET ticker = %s WHERE nome = %s AND (ticker IS NULL OR ticker = '')", (ticker, nome))
+    # ticker correcto do Standard Bank Angola na BODIVA: SBAOAAAA (versões antigas gravavam SBAAAAAA)
+    executar("UPDATE activos SET ticker = 'SBAOAAAA' WHERE ticker = 'SBAAAAAA'")
 
     for titulo, categoria, conteudo in ARTIGOS_INICIAIS:
         if not consultar_um("SELECT 1 FROM artigos WHERE titulo = %s", (titulo,)):
@@ -7115,8 +7149,8 @@ def pagina_historico_relatorios(tx):
 # =========================================================
 # FASE 1 — componentes: cartões KPI, gráficos na paleta do Clube, conteúdo institucional editável
 # =========================================================
-_PALETA_SERIES = ["#7C3AED", "#F97316", "#06B6D4", "#E11D48", "#4F46E5", "#FB923C", "#14B8A6", "#BE185D"]
-COR_PRECO = "#4F6BFF"          # cotações/preços: azul-eléctrico vivo (nunca negativos, por isso sem verde/vermelho)
+_PALETA_SERIES = ["#6D28D9", "#7C1F3E", "#E11D48", "#F97316", "#8B5CF6", "#BE185D", "#FB923C", "#B45309"]
+COR_PRECO = "#7C1F3E"          # cotações/preços: vinho do Clube (o gradiente das áreas vai de roxo a vinho, vermelho e laranja)
 
 
 def kpi_card(icone: str, titulo: str, valor: str, sub: str = None, progresso: float = None, tom: str = None, destaque: bool = False) -> str:
@@ -7133,7 +7167,7 @@ def kpi_linha(cartoes: list):
 
 
 def fx_barras(df: pd.DataFrame, height: int = 300, **_):
-    """Barras na paleta do Clube: uma série = gradiente ciano→violeta; várias = barras agrupadas."""
+    """Barras na paleta do Clube: uma série = gradiente roxo→vinho→vermelho→laranja; várias = barras agrupadas."""
     try:
         import altair as alt
         d = df.copy()
@@ -7145,7 +7179,7 @@ def fx_barras(df: pd.DataFrame, height: int = 300, **_):
         tip = [alt.Tooltip("Item:N", title="Item"), alt.Tooltip("Série:N", title="Série"), alt.Tooltip("Valor:Q", format=",.2f", title="Valor")]
         if d.shape[1] == 1:
             grad = alt.Gradient(gradient="linear", x1=1, x2=1, y1=0, y2=1,
-                                stops=[alt.GradientStop(color="#7C3AED", offset=0), alt.GradientStop(color="#22D3EE", offset=1)])
+                                stops=[alt.GradientStop(color="#6D28D9", offset=0), alt.GradientStop(color="#7C1F3E", offset=0.35), alt.GradientStop(color="#E11D48", offset=0.68), alt.GradientStop(color="#F97316", offset=1)])
             ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=8, cornerRadiusTopRight=8, color=grad, size=46).encode(x=x, y=y, tooltip=tip)
         else:
             ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
