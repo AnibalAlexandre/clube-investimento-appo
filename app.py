@@ -7491,6 +7491,7 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
+st.sidebar.caption("Versão da app: 2026-10-14 · B (logótipos, Universo do Clube)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
@@ -7579,7 +7580,7 @@ try:
             _painel_indices(df_activos)
             st.divider()
 
-            aba_mkt, aba_fav, aba_todos, aba_graf = st.tabs(["🌐 Mercado BODIVA (todos os títulos)", tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos do Clube"])
+            aba_mkt, aba_fav, aba_todos, aba_graf = st.tabs(["🌐 Mercado BODIVA", tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos do Clube"])
             with aba_mkt:
                 painel_mercado_bodiva()
             conta_id          = st.session_state["conta_id"]
