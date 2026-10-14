@@ -2112,6 +2112,7 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS identidades_socios (nome_interno TEXT PRIMARY KEY, rotulo_publico TEXT NOT NULL)""")
     executar("""CREATE TABLE IF NOT EXISTS carteira_referencia (ticker TEXT PRIMARY KEY, qtd NUMERIC NOT NULL, fonte TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS config_app (chave TEXT PRIMARY KEY, valor TEXT)""")
+    executar("""CREATE TABLE IF NOT EXISTS lancamentos_contab (id SERIAL PRIMARY KEY, data DATE NOT NULL, rubrica TEXT NOT NULL, descricao TEXT, valor NUMERIC NOT NULL, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS despesas_admin (id SERIAL PRIMARY KEY, data DATE NOT NULL, descricao TEXT NOT NULL, categoria TEXT, valor NUMERIC NOT NULL, fornecedor TEXT, estado TEXT NOT NULL DEFAULT 'Proposta', aprovada_por TEXT, aprovada_em TIMESTAMP, nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     _seed_servicos = [
         ("primeiros_passos_bodiva", "Primeiros passos na BODIVA", "Workshop em grupo, guia próprio e sessão de perguntas sobre o funcionamento da bolsa, acções, dividendos, riscos e comissões.", 5000, "Preço experimental de teste (editável); não é preço de mercado comprovado.", "educativo", True, True, True, 1),
@@ -7148,6 +7149,178 @@ def _aba_relatorios(tx, a: dict, df_movimentos):
         st.caption("As exportações analíticas ficam disponíveis assim que houver histórico de cotações e carteira registada.")
 
 
+# ---------------- Contabilidade: balanço, demonstração de resultados e fluxos de caixa ----------------
+RUBRICAS_CONTAB = {   # rubrica -> (grupo, descrição de ajuda)
+    "Dividendos recebidos":    ("rendimento", "Dividendos efectivamente recebidos."),
+    "Mais-valias realizadas":  ("rendimento", "Ganho em vendas já concretizadas."),
+    "Outros rendimentos":      ("rendimento", "Juros e outros rendimentos."),
+    "Comissões e corretagem":  ("gasto", "Comissões de corretoras, BODIVA e entidades de supervisão."),
+    "Impostos e taxas":        ("gasto", "Impostos e taxas incidentes sobre rendimentos e operações."),
+    "Menos-valias realizadas": ("gasto", "Perda em vendas já concretizadas."),
+    "Outros gastos":           ("gasto", "Outros gastos de funcionamento não registados noutro lado."),
+}
+
+
+def _soma_sql(sql, params=()):
+    r = consultar_um(sql, params)
+    return dec(r[0]) if r and r[0] is not None else D(0)
+
+
+def registar_lancamento_contab(data, rubrica: str, descricao: str, valor):
+    exigir_admin()
+    if rubrica not in RUBRICAS_CONTAB:
+        raise ValueError("Rubrica inválida.")
+    v = dec(valor)
+    if v <= 0:
+        raise ValueError("O valor deve ser maior que zero.")
+    with transaccao() as cur:
+        cur.execute("INSERT INTO lancamentos_contab (data, rubrica, descricao, valor, criado_por) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                    (data, rubrica, (descricao or "").strip() or None, v, utilizador_actual()))
+        novo = cur.fetchone()[0]
+        registar_auditoria("lancamento_contab", "lancamentos_contab", novo, depois={"rubrica": rubrica, "valor": str(v)}, cur=cur)
+
+
+def calcular_demonstracoes(ano: int) -> dict:
+    """Junta os dados que a app já tem (movimentos, carteira real, balanço, despesas) e os lançamentos contabilísticos do exercício."""
+    exigir_participante()
+    lanc = consultar_df("SELECT rubrica, COALESCE(SUM(valor), 0) AS v FROM lancamentos_contab WHERE EXTRACT(YEAR FROM data) = %s GROUP BY rubrica", (int(ano),))
+    por_rub = {r["rubrica"]: dec(r["v"]) for _, r in lanc.iterrows()}
+    g = lambda nome: por_rub.get(nome, D(0))
+    mov = lambda tipo: _soma_sql("SELECT COALESCE(SUM(montante), 0) FROM movimentos WHERE tipo = %s AND EXTRACT(YEAR FROM data_movimento) = %s", (tipo, int(ano)))
+    desp_grupo = _soma_sql("SELECT COALESCE(SUM(valor), 0) FROM despesas_admin WHERE estado = 'Aprovada' AND EXTRACT(YEAR FROM data) = %s", (int(ano),))
+    saidas = mov("Saída/Despesa")
+    compras, vendas, entradas = mov("Compra de Activo"), mov("Venda de Activo"), mov("Entrada de Capital")
+    av = avaliar_carteira_real()
+    resumo = obter_resumo_patrimonial()
+    bal = obter_ultimo_balanco()
+    caixa = dec(bal[2]) if bal and bal[2] is not None else D(0)
+    outros = dec(bal[3]) if bal and bal[3] is not None else D(0)
+    passivos = dec(bal[4]) if bal and bal[4] is not None else D(0)
+
+    rendimentos = [("Dividendos recebidos", g("Dividendos recebidos")), ("Mais-valias realizadas", g("Mais-valias realizadas")), ("Outros rendimentos", g("Outros rendimentos"))]
+    gastos = [("Comissões e corretagem", g("Comissões e corretagem")), ("Impostos e taxas", g("Impostos e taxas")), ("Menos-valias realizadas", g("Menos-valias realizadas")),
+              ("Despesas do grupo (aprovadas)", desp_grupo), ("Outras saídas/despesas (movimentos)", saidas), ("Outros gastos", g("Outros gastos"))]
+    t_rend, t_gast = sum((v for _, v in rendimentos), D(0)), sum((v for _, v in gastos), D(0))
+    realizado = t_rend - t_gast
+    latente = av["valor"] - av["custo"]
+    integral = realizado + latente
+
+    activo = [("Caixa e equivalentes", caixa), ("Carteira de investimentos (valor de mercado)", av["valor"]), ("Outros activos", outros)]
+    t_activo = sum((v for _, v in activo), D(0))
+    cap_realizado = dec(resumo["capital_realizado"])
+    t_cp = cap_realizado + integral
+    t_pass_cp = passivos + t_cp
+    return {
+        "ano": int(ano), "rendimentos": rendimentos, "gastos": gastos, "t_rend": t_rend, "t_gast": t_gast, "realizado": realizado,
+        "latente": latente, "integral": integral, "activo": activo, "t_activo": t_activo, "passivos": passivos, "cap_realizado": cap_realizado,
+        "reservas": dec(resumo["reservas"]), "t_cp": t_cp, "t_pass_cp": t_pass_cp, "diferenca": t_activo - t_pass_cp,
+        "tem_balanco": bal is not None, "sem_preco": av["sem_preco"],
+        "op": [("Dividendos recebidos", g("Dividendos recebidos")), ("Mais-valias realizadas (venda)", g("Mais-valias realizadas")), ("Outros rendimentos", g("Outros rendimentos")),
+               ("Comissões e corretagem", -g("Comissões e corretagem")), ("Impostos e taxas", -g("Impostos e taxas")), ("Menos-valias realizadas", -g("Menos-valias realizadas")),
+               ("Despesas do grupo (aprovadas)", -desp_grupo), ("Outras saídas/despesas", -saidas), ("Outros gastos", -g("Outros gastos"))],
+        "inv": [("Compra de activos", -compras), ("Venda de activos", vendas)],
+        "fin": [("Entradas de capital dos sócios", entradas)],
+    }
+
+
+def _tabela_contab(linhas, total_rot: str = None, total_val=None):
+    d = [{"Rubrica": r, "Valor": kz(float(v))} for r, v in linhas]
+    if total_rot is not None:
+        d.append({"Rubrica": total_rot, "Valor": kz(float(total_val))})
+    st.dataframe(pd.DataFrame(d), hide_index=True)
+
+
+def pagina_contabilidade(tx: dict):
+    import datetime as _dt
+    hoje = _dt.date.today()
+    ano = st.selectbox("Exercício (ano) das demonstrações", list(range(hoje.year, 2023, -1)), key="cont_ano")
+    aba_res, aba_bal, aba_dr, aba_fc = st.tabs(["📋 Resumo", "⚖️ Balanço", "📉 Demonstração de Resultados", "💧 Fluxos de Caixa"])
+    with aba_res:
+            resumo   = obter_resumo_patrimonial()
+            cols_df  = tx["cont_df_cols"]
+            rows_df  = tx["cont_df_rows"]
+            montantes= [kz(resumo["capital_subscrito"]), kz(resumo["capital_realizado"]), kz(resumo["investimentos"]), kz(resumo["reservas"])]
+            df_resumo = pd.DataFrame([{cols_df[0]: r[0], cols_df[1]: r[1], cols_df[2]: m, cols_df[3]: r[2]}
+                                       for r, m in zip(rows_df, montantes)])
+            st.dataframe(df_resumo, hide_index=True)
+            total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são subdivisões do realizado
+            st.metric(tx["cont_patrimonio_metric"], kz(total_patrimonio))
+            st.caption(f"{tx['cont_ultima_actualizacao']} {resumo['actualizado_em']}")
+
+    try:
+        dm = calcular_demonstracoes(int(ano))
+    except Exception as e:
+        st.error(f"Não foi possível calcular as demonstrações: {e}")
+        return
+    nota = ("Estrutura inspirada no plano de contas angolano; é um mapa de gestão do Clube e deve ser validado por um contabilista antes de qualquer uso oficial. "
+            "Os valores vêm dos movimentos, da carteira real, do balanço e das despesas já registados; as rubricas sem lançamentos ficam a zero, à espera de registo.")
+
+    with aba_bal:
+        st.markdown(f"#### Balanço do Clube — situação actual (resultado do exercício {dm['ano']})")
+        ce, cd = st.columns(2)
+        with ce:
+            st.markdown("**ACTIVO**")
+            _tabela_contab(dm["activo"], "TOTAL DO ACTIVO", dm["t_activo"])
+        with cd:
+            st.markdown("**PASSIVO E CAPITAL PRÓPRIO**")
+            _tabela_contab([("Passivos", dm["passivos"]), ("Capital realizado", dm["cap_realizado"]),
+                            ("Resultado do exercício (inclui mais-valias latentes)", dm["integral"])],
+                           "TOTAL DO PASSIVO E CAPITAL PRÓPRIO", dm["t_pass_cp"])
+            st.caption(f"Dos quais, reservas: {kz(float(dm['reservas']))} (já incluídas no capital realizado, não somadas outra vez).")
+        if abs(dm["diferenca"]) <= D("1"):
+            st.success("✅ O balanço fecha: Activo = Passivo + Capital próprio.")
+        else:
+            st.warning(f"⚠️ O balanço não fecha: diferença de {kz(float(dm['diferenca']))} (Activo − Passivo − Capital próprio). "
+                       "Isto indica dados por reconciliar (por exemplo, caixa, outros activos ou passivos por registar no Painel do Administrador › Resumo Patrimonial).")
+        if not dm["tem_balanco"]:
+            st.info("Ainda não há um balanço de caixa, outros activos e passivos registado: estas linhas aparecem a zero.")
+        if dm["sem_preco"]:
+            st.caption("Posições sem preço de mercado (valorizadas a zero): " + ", ".join(dm["sem_preco"]))
+        st.caption(nota)
+
+    with aba_dr:
+        st.markdown(f"#### Demonstração de Resultados — exercício {dm['ano']}")
+        _tabela_contab(dm["rendimentos"], "Total de rendimentos", dm["t_rend"])
+        _tabela_contab([(r, -v) for r, v in dm["gastos"]], "Total de gastos", -dm["t_gast"])
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Resultado realizado", kz(float(dm["realizado"])))
+        c2.metric("Mais-valias latentes (acumuladas)", kz(float(dm["latente"])))
+        c3.metric("Resultado do exercício", kz(float(dm["integral"])))
+        st.caption("As mais-valias latentes são a diferença entre o valor de mercado da carteira e o custo de aquisição, desde a compra; só se realizam com a venda. " + nota)
+
+    with aba_fc:
+        st.markdown(f"#### Mapa de Fluxos de Caixa — exercício {dm['ano']} (método directo)")
+        t_op, t_inv, t_fin = (sum((v for _, v in dm[k]), D(0)) for k in ("op", "inv", "fin"))
+        st.markdown("**Actividades operacionais**"); _tabela_contab(dm["op"], "Fluxo das actividades operacionais", t_op)
+        st.markdown("**Actividades de investimento**"); _tabela_contab(dm["inv"], "Fluxo das actividades de investimento", t_inv)
+        st.markdown("**Actividades de financiamento**"); _tabela_contab(dm["fin"], "Fluxo das actividades de financiamento", t_fin)
+        st.metric("Variação líquida de caixa no exercício", kz(float(t_op + t_inv + t_fin)))
+        st.caption("Evite lançar a mesma despesa em «Movimentos» e em «Despesas do grupo», porque aqui são somadas as duas. " + nota)
+
+    if eh_admin():
+        with st.expander("➕ Registar lançamento contabilístico (administrador)"):
+            with st.form("form_lanc_contab", clear_on_submit=True):
+                f1, f2 = st.columns(2)
+                rub = f1.selectbox("Rubrica", list(RUBRICAS_CONTAB))
+                dt_l = f2.date_input("Data", value=hoje)
+                desc_l = st.text_input("Descrição", max_chars=200)
+                val_l = st.number_input("Valor (Kz)", min_value=0.0, step=1000.0)
+                ok_l = st.form_submit_button("Registar lançamento")
+            if ok_l:
+                try:
+                    registar_lancamento_contab(dt_l, rub, desc_l, val_l)
+                    st.success("Lançamento registado.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+            st.caption(RUBRICAS_CONTAB[rub][1] + " Os valores entram sempre em positivo; a rubrica decide se é rendimento ou gasto.")
+            _dl = consultar_df("SELECT id, data, rubrica, descricao, valor FROM lancamentos_contab ORDER BY data DESC, id DESC LIMIT 200")
+            if not _dl.empty:
+                _dl = _dl.copy(); _dl["valor"] = _dl["valor"].apply(kz)
+                st.dataframe(_dl, hide_index=True)
+
+
+
 def pagina_historico_relatorios(tx):
     df_movimentos = obter_movimentos()
     resumo = obter_resumo_patrimonial()
@@ -7491,7 +7664,7 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
-st.sidebar.caption("Versão da app: 2026-10-14 · B (logótipos, Universo do Clube)")
+st.sidebar.caption("Versão da app: 2026-10-14 · C (Contabilidade)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
@@ -7657,16 +7830,7 @@ try:
     elif pagina == "💰 Contabilidade & Finanças":
         tx = t()
         hero("💰 " + tx["nav_map"]["💰 Contabilidade & Finanças"].replace("💰 ", ""), tx["cont_hero_sub"])
-        resumo   = obter_resumo_patrimonial()
-        cols_df  = tx["cont_df_cols"]
-        rows_df  = tx["cont_df_rows"]
-        montantes= [kz(resumo["capital_subscrito"]), kz(resumo["capital_realizado"]), kz(resumo["investimentos"]), kz(resumo["reservas"])]
-        df_resumo = pd.DataFrame([{cols_df[0]: r[0], cols_df[1]: r[1], cols_df[2]: m, cols_df[3]: r[2]}
-                                   for r, m in zip(rows_df, montantes)])
-        st.dataframe(df_resumo, hide_index=True)
-        total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são subdivisões do realizado
-        st.metric(tx["cont_patrimonio_metric"], kz(total_patrimonio))
-        st.caption(f"{tx['cont_ultima_actualizacao']} {resumo['actualizado_em']}")
+        pagina_contabilidade(tx)
 
     # =========================================================
     # PÁGINA: HISTÓRICO & RELATÓRIOS
