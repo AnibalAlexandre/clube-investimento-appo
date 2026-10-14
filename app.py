@@ -2114,6 +2114,7 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS config_app (chave TEXT PRIMARY KEY, valor TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS teses_activos (ticker TEXT PRIMARY KEY, tese TEXT, fair_value NUMERIC, decisao TEXT, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW(), actualizado_por TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS admissoes_formais (id SERIAL PRIMARY KEY, manifestacao_id INTEGER UNIQUE, nome TEXT NOT NULL, bi TEXT, nif TEXT, data_nascimento DATE, morada TEXT, origem_fundos TEXT, consentimento_formal BOOLEAN NOT NULL DEFAULT FALSE, consentimento_em TIMESTAMP, estado TEXT NOT NULL DEFAULT 'Em preparação', nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS transaccoes (id SERIAL PRIMARY KEY, data DATE NOT NULL, ticker TEXT NOT NULL, nome TEXT NOT NULL, tipo TEXT NOT NULL, qtd NUMERIC NOT NULL, preco_unit NUMERIC NOT NULL, comissao NUMERIC NOT NULL DEFAULT 0, nota TEXT, anulada BOOLEAN NOT NULL DEFAULT FALSE, motivo_anulacao TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS lancamentos_contab (id SERIAL PRIMARY KEY, data DATE NOT NULL, rubrica TEXT NOT NULL, descricao TEXT, valor NUMERIC NOT NULL, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS despesas_admin (id SERIAL PRIMARY KEY, data DATE NOT NULL, descricao TEXT NOT NULL, categoria TEXT, valor NUMERIC NOT NULL, fornecedor TEXT, estado TEXT NOT NULL DEFAULT 'Proposta', aprovada_por TEXT, aprovada_em TIMESTAMP, nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     _seed_servicos = [
@@ -7318,6 +7319,26 @@ def calcular_demonstracoes(ano: int) -> dict:
     desp_grupo = _soma_sql("SELECT COALESCE(SUM(valor), 0) FROM despesas_admin WHERE estado = 'Aprovada' AND EXTRACT(YEAR FROM data) = %s", (int(ano),))
     saidas = mov("Saída/Despesa")
     compras, vendas, entradas = mov("Compra de Activo"), mov("Venda de Activo"), mov("Entrada de Capital")
+    # livro de transacções: mais/menos-valias realizadas, comissões e fluxos de investimento do exercício
+    mv_livro, menos_livro, com_livro, usa_livro = D(0), D(0), D(0), False
+    try:
+        tdf = obter_transaccoes_df()
+        _, vend_l = processar_transaccoes(tdf)
+        for v in vend_l:
+            if v["data"].year == int(ano):
+                if v["ganho"] >= 0:
+                    mv_livro += v["ganho"]
+                else:
+                    menos_livro += -v["ganho"]
+        if not tdf.empty:
+            tano = tdf[pd.to_datetime(tdf["data"]).dt.year == int(ano)]
+            if not tano.empty:
+                usa_livro = True
+                com_livro = sum((dec(x) for x in tano["comissao"]), D(0))
+                compras = sum((dec(r.qtd) * dec(r.preco_unit) for r in tano.itertuples() if r.tipo == "Compra"), D(0))
+                vendas = sum((dec(r.qtd) * dec(r.preco_unit) for r in tano.itertuples() if r.tipo == "Venda"), D(0))
+    except Exception:
+        pass
     av = avaliar_carteira_real()
     resumo = obter_resumo_patrimonial()
     bal = obter_ultimo_balanco()
@@ -7330,8 +7351,8 @@ def calcular_demonstracoes(ano: int) -> dict:
     outros = dec(bal[3]) if bal and bal[3] is not None else D(0)
     passivos = dec(bal[4]) if bal and bal[4] is not None else D(0)
 
-    rendimentos = [("Dividendos recebidos", g("Dividendos recebidos")), ("Mais-valias realizadas", g("Mais-valias realizadas")), ("Outros rendimentos", g("Outros rendimentos"))]
-    gastos = [("Comissões e corretagem", g("Comissões e corretagem")), ("Impostos e taxas", g("Impostos e taxas")), ("Menos-valias realizadas", g("Menos-valias realizadas")),
+    rendimentos = [("Dividendos recebidos", g("Dividendos recebidos")), ("Mais-valias realizadas", g("Mais-valias realizadas") + mv_livro), ("Outros rendimentos", g("Outros rendimentos"))]
+    gastos = [("Comissões e corretagem", g("Comissões e corretagem") + com_livro), ("Impostos e taxas", g("Impostos e taxas")), ("Menos-valias realizadas", g("Menos-valias realizadas") + menos_livro),
               ("Despesas do grupo (aprovadas)", desp_grupo), ("Outras saídas/despesas (movimentos)", saidas), ("Outros gastos", g("Outros gastos"))]
     t_rend, t_gast = sum((v for _, v in rendimentos), D(0)), sum((v for _, v in gastos), D(0))
     realizado = t_rend - t_gast
@@ -7348,11 +7369,11 @@ def calcular_demonstracoes(ano: int) -> dict:
         "latente": latente, "integral": integral, "activo": activo, "t_activo": t_activo, "passivos": passivos, "cap_realizado": cap_realizado,
         "reservas": dec(resumo["reservas"]), "t_cp": t_cp, "t_pass_cp": t_pass_cp, "diferenca": t_activo - t_pass_cp,
         "tem_balanco": bal is not None, "sem_preco": av["sem_preco"], "caixa_origem": caixa_origem, "investimentos_custo": dec(resumo["investimentos"]),
-        "op": [("Dividendos recebidos", g("Dividendos recebidos")), ("Mais-valias realizadas (venda)", g("Mais-valias realizadas")), ("Outros rendimentos", g("Outros rendimentos")),
-               ("Comissões e corretagem", -g("Comissões e corretagem")), ("Impostos e taxas", -g("Impostos e taxas")), ("Menos-valias realizadas", -g("Menos-valias realizadas")),
+        "op": [("Dividendos recebidos", g("Dividendos recebidos")), ("Outros rendimentos", g("Outros rendimentos")),
+               ("Comissões e corretagem", -(g("Comissões e corretagem") + com_livro)), ("Impostos e taxas", -g("Impostos e taxas")),
                ("Despesas do grupo (aprovadas)", -desp_grupo), ("Outras saídas/despesas", -saidas), ("Outros gastos", -g("Outros gastos"))],
-        "inv": [("Compra de activos", -compras), ("Venda de activos", vendas)],
-        "fin": [("Entradas de capital dos sócios", entradas)],
+        "inv": [("Compra de activos", -compras), ("Venda de activos (produto da venda)", vendas)],
+        "fin": [("Entradas de capital dos sócios", entradas)], "usa_livro": usa_livro,
     }
 
 
@@ -7363,11 +7384,238 @@ def _tabela_contab(linhas, total_rot: str = None, total_val=None):
     st.dataframe(pd.DataFrame(d), hide_index=True)
 
 
+# ---------------- Livro de transacções (custo médio ponderado) ----------------
+def obter_transaccoes_df(incluir_anuladas: bool = False) -> pd.DataFrame:
+    exigir_participante()
+    filtro = "" if incluir_anuladas else "WHERE anulada = FALSE "
+    return consultar_df("SELECT id, data, ticker, nome, tipo, qtd, preco_unit, comissao, nota, anulada, motivo_anulacao FROM transaccoes " + filtro + "ORDER BY data, id")
+
+
+def processar_transaccoes(df: pd.DataFrame):
+    """Custo médio ponderado. Devolve (posições por activo, vendas realizadas). As comissões NÃO entram no custo: são gasto do período.
+    Levanta ValueError se alguma venda exceder a posição detida nessa data."""
+    pos, vendas = {}, []
+    if df is None or df.empty:
+        return pos, vendas
+    for r in df.sort_values(["data", "id"]).itertuples():
+        k = _chave_ticker(r.ticker)
+        p = pos.setdefault(k, {"ticker": r.ticker, "nome": r.nome, "qtd": D(0), "custo": D(0)})
+        q, pr = dec(r.qtd), dec(r.preco_unit)
+        if r.tipo == "Compra":
+            p["qtd"] += q
+            p["custo"] += q * pr
+        else:
+            if q > p["qtd"]:
+                raise ValueError(f"A venda de {q} de {r.nome} em {pd.Timestamp(r.data):%d/%m/%Y} excede a posição detida nessa data ({p['qtd']}).")
+            cm = p["custo"] / p["qtd"]
+            vendas.append({"data": pd.Timestamp(r.data).date(), "ticker": r.ticker, "nome": r.nome, "qtd": q, "preco": pr, "custo_medio": cm,
+                           "ganho": q * (pr - cm), "comissao": dec(r.comissao)})
+            p["custo"] -= q * cm
+            p["qtd"] -= q
+    return pos, vendas
+
+
+def registar_transaccao(data, ticker: str, nome: str, tipo: str, qtd, preco, comissao, nota: str):
+    exigir_admin()
+    if tipo not in ("Compra", "Venda"):
+        raise ValueError("Tipo inválido.")
+    q, pr, cm = dec(qtd), dec(preco), dec(comissao or 0)
+    if not (ticker or "").strip():
+        raise ValueError("Escolha um activo com ticker.")
+    if q <= 0 or pr <= 0 or cm < 0:
+        raise ValueError("Quantidade e preço devem ser positivos e a comissão não pode ser negativa.")
+    novo = pd.DataFrame([{"id": 10**9, "data": data, "ticker": ticker, "nome": nome, "tipo": tipo, "qtd": q, "preco_unit": pr, "comissao": cm}])
+    processar_transaccoes(pd.concat([obter_transaccoes_df(), novo], ignore_index=True))   # valida antes de gravar
+    with transaccao() as cur:
+        cur.execute("INSERT INTO transaccoes (data, ticker, nome, tipo, qtd, preco_unit, comissao, nota, criado_por) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                    (data, ticker.strip().upper(), nome, tipo, q, pr, cm, (nota or "").strip()[:300] or None, utilizador_actual()))
+        nid = cur.fetchone()[0]
+        registar_auditoria("transaccao_registada", "transaccoes", nid, depois={"tipo": tipo, "ticker": ticker, "qtd": str(q), "preco": str(pr), "comissao": str(cm)}, cur=cur)
+
+
+def anular_transaccao(tid: int, motivo: str):
+    exigir_admin()
+    if not (motivo or "").strip():
+        raise ValueError("Indique o motivo da anulação.")
+    resto = obter_transaccoes_df()
+    processar_transaccoes(resto[resto["id"] != int(tid)])   # a anulação não pode invalidar vendas posteriores
+    with transaccao() as cur:
+        cur.execute("UPDATE transaccoes SET anulada = TRUE, motivo_anulacao = %s WHERE id = %s AND anulada = FALSE", (motivo.strip()[:300], int(tid)))
+        registar_auditoria("transaccao_anulada", "transaccoes", tid, motivo=motivo.strip()[:300], cur=cur)
+
+
+def rentabilidade_clube_periodos() -> tuple:
+    """Rentabilidade do Clube (variação do valor da unidade) por período. Devolve (linhas, info do VUP)."""
+    info = obter_vup_info()
+    if info["estado"] == "Não calculado" or info["vup"] <= 0:
+        return [], info
+    hist = consultar_df("SELECT dia, vup FROM historico_vup ORDER BY dia")
+    hoje = datetime.now().date()
+    from datetime import timedelta
+    marcos = [(f"Desde 1 de Janeiro de {hoje.year}", datetime(hoje.year, 1, 1).date()), ("Últimos 3 meses", hoje - timedelta(days=91)),
+              ("Últimos 12 meses", hoje - timedelta(days=365))]
+    linhas = []
+    for rot, ini in marcos:
+        h = hist[hist["dia"] >= ini] if not hist.empty else hist
+        if h is None or h.empty:
+            linhas.append((rot, None, None))
+            continue
+        v0 = float(h.iloc[0]["vup"])
+        linhas.append((rot, v0, info["vup"] / v0 - 1 if v0 > 0 else None))
+    if info["vup_base"] > 0:
+        linhas.append(("Desde a origem (valor-base da unidade)", info["vup_base"], info["vup"] / info["vup_base"] - 1))
+    return linhas, info
+
+
+def rentabilidade_por_socio(vup: float) -> pd.DataFrame:
+    """Ganho = valor actual das unidades + resgates recebidos - subscrições. Rentabilidade acumulada simples (não anualizada)."""
+    mv = obter_unidades_movimentos(incluir_anulados=False)
+    if mv.empty:
+        return pd.DataFrame()
+    mv = mv[mv["estado"] == "Validado"]
+    linhas = []
+    for socio, g_ in mv.groupby("socio"):
+        subs = float(g_.loc[g_["montante"].astype(float) > 0, "montante"].astype(float).sum())
+        resg = -float(g_.loc[g_["montante"].astype(float) < 0, "montante"].astype(float).sum())
+        un = float(g_["unidades"].astype(float).sum())
+        valor = un * vup
+        ganho = valor + resg - subs
+        linhas.append({"Sócio": socio, "Subscrições": kz(subs), "Resgates": kz(resg), "Unidades": f"{un:,.4f}".replace(",", " "),
+                       "Valor actual": kz(valor), "Ganho": kz(ganho), "Rentabilidade": _pct_sinal(ganho / subs) if subs > 0 else "—"})
+    return pd.DataFrame(linhas)
+
+
+def render_livro_transaccoes():
+    try:
+        df = obter_transaccoes_df()
+        pos, vendas = processar_transaccoes(df)
+    except Exception as e:
+        st.error(f"O livro de transacções tem uma inconsistência: {e}")
+        return
+    act = obter_activos()
+    preco_por = {_chave_ticker(r["ticker"]): float(r["preco"]) for _, r in act.iterrows() if str(r["ticker"]).strip()}
+    st.markdown("#### Posições (custo médio ponderado)")
+    linhas = []
+    for k, p in pos.items():
+        if p["qtd"] <= 0:
+            continue
+        cm = p["custo"] / p["qtd"]
+        pr = preco_por.get(k)
+        vm = float(p["qtd"]) * pr if pr else None
+        linhas.append({"Logo": logo_data_uri(p["ticker"]), "Activo": p["nome"], "Quantidade": f"{float(p['qtd']):,.0f}".replace(",", " "), "Custo médio": kz(float(cm)),
+                       "Custo total": kz(float(p["custo"])), "Preço actual": kz(pr) if pr else "—", "Valor de mercado": kz(vm) if vm else "—",
+                       "Mais-valia latente": _pct_sinal(vm / float(p["custo"]) - 1) if vm and p["custo"] > 0 else "—"})
+    if linhas:
+        st.dataframe(pd.DataFrame(linhas), hide_index=True, column_config=cfg_logo())
+    else:
+        st.info("Ainda não há transacções registadas." if df.empty else "Não há posições abertas.")
+    st.caption("Custo médio ponderado; as comissões não entram no custo, são gasto do período (Demonstração de Resultados).")
+
+    if vendas:
+        st.markdown("#### Vendas realizadas")
+        st.dataframe(pd.DataFrame([{"Data": v["data"].strftime("%d/%m/%Y"), "Activo": v["nome"], "Quantidade": f"{float(v['qtd']):,.0f}".replace(",", " "),
+                                    "Preço de venda": kz(float(v["preco"])), "Custo médio": kz(float(v["custo_medio"])), "Ganho/Perda": kz(float(v["ganho"])),
+                                    "Comissão": kz(float(v["comissao"]))} for v in vendas[::-1]]), hide_index=True)
+        por_ano = {}
+        for v in vendas:
+            a = por_ano.setdefault(v["data"].year, [D(0), D(0)])
+            a[0] += v["ganho"]; a[1] += v["comissao"]
+        for tr in df.itertuples():
+            if tr.tipo == "Compra":
+                por_ano.setdefault(pd.Timestamp(tr.data).year, [D(0), D(0)])[1] += dec(tr.comissao)
+        st.dataframe(pd.DataFrame([{"Ano": a, "Mais/menos-valias realizadas": kz(float(v[0])), "Comissões pagas": kz(float(v[1]))} for a, v in sorted(por_ano.items(), reverse=True)]), hide_index=True)
+
+    try:   # comparação com a carteira real registada à mão
+        cart = obter_carteira_real()
+        dif = []
+        for _, l in cart.iterrows():
+            k = _chave_ticker(l["ticker"])
+            q_l = float(pos[k]["qtd"]) if k in pos else 0.0
+            if abs(q_l - float(l["qtd"] or 0)) > 1e-9:
+                dif.append({"Activo": l["nome"], "Quantidade na carteira real": f"{float(l['qtd'] or 0):,.0f}".replace(",", " "), "Quantidade no livro": f"{q_l:,.0f}".replace(",", " ")})
+        if pos and dif:
+            st.warning("O livro de transacções e a carteira real não coincidem nestes activos:")
+            st.dataframe(pd.DataFrame(dif), hide_index=True)
+        elif pos:
+            st.success("✅ As quantidades do livro coincidem com a carteira real.")
+    except Exception:
+        pass
+
+    with st.expander("📜 Todas as transacções"):
+        todas = obter_transaccoes_df(incluir_anuladas=True)
+        if todas.empty:
+            st.caption("Sem registos.")
+        else:
+            v = todas.copy()
+            v["preco_unit"] = v["preco_unit"].apply(lambda x: kz(float(x)))
+            v["comissao"] = v["comissao"].apply(lambda x: kz(float(x)))
+            st.dataframe(v, hide_index=True)
+
+    if eh_admin():
+        with st.expander("➕ Registar transacção (administrador)"):
+            ac = act[act["ticker"].astype(str).str.strip() != ""]
+            if ac.empty:
+                st.warning("Registe primeiro os activos com ticker em «Cotações & Activos».")
+            else:
+                with st.form("form_transaccao", clear_on_submit=True):
+                    t1, t2 = st.columns(2)
+                    tk = t1.selectbox("Activo", ac["ticker"].tolist(), format_func=lambda x: f"{ac.loc[ac['ticker'] == x, 'nome'].iloc[0]} ({x})")
+                    tp = t2.radio("Operação", ["Compra", "Venda"], horizontal=True)
+                    dt = st.date_input("Data da operação", format="DD/MM/YYYY")
+                    u1, u2, u3 = st.columns(3)
+                    qt = u1.number_input("Quantidade", min_value=0.0, step=1.0)
+                    pu = u2.number_input("Preço unitário (Kz)", min_value=0.0, step=100.0)
+                    cmz = u3.number_input("Comissão total (Kz)", min_value=0.0, step=100.0)
+                    nt = st.text_input("Nota (opcional)", max_chars=300)
+                    gr = st.form_submit_button("Registar transacção")
+                if gr:
+                    try:
+                        registar_transaccao(dt, tk, str(ac.loc[ac["ticker"] == tk, "nome"].iloc[0]), tp, qt, pu, cmz, nt)
+                        st.success("Transacção registada.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+        with st.expander("🚫 Anular transacção (administrador)"):
+            if df.empty:
+                st.caption("Sem transacções para anular.")
+            else:
+                ids = df["id"].astype(int).tolist()[::-1]
+                tid = st.selectbox("Transacção", ids, format_func=lambda i: f"#{i} · {df.loc[df['id'] == i, 'tipo'].iloc[0]} · {df.loc[df['id'] == i, 'nome'].iloc[0]} · {pd.Timestamp(df.loc[df['id'] == i, 'data'].iloc[0]):%d/%m/%Y}")
+                mot = st.text_input("Motivo da anulação", max_chars=300, key="mot_anul_tx")
+                if st.button("Anular transacção", key="btn_anul_tx"):
+                    try:
+                        anular_transaccao(tid, mot)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+
+
+def render_rentabilidade():
+    try:
+        linhas, info = rentabilidade_clube_periodos()
+    except Exception as e:
+        st.error(f"Não foi possível calcular a rentabilidade: {e}")
+        return
+    st.markdown("#### Rentabilidade do Clube por período")
+    if not linhas:
+        st.info("O valor da unidade ainda não é calculável. " + " ".join(info.get("motivos", [])))
+    else:
+        st.dataframe(pd.DataFrame([{"Período": r, "Valor da unidade no início": kz(v0) if v0 else "sem histórico", "Valor da unidade actual": kz(info["vup"]), "Rentabilidade": _pct_sinal(x)} for r, v0, x in linhas]), hide_index=True)
+        st.caption(f"Estado do valor da unidade: {info['estado']}. Rentabilidade acumulada no período, não anualizada.")
+        st.markdown("#### Rentabilidade por sócio" if eh_admin() else "#### A minha rentabilidade")
+        d = rentabilidade_por_socio(info["vup"])
+        if d.empty:
+            st.info("Ainda não há movimentos de unidades validados" + ("." if eh_admin() else " associados à sua conta."))
+        else:
+            st.dataframe(d, hide_index=True)
+            st.caption("Ganho = valor actual das unidades + resgates recebidos − subscrições. É uma rentabilidade acumulada simples, que não pondera o tempo de cada entrada.")
+
+
 def pagina_contabilidade(tx: dict):
     import datetime as _dt
     hoje = _dt.date.today()
     ano = st.selectbox("Exercício (ano) das demonstrações", list(range(hoje.year, 2023, -1)), key="cont_ano")
-    aba_res, aba_bal, aba_dr, aba_fc = st.tabs(["📋 Resumo", "⚖️ Balanço", "📉 Demonstração de Resultados", "💧 Fluxos de Caixa"])
+    aba_res, aba_bal, aba_dr, aba_fc, aba_liv, aba_rent = st.tabs(["📋 Resumo", "⚖️ Balanço", "📉 Demonstração de Resultados", "💧 Fluxos de Caixa", "📒 Livro de Transacções", "📈 Rentabilidade"])
     with aba_res:
             resumo   = obter_resumo_patrimonial()
             cols_df  = tx["cont_df_cols"]
@@ -7429,7 +7677,13 @@ def pagina_contabilidade(tx: dict):
         st.markdown("**Actividades de investimento**"); _tabela_contab(dm["inv"], "Fluxo das actividades de investimento", t_inv)
         st.markdown("**Actividades de financiamento**"); _tabela_contab(dm["fin"], "Fluxo das actividades de financiamento", t_fin)
         st.metric("Variação líquida de caixa no exercício", kz(float(t_op + t_inv + t_fin)))
-        st.caption("Evite lançar a mesma despesa em «Movimentos» e em «Despesas do grupo», porque aqui são somadas as duas. " + nota)
+        st.caption(("As compras e vendas vêm do Livro de Transacções (os movimentos «Compra/Venda de Activo» deste ano são ignorados). " if dm.get("usa_livro") else "As compras e vendas vêm dos movimentos; registe-as no Livro de Transacções para obter custo médio e mais-valias realizadas. ")
+                   + "Evite lançar a mesma despesa em «Movimentos» e em «Despesas do grupo», porque aqui são somadas as duas. " + nota)
+
+    with aba_liv:
+        render_livro_transaccoes()
+    with aba_rent:
+        render_rentabilidade()
 
     if eh_admin():
         with st.expander("➕ Registar lançamento contabilístico (administrador)"):
@@ -7907,7 +8161,7 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
-st.sidebar.caption("Versão da app: 2026-10-14 · E (admissão formal)")
+st.sidebar.caption("Versão da app: 2026-10-14 · F (livro de transacções)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
