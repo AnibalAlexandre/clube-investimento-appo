@@ -2112,6 +2112,7 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS identidades_socios (nome_interno TEXT PRIMARY KEY, rotulo_publico TEXT NOT NULL)""")
     executar("""CREATE TABLE IF NOT EXISTS carteira_referencia (ticker TEXT PRIMARY KEY, qtd NUMERIC NOT NULL, fonte TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS config_app (chave TEXT PRIMARY KEY, valor TEXT)""")
+    executar("""CREATE TABLE IF NOT EXISTS teses_activos (ticker TEXT PRIMARY KEY, tese TEXT, fair_value NUMERIC, decisao TEXT, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW(), actualizado_por TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS lancamentos_contab (id SERIAL PRIMARY KEY, data DATE NOT NULL, rubrica TEXT NOT NULL, descricao TEXT, valor NUMERIC NOT NULL, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS despesas_admin (id SERIAL PRIMARY KEY, data DATE NOT NULL, descricao TEXT NOT NULL, categoria TEXT, valor NUMERIC NOT NULL, fornecedor TEXT, estado TEXT NOT NULL DEFAULT 'Proposta', aprovada_por TEXT, aprovada_em TIMESTAMP, nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     _seed_servicos = [
@@ -7193,7 +7194,12 @@ def calcular_demonstracoes(ano: int) -> dict:
     av = avaliar_carteira_real()
     resumo = obter_resumo_patrimonial()
     bal = obter_ultimo_balanco()
-    caixa = dec(bal[2]) if bal and bal[2] is not None else D(0)
+    reservas_caixa = dec(resumo["reservas"])
+    # As reservas do Clube são o dinheiro em caixa. Usa-se o caixa do balanço registado, se existir e for positivo; senão, as reservas.
+    if bal and bal[2] is not None and dec(bal[2]) > 0:
+        caixa, caixa_origem = dec(bal[2]), "balanço registado"
+    else:
+        caixa, caixa_origem = reservas_caixa, "reservas do Clube"
     outros = dec(bal[3]) if bal and bal[3] is not None else D(0)
     passivos = dec(bal[4]) if bal and bal[4] is not None else D(0)
 
@@ -7214,7 +7220,7 @@ def calcular_demonstracoes(ano: int) -> dict:
         "ano": int(ano), "rendimentos": rendimentos, "gastos": gastos, "t_rend": t_rend, "t_gast": t_gast, "realizado": realizado,
         "latente": latente, "integral": integral, "activo": activo, "t_activo": t_activo, "passivos": passivos, "cap_realizado": cap_realizado,
         "reservas": dec(resumo["reservas"]), "t_cp": t_cp, "t_pass_cp": t_pass_cp, "diferenca": t_activo - t_pass_cp,
-        "tem_balanco": bal is not None, "sem_preco": av["sem_preco"],
+        "tem_balanco": bal is not None, "sem_preco": av["sem_preco"], "caixa_origem": caixa_origem, "investimentos_custo": dec(resumo["investimentos"]),
         "op": [("Dividendos recebidos", g("Dividendos recebidos")), ("Mais-valias realizadas (venda)", g("Mais-valias realizadas")), ("Outros rendimentos", g("Outros rendimentos")),
                ("Comissões e corretagem", -g("Comissões e corretagem")), ("Impostos e taxas", -g("Impostos e taxas")), ("Menos-valias realizadas", -g("Menos-valias realizadas")),
                ("Despesas do grupo (aprovadas)", -desp_grupo), ("Outras saídas/despesas", -saidas), ("Outros gastos", -g("Outros gastos"))],
@@ -7266,14 +7272,15 @@ def pagina_contabilidade(tx: dict):
             _tabela_contab([("Passivos", dm["passivos"]), ("Capital realizado", dm["cap_realizado"]),
                             ("Resultado do exercício (inclui mais-valias latentes)", dm["integral"])],
                            "TOTAL DO PASSIVO E CAPITAL PRÓPRIO", dm["t_pass_cp"])
-            st.caption(f"Dos quais, reservas: {kz(float(dm['reservas']))} (já incluídas no capital realizado, não somadas outra vez).")
+            st.caption(f"O capital realizado compõe-se de investimentos ao custo ({kz(float(dm['investimentos_custo']))}) e reservas, isto é, dinheiro em caixa ({kz(float(dm['reservas']))}).")
         if abs(dm["diferenca"]) <= D("1"):
             st.success("✅ O balanço fecha: Activo = Passivo + Capital próprio.")
         else:
             st.warning(f"⚠️ O balanço não fecha: diferença de {kz(float(dm['diferenca']))} (Activo − Passivo − Capital próprio). "
-                       "Isto indica dados por reconciliar (por exemplo, caixa, outros activos ou passivos por registar no Painel do Administrador › Resumo Patrimonial).")
+                       "Isto indica dados por reconciliar (por exemplo, o custo dos investimentos, as reservas, outros activos ou passivos no Painel do Administrador › Resumo Patrimonial).")
+        st.caption(f"Caixa e equivalentes: origem — {dm['caixa_origem']}.")
         if not dm["tem_balanco"]:
-            st.info("Ainda não há um balanço de caixa, outros activos e passivos registado: estas linhas aparecem a zero.")
+            st.info("Ainda não há balanço de outros activos e passivos registado: essas linhas aparecem a zero.")
         if dm["sem_preco"]:
             st.caption("Posições sem preço de mercado (valorizadas a zero): " + ", ".join(dm["sem_preco"]))
         st.caption(nota)
@@ -7319,6 +7326,115 @@ def pagina_contabilidade(tx: dict):
                 _dl = _dl.copy(); _dl["valor"] = _dl["valor"].apply(kz)
                 st.dataframe(_dl, hide_index=True)
 
+
+
+# ---------------- Terminal de Decisão ----------------
+DECISOES_CLUBE = ["Em observação", "Comprar", "Reforçar", "Manter", "Reduzir", "Vender"]
+LIMITE_ACTIVO_CLUBE = 0.10   # regra do Clube: máximo 10% do fundo global por activo
+
+
+def _chave_ticker(t) -> str:
+    return str(t or "").strip().upper().rstrip("A")
+
+
+def obter_teses() -> pd.DataFrame:
+    return consultar_df("SELECT ticker, tese, fair_value, decisao, actualizado_em, actualizado_por FROM teses_activos")
+
+
+def guardar_tese(ticker: str, tese: str, fair_value, decisao: str):
+    exigir_admin()
+    if not (ticker or "").strip():
+        raise ValueError("Escolha um activo com ticker.")
+    if decisao not in DECISOES_CLUBE:
+        raise ValueError("Decisão inválida.")
+    fv = dec(fair_value) if fair_value else None
+    with transaccao() as cur:
+        cur.execute("""INSERT INTO teses_activos (ticker, tese, fair_value, decisao, actualizado_em, actualizado_por)
+                       VALUES (%s, %s, %s, %s, NOW(), %s)
+                       ON CONFLICT (ticker) DO UPDATE SET tese = EXCLUDED.tese, fair_value = EXCLUDED.fair_value,
+                       decisao = EXCLUDED.decisao, actualizado_em = NOW(), actualizado_por = EXCLUDED.actualizado_por""",
+                    (ticker.strip().upper(), (tese or "").strip()[:4000] or None, fv, decisao, utilizador_actual()))
+        registar_auditoria("tese_activo", "teses_activos", ticker.strip().upper(), depois={"decisao": decisao, "fair_value": str(fv) if fv else ""}, cur=cur)
+
+
+def _sinal_valor(preco: float, fv):
+    """Sinal calculado (não escrito à mão): compara o preço com o fair value."""
+    if not fv or float(fv) <= 0 or not preco:
+        return "Sem fair value", None
+    pot = float(fv) / float(preco) - 1
+    if pot > 0.15:
+        return "Subvalorizado", pot
+    if pot < -0.10:
+        return "Sobrevalorizado", pot
+    return "Perto do valor justo", pot
+
+
+def _pct_sinal(x) -> str:
+    return "—" if x is None else f"{x * 100:+.1f}%".replace(".", ",")
+
+
+def pagina_terminal_decisao():
+    socio = eh_participante()
+    hero("🎯 Terminal de Decisão",
+         "As decisões do Clube sobre a carteira real, com teses e fair value." if socio else "Lista de acompanhamento do mercado BODIVA: preço, fair value e sinal de valorização.",
+         "🇦🇴 BODIVA")
+    act = obter_activos()
+    act = act[act["ticker"].astype(str).str.strip() != ""] if not act.empty else act
+    if act.empty:
+        st.info("Ainda não há activos com ticker registados. O administrador regista-os em Painel do Administrador › Cotações & Activos.")
+        return
+    teses = obter_teses()
+    por_tk = {_chave_ticker(r["ticker"]): r for _, r in teses.iterrows()} if not teses.empty else {}
+
+    pos = {}
+    total = 0.0
+    if socio:
+        try:
+            cart = obter_carteira_real()
+            preco_por = {_chave_ticker(r["ticker"]): float(r["preco"]) for _, r in act.iterrows()}
+            for _, l in cart.iterrows():
+                k = _chave_ticker(l["ticker"])
+                valor = float(l["qtd"] or 0) * preco_por.get(k, 0.0)
+                pos[k] = {"qtd": float(l["qtd"] or 0), "valor": valor, "custo": float(l["valor_aquisicao"] or 0)}
+                total += valor
+        except Exception:
+            pos, total = {}, 0.0
+
+    linhas = []
+    for _, a in act.iterrows():
+        k = _chave_ticker(a["ticker"])
+        t_ = por_tk.get(k)
+        fv = float(t_["fair_value"]) if t_ is not None and t_["fair_value"] is not None and pd.notna(t_["fair_value"]) else None
+        sinal, pot = _sinal_valor(float(a["preco"]), fv)
+        linha = {"Logo": logo_data_uri(a["ticker"]), "Ticker": str(a["ticker"]), "Activo": str(a["nome"]), "Preço": kz(float(a["preco"])),
+                 "Variação": pct_bruto(a["variacao"]), "Fair value": kz(fv) if fv else "—", "Potencial": _pct_sinal(pot), "Sinal": sinal}
+        if socio:
+            p = pos.get(k)
+            peso = (p["valor"] / total) if p and total > 0 else None
+            linha["Peso na carteira"] = _pct_sinal(peso).replace("+", "") if peso is not None else "—"
+            linha["Limite de 10%"] = "—" if peso is None else ("⚠️ Excedido" if peso > LIMITE_ACTIVO_CLUBE else "Dentro do limite")
+            linha["Mais-valia"] = (_pct_sinal(p["valor"] / p["custo"] - 1) if p and p["custo"] > 0 else "—")
+            linha["Decisão do Clube"] = (t_["decisao"] if t_ is not None and t_["decisao"] else "Em observação")
+        linhas.append(linha)
+    df = pd.DataFrame(linhas)
+    if socio:
+        df["_p"] = df["Peso na carteira"].map(lambda v: -1.0 if v == "—" else -float(v.replace("%", "").replace(",", ".")))
+        df = df.sort_values("_p").drop(columns="_p")
+    st.dataframe(df, hide_index=True, column_config=cfg_logo())
+    if socio:
+        st.caption("O peso e o limite são calculados com a carteira real e os preços actuais; o limite de 10% por activo é a regra do Clube. O sinal compara o preço com o fair value (subvalorizado acima de +15%, sobrevalorizado abaixo de −10%).")
+        st.markdown("#### Teses do Clube")
+        com_tese = [(r["Activo"], r["Ticker"]) for _, r in df.iterrows() if por_tk.get(_chave_ticker(r["Ticker"])) is not None and por_tk[_chave_ticker(r["Ticker"])]["tese"]]
+        if not com_tese:
+            st.info("Ainda não há teses registadas. O administrador escreve-as em Painel do Administrador › Teses & Fair Value.")
+        for nome, tk in com_tese:
+            t_ = por_tk[_chave_ticker(tk)]
+            with st.expander(f"{nome} ({tk}) — {t_['decisao'] or 'Em observação'}"):
+                st.write(t_["tese"])
+                st.caption(f"Última revisão: {t_['actualizado_em']:%d/%m/%Y}" if pd.notna(t_["actualizado_em"]) else "")
+    else:
+        st.caption("Lista de acompanhamento de mercado, sem as posições nem as decisões do Clube.")
+    aviso_discreto("Informação educativa, sem recomendação personalizada. O fair value é uma estimativa e pode estar errado; confirme sempre os preços no site oficial da BODIVA.")
 
 
 def pagina_historico_relatorios(tx):
@@ -7651,7 +7767,7 @@ PAGINAS = ["🏠 Início & Análises", "🧭 Perfil de Investidor", "🧠 Capaci
 if eh_participante():
     PAGINAS += ["💰 Contabilidade & Finanças", "📊 Histórico & Relatórios"]   # área patrimonial restrita
 if eh_investidor():   # Portal Investidor (níveis avançados)
-    PAGINAS += ["📈 Cotações & Activos", "📐 Avaliação de Activos", "🧪 Simulador de Investimento", "🧮 Princípio 50/30/20", "💱 Conversor de Moeda"]
+    PAGINAS += ["📈 Cotações & Activos", "🎯 Terminal de Decisão", "📐 Avaliação de Activos", "🧪 Simulador de Investimento", "🧮 Princípio 50/30/20", "💱 Conversor de Moeda"]
 PAGINAS += ["📚 Biblioteca Educativa", "🎓 Educação & Serviços", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos"]
 if st.session_state["is_admin"]:
     PAGINAS.append("🔐 Painel do Administrador")
@@ -7664,7 +7780,7 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
-st.sidebar.caption("Versão da app: 2026-10-14 · C (Contabilidade)")
+st.sidebar.caption("Versão da app: 2026-10-14 · D (Contabilidade corrigida, Terminal de Decisão)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
@@ -7827,6 +7943,9 @@ try:
     # =========================================================
     # PÁGINA: CONTABILIDADE & FINANÇAS
     # =========================================================
+    elif pagina == "🎯 Terminal de Decisão":
+        pagina_terminal_decisao()
+
     elif pagina == "💰 Contabilidade & Finanças":
         tx = t()
         hero("💰 " + tx["nav_map"]["💰 Contabilidade & Finanças"].replace("💰 ", ""), tx["cont_hero_sub"])
@@ -8568,12 +8687,43 @@ try:
     elif pagina == "🔐 Painel do Administrador":
         hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
 
-        aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca, aba_edu_serv, aba_despesas, aba_site = st.tabs(
-            ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança", "Educação & Serviços", "Despesas do grupo", "Site & Sobre Nós"])
+        aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca, aba_edu_serv, aba_despesas, aba_site, aba_teses = st.tabs(
+            ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança", "Educação & Serviços", "Despesas do grupo", "Site & Sobre Nós", "Teses & Fair Value"])
         with aba_edu_serv:
             painel_educacao_servicos_admin()
         with aba_despesas:
             painel_despesas_admin()
+        with aba_teses:
+            st.subheader("Teses e fair value (Terminal de Decisão)")
+            _ac = obter_activos()
+            _ac = _ac[_ac["ticker"].astype(str).str.strip() != ""]
+            if _ac.empty:
+                st.warning("Registe primeiro os activos com ticker em «Cotações & Activos».")
+            else:
+                _tz = obter_teses()
+                _mapa = {_chave_ticker(r["ticker"]): r for _, r in _tz.iterrows()} if not _tz.empty else {}
+                _escolha = st.selectbox("Activo", _ac["ticker"].tolist(), key="tese_tk",
+                                        format_func=lambda tk: f"{_ac.loc[_ac['ticker'] == tk, 'nome'].iloc[0]} ({tk})")
+                _cur = _mapa.get(_chave_ticker(_escolha))
+                _fv0 = float(_cur["fair_value"]) if _cur is not None and pd.notna(_cur["fair_value"]) else 0.0
+                _dc0 = _cur["decisao"] if _cur is not None and _cur["decisao"] in DECISOES_CLUBE else "Em observação"
+                with st.form(f"form_tese_{_escolha}"):
+                    _fv = st.number_input("Fair value (Kz por acção; 0 = sem estimativa)", min_value=0.0, value=_fv0, step=500.0)
+                    _dc = st.selectbox("Decisão do Clube", DECISOES_CLUBE, index=DECISOES_CLUBE.index(_dc0))
+                    _ts = st.text_area("Tese de investimento", value=(_cur["tese"] if _cur is not None and _cur["tese"] else ""), height=180, max_chars=4000)
+                    _gv = st.form_submit_button("Guardar tese")
+                if _gv:
+                    try:
+                        guardar_tese(_escolha, _ts, _fv, _dc)
+                        st.success("Tese guardada.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+                if not _tz.empty:
+                    _v = _tz[["ticker", "decisao", "fair_value", "actualizado_em", "actualizado_por"]].copy()
+                    _v["fair_value"] = _v["fair_value"].apply(lambda x: kz(float(x)) if pd.notna(x) else "—")
+                    st.dataframe(_v, hide_index=True)
+
         with aba_site:
             painel_site_admin()
 
