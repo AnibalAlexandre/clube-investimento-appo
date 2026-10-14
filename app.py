@@ -98,8 +98,8 @@ TRADUCOES = {
         "cot_tendencia_semanal": "##### Tendência semanal do Índice APPO",
         "cot_tendencia_sem_caption1": "Ainda não há pelo menos duas semanas de histórico para mostrar a tendência semanal.",
         "cot_tendencia_sem_caption2": "Ainda não há histórico suficiente para a vista semanal.",
-        "cot_tab_favoritos": "⭐ Favoritos",
-        "cot_tab_todos": "📋 Todos os Activos",
+        "cot_tab_favoritos": "⭐ Os meus favoritos",
+        "cot_tab_todos": "🔭 Universo do Clube",
         "cot_fav_escolher": "Escolher os teus activos favoritos",
         "cot_fav_info": "Ainda não marcaste nenhum activo como favorito. Usa a caixa acima.",
         "cot_filtrar_tipo": "Filtrar por tipo de activo",
@@ -1283,6 +1283,27 @@ _PASTA_LOGOS = Path(__file__).resolve().parent / "logos"
 _CACHE_LOGOS = {}
 
 
+def logo_data_uri(ticker) -> str:
+    """Data-URI do logótipo (para st.column_config.ImageColumn); vazio se não houver ficheiro."""
+    base = str(ticker or "").strip().upper().rstrip("A")
+    try:
+        import base64 as _b64
+        for ext, mime in ((".png", "image/png"), (".jpg", "image/jpeg"), (".webp", "image/webp")):
+            f = _PASTA_LOGOS / f"{base}{ext}"
+            if base and f.is_file() and f.stat().st_size < 400_000:
+                return f"data:{mime};base64," + _b64.b64encode(f.read_bytes()).decode()
+    except Exception:
+        pass
+    return ""
+
+
+def cfg_logo() -> dict:
+    try:
+        return {"Logo": st.column_config.ImageColumn(" ", width="small")}
+    except Exception:
+        return {}
+
+
 def logo_activo_html(ticker, nome="", px: int = 18) -> str:
     base = str(ticker or "").strip().upper().rstrip("A")
     chave = (base, px)
@@ -1422,10 +1443,11 @@ def tabela_cotacoes_estilizada(df_activos: pd.DataFrame):
     tx = t()
     cols = tx["cot_tabela_cols"]
     df_disp = df_activos[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
+    df_disp.insert(0, "Logo", df_disp["ticker"].map(logo_data_uri))
     df_disp["mercado"] = "🇦🇴 BODIVA"
     df_disp = df_disp.rename(columns={"ticker": cols["ticker"], "nome": cols["nome"], "tipo": cols["tipo"],
                                        "preco": cols["preco"], "variacao": cols["variacao"], "mercado": cols["mercado"]})
-    df_disp = df_disp[[cols["ticker"], cols["nome"], cols["tipo"], cols["mercado"], cols["preco"], cols["variacao"]]]
+    df_disp = df_disp[["Logo", cols["ticker"], cols["nome"], cols["tipo"], cols["mercado"], cols["preco"], cols["variacao"]]]
     return (
         df_disp.style
         .format({cols["preco"]: kz, cols["variacao"]: pct_bruto})
@@ -1628,10 +1650,10 @@ def obter_serie_cambio_aoa(moeda: str, periodo: str = "1m") -> pd.DataFrame:
 
 def _camadas_serie(alt, df, eixo_x, eixo_y, base, unidade):
     """Área com gradiente suave, linha fina e, ao passar o rato, guia vertical, ponto e etiqueta com data e valor."""
-    cor = "#7C1F3E"
+    cor = "#A8607B"
     try:
         grad = alt.Gradient(gradient="linear", x1=1, x2=1, y1=1, y2=0,
-                            stops=[alt.GradientStop(color="rgba(249,115,22,0.0)", offset=0), alt.GradientStop(color="rgba(225,29,72,0.16)", offset=0.55), alt.GradientStop(color="rgba(109,40,217,0.32)", offset=1)])
+                            stops=[alt.GradientStop(color="rgba(239,185,136,0.0)", offset=0), alt.GradientStop(color="rgba(217,138,130,0.14)", offset=0.55), alt.GradientStop(color="rgba(142,124,195,0.26)", offset=1)])
         area = alt.Chart(df).mark_area(color=grad, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
     except Exception:
         area = alt.Chart(df).mark_area(opacity=0.12, color=cor, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
@@ -2085,6 +2107,7 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS servicos_catalogo (id SERIAL PRIMARY KEY, codigo TEXT UNIQUE NOT NULL, nome TEXT NOT NULL, descricao TEXT, preco NUMERIC, nota_preco TEXT, tipo TEXT NOT NULL DEFAULT 'educativo', activo BOOLEAN NOT NULL DEFAULT TRUE, visivel_publico BOOLEAN NOT NULL DEFAULT TRUE, contratavel BOOLEAN NOT NULL DEFAULT FALSE, ordem INTEGER NOT NULL DEFAULT 0)""")
     executar("""CREATE TABLE IF NOT EXISTS pedidos_servicos (id SERIAL PRIMARY KEY, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), servico_id INTEGER, servico_nome TEXT, nome TEXT NOT NULL, email TEXT, telefone TEXT, participantes INTEGER NOT NULL DEFAULT 1, mensagem TEXT, estado_servico TEXT NOT NULL DEFAULT 'Recebido', estado_pagamento TEXT NOT NULL DEFAULT 'Por confirmar', pagamento_confirmado_por TEXT, pagamento_confirmado_em TIMESTAMP, pagamento_nota TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS manifestacoes_interesse (id SERIAL PRIMARY KEY, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), nome TEXT NOT NULL, email TEXT, telefone TEXT, mensagem TEXT, consentimento BOOLEAN NOT NULL DEFAULT FALSE, estado TEXT NOT NULL DEFAULT 'Recebida')""")
+    executar("ALTER TABLE manifestacoes_interesse ADD COLUMN IF NOT EXISTS profissao TEXT")
     executar("""CREATE TABLE IF NOT EXISTS historico_privado (id SERIAL PRIMARY KEY, descricao TEXT NOT NULL, valor_estimado NUMERIC, estado TEXT NOT NULL DEFAULT 'Estimativa não reconciliada', nota TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS identidades_socios (nome_interno TEXT PRIMARY KEY, rotulo_publico TEXT NOT NULL)""")
     executar("""CREATE TABLE IF NOT EXISTS carteira_referencia (ticker TEXT PRIMARY KEY, qtd NUMERIC NOT NULL, fonte TEXT)""")
@@ -4807,9 +4830,9 @@ def registar_pedido_servico(servico_id: int, nome: str, email: str, telefone: st
              (s[0], s[1], nome.strip(), email.strip() or None, telefone.strip() or None, int(participantes), (mensagem or "").strip()[:1000] or None))
 
 
-def registar_manifestacao_interesse(nome: str, email: str, telefone: str, mensagem: str):
-    executar("INSERT INTO manifestacoes_interesse (nome, email, telefone, mensagem, consentimento) VALUES (%s, %s, %s, %s, TRUE)",
-             (nome.strip(), email.strip() or None, telefone.strip() or None, (mensagem or "").strip()[:1000] or None))
+def registar_manifestacao_interesse(nome: str, email: str, telefone: str, mensagem: str, profissao: str = ""):
+    executar("INSERT INTO manifestacoes_interesse (nome, email, telefone, mensagem, profissao, consentimento) VALUES (%s, %s, %s, %s, %s, TRUE)",
+             (nome.strip(), email.strip() or None, telefone.strip() or None, (mensagem or "").strip()[:1000] or None, (profissao or "").strip()[:120] or None))
 
 
 def pagina_educacao_servicos():
@@ -4868,7 +4891,7 @@ def pagina_educacao_servicos():
 def pagina_manifestacao_interesse():
     st.markdown("### 🤝 Manifestação de interesse")
     st.info(TEXTO_MANIFESTACAO)
-    aviso_discreto("Nesta fase não pedimos capital, documentos de identificação nem comprovativos.")
+    aviso_discreto("Nesta fase pedimos apenas o necessário: nome, contacto, profissão e motivação. Não pedimos capital, BI, NIF, morada nem origem de fundos — esses dados só são solicitados, mais tarde, se avançar para a admissão formal, e ficam acessíveis apenas aos administradores.")
     with st.form("form_manifestacao", clear_on_submit=True):
         _pn, _ap = st.columns(2)
         _nome_p = _pn.text_input("Nome próprio", max_chars=60)
@@ -4877,8 +4900,9 @@ def pagina_manifestacao_interesse():
         c1, c2 = st.columns(2)
         email = c1.text_input("E-mail", max_chars=200)
         tel = c2.text_input("Telefone", max_chars=30)
-        msg = st.text_area("Mensagem (opcional)", max_chars=1000)
-        ok = st.checkbox("Compreendo que isto não é uma admissão e autorizo o APPO a usar estes dados apenas para me contactar sobre este assunto.")
+        profissao = st.text_input("Profissão", max_chars=120)
+        msg = st.text_area("Motivação: porque quer participar no Clube?", max_chars=1000)
+        ok = st.checkbox("Compreendo que isto não é uma admissão e consinto, de forma expressa, que o APPO trate estes dados apenas para me contactar sobre este assunto, nos termos da Lei n.º 22/11 (Lei da Protecção de Dados Pessoais).")
         enviar = st.form_submit_button("Enviar manifestação de interesse")
     if enviar:
         erro = "Indique o nome próprio e o apelido." if not (_nome_p.strip() and _apelido.strip()) else validar_contacto(nome, email, tel)
@@ -4890,7 +4914,7 @@ def pagina_manifestacao_interesse():
             st.warning("Aguarde alguns segundos antes de enviar outro pedido.")
         else:
             try:
-                registar_manifestacao_interesse(nome, email, tel, msg)
+                registar_manifestacao_interesse(nome, email, tel, msg, profissao)
                 st.success("Manifestação de interesse recebida. Entraremos em contacto, se e quando houver novidades.")
             except Exception as e:
                 st.error(f"Não foi possível registar o pedido: {e}")
@@ -5020,7 +5044,7 @@ def painel_educacao_servicos_admin():
                         except Exception as e:
                             st.error(str(e))
     with sub_man:
-        dfm = consultar_df("SELECT id, criado_em, nome, email, telefone, mensagem, consentimento, estado FROM manifestacoes_interesse ORDER BY id DESC LIMIT 500")
+        dfm = consultar_df("SELECT id, criado_em, nome, email, telefone, profissao, mensagem, consentimento, estado FROM manifestacoes_interesse ORDER BY id DESC LIMIT 500")
         st.caption("Registos de interesse. Não são admissões nem dão direito a cotas. A admissão futura continua desactivada.")
         if dfm.empty:
             st.info("Ainda não há manifestações de interesse.")
@@ -6778,7 +6802,7 @@ def painel_mercado_bodiva():
 # =========================================================
 # COMPONENTES VISUAIS: gráficos de anel, biblioteca por níveis, Histórico & Relatórios avançado
 # =========================================================
-_PALETA_FX = ["#6D28D9", "#E11D48", "#F97316", "#8B5CF6", "#FB7185", "#FDBA74", "#4F46E5", "#BE185D", "#B45309", "#0EA5E9"]
+_PALETA_FX = ["#8E7CC3", "#A8607B", "#D98A82", "#EFB988", "#B3A5DB", "#C98BA0", "#F3CBA4", "#B59A86", "#9AA0C8", "#D6A3B3"]
 
 
 def grafico_anel(df: pd.DataFrame, cat: str, val: str, titulo: str = "", centro_titulo: str = "Total", centro_valor: str = "",
@@ -7149,8 +7173,8 @@ def pagina_historico_relatorios(tx):
 # =========================================================
 # FASE 1 — componentes: cartões KPI, gráficos na paleta do Clube, conteúdo institucional editável
 # =========================================================
-_PALETA_SERIES = ["#6D28D9", "#7C1F3E", "#E11D48", "#F97316", "#8B5CF6", "#BE185D", "#FB923C", "#B45309"]
-COR_PRECO = "#7C1F3E"          # cotações/preços: vinho do Clube (o gradiente das áreas vai de roxo a vinho, vermelho e laranja)
+_PALETA_SERIES = ["#8E7CC3", "#A8607B", "#D98A82", "#EFB988", "#B3A5DB", "#C98BA0", "#F3CBA4", "#B59A86"]
+COR_PRECO = "#A8607B"          # cotações/preços: vinho do Clube (o gradiente das áreas vai de roxo a vinho, vermelho e laranja)
 
 
 def kpi_card(icone: str, titulo: str, valor: str, sub: str = None, progresso: float = None, tom: str = None, destaque: bool = False) -> str:
@@ -7174,13 +7198,13 @@ def fx_barras(df: pd.DataFrame, height: int = 300, **_):
         d.index = d.index.astype(str)
         d.index.name = "Item"
         L = d.reset_index().melt("Item", var_name="Série", value_name="Valor")
-        x = alt.X("Item:N", sort=None, title=None, axis=alt.Axis(labelAngle=0, labelLimit=150, labelColor="#475569"))
+        x = alt.X("Item:N", sort=None, title=None, scale=alt.Scale(paddingInner=0.3, paddingOuter=0.2), axis=alt.Axis(labelAngle=0, labelLimit=150, labelColor="#475569"))
         y = alt.Y("Valor:Q", title=None, axis=alt.Axis(format="~s", gridColor="#EDE9F7", labelColor="#64748B"))
         tip = [alt.Tooltip("Item:N", title="Item"), alt.Tooltip("Série:N", title="Série"), alt.Tooltip("Valor:Q", format=",.2f", title="Valor")]
         if d.shape[1] == 1:
             grad = alt.Gradient(gradient="linear", x1=1, x2=1, y1=0, y2=1,
-                                stops=[alt.GradientStop(color="#6D28D9", offset=0), alt.GradientStop(color="#7C1F3E", offset=0.35), alt.GradientStop(color="#E11D48", offset=0.68), alt.GradientStop(color="#F97316", offset=1)])
-            ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=8, cornerRadiusTopRight=8, color=grad, size=46).encode(x=x, y=y, tooltip=tip)
+                                stops=[alt.GradientStop(color="#9C8FCF", offset=0), alt.GradientStop(color="#A8607B", offset=0.4), alt.GradientStop(color="#D98A82", offset=0.75), alt.GradientStop(color="#EFB988", offset=1)])
+            ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6, color=grad).encode(x=x, y=y, tooltip=tip)
         else:
             ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
                 x=x, xOffset="Série:N", y=y, tooltip=tip,
@@ -7555,7 +7579,7 @@ try:
             _painel_indices(df_activos)
             st.divider()
 
-            aba_mkt, aba_fav, aba_todos, aba_graf = st.tabs(["🌐 Mercado BODIVA (todos os títulos)", tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos"])
+            aba_mkt, aba_fav, aba_todos, aba_graf = st.tabs(["🌐 Mercado BODIVA (todos os títulos)", tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos do Clube"])
             with aba_mkt:
                 painel_mercado_bodiva()
             conta_id          = st.session_state["conta_id"]
@@ -7569,15 +7593,20 @@ try:
                     definir_favoritos(conta_id, [opcoes[n] for n in novos_nomes])
                     st.rerun()
                 if novos_nomes:
-                    st.dataframe(tabela_cotacoes_estilizada(df_activos[df_activos["nome"].isin(novos_nomes)]), hide_index=True)
+                    st.dataframe(tabela_cotacoes_estilizada(df_activos[df_activos["nome"].isin(novos_nomes)]), hide_index=True, column_config=cfg_logo())
                 else:
                     st.info(tx["cot_fav_info"])
 
             with aba_todos:
-                tipos        = [tx["cot_filtrar_todos"]] + sorted(df_activos["tipo"].unique().tolist())
-                filtro_tipo  = st.selectbox(tx["cot_filtrar_tipo"], tipos)
-                df_filtrado  = df_activos if filtro_tipo == tx["cot_filtrar_todos"] else df_activos[df_activos["tipo"] == filtro_tipo]
-                st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True)
+                st.caption("Todos os activos que o Clube acompanha — cotados na BODIVA ou não —, organizados por classe.")
+                _classes = {"Todas": None, "📈 Ações": ("ação", "acao", "acç"), "🏛️ Obrigações": ("obrig", "bilhete", "título público", "titulo publico"), "📊 Fundos": ("fundo",)}
+                _cl = st.radio("Classe de activo", list(_classes), horizontal=True, key="cot_classe")
+                _chaves = _classes[_cl]
+                df_filtrado = df_activos if _chaves is None else df_activos[df_activos["tipo"].astype(str).str.lower().apply(lambda v: any(c in v for c in _chaves))]
+                if df_filtrado.empty:
+                    st.info(f"O Clube ainda não acompanha activos nesta classe ({_cl.split(' ', 1)[-1]}). "
+                            "O administrador pode registá-los em Painel do Administrador › Cotações & Activos.")
+                st.dataframe(tabela_cotacoes_estilizada(df_filtrado), hide_index=True, column_config=cfg_logo())
                 st.caption(f"{tx['cot_ultima_actualizacao']} {df_filtrado['actualizado_em'].max()}")
                 _xl_cot = _xlsx_seguro(lambda: gerar_xlsx_cotacoes(df_filtrado))
                 if _xl_cot:
@@ -7589,7 +7618,8 @@ try:
                 st.divider()
                 st.subheader(tx["cot_comparacao"])
                 cols_tb = tx["cot_tabela_cols"]
-                fx_barras(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": tx["cot_preco_kz"]}))
+                if not df_filtrado.empty:
+                    fx_barras(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": tx["cot_preco_kz"]}))
 
             with aba_graf:
                 registar_cotacoes_hoje(df_activos)
