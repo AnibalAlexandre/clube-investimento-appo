@@ -2113,6 +2113,7 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS carteira_referencia (ticker TEXT PRIMARY KEY, qtd NUMERIC NOT NULL, fonte TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS config_app (chave TEXT PRIMARY KEY, valor TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS teses_activos (ticker TEXT PRIMARY KEY, tese TEXT, fair_value NUMERIC, decisao TEXT, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW(), actualizado_por TEXT)""")
+    executar("""CREATE TABLE IF NOT EXISTS admissoes_formais (id SERIAL PRIMARY KEY, manifestacao_id INTEGER UNIQUE, nome TEXT NOT NULL, bi TEXT, nif TEXT, data_nascimento DATE, morada TEXT, origem_fundos TEXT, consentimento_formal BOOLEAN NOT NULL DEFAULT FALSE, consentimento_em TIMESTAMP, estado TEXT NOT NULL DEFAULT 'Em preparação', nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS lancamentos_contab (id SERIAL PRIMARY KEY, data DATE NOT NULL, rubrica TEXT NOT NULL, descricao TEXT, valor NUMERIC NOT NULL, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS despesas_admin (id SERIAL PRIMARY KEY, data DATE NOT NULL, descricao TEXT NOT NULL, categoria TEXT, valor NUMERIC NOT NULL, fornecedor TEXT, estado TEXT NOT NULL DEFAULT 'Proposta', aprovada_por TEXT, aprovada_em TIMESTAMP, nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     _seed_servicos = [
@@ -4837,6 +4838,130 @@ def registar_manifestacao_interesse(nome: str, email: str, telefone: str, mensag
              (nome.strip(), email.strip() or None, telefone.strip() or None, (mensagem or "").strip()[:1000] or None, (profissao or "").strip()[:120] or None))
 
 
+# ---------------- Admissão formal (fase 2): dados sensíveis, só administradores ----------------
+ESTADOS_ADMISSAO = ["Em preparação", "Documentos recebidos", "Aprovada pela Comissão", "Recusada", "Arquivada"]
+ORIGENS_FUNDOS = ["Rendimento do trabalho (salário)", "Actividade empresarial", "Poupanças", "Herança ou doação", "Venda de bens", "Outra"]
+TEXTO_CONSENTIMENTO_FORMAL = ("O titular foi informado de que os seus dados de identificação (BI, NIF, morada, data de nascimento e origem de fundos) são recolhidos apenas para a "
+                              "análise da sua admissão, ficam acessíveis só aos administradores e consentiu expressamente, nos termos da Lei n.º 22/11.")
+
+
+def _fernet():
+    import os as _os
+    chave = _os.environ.get("APPO_CHAVE_DADOS", "").strip()
+    if not chave:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(chave.encode())
+    except Exception:
+        return None
+
+
+def _cifrar(txt: str) -> str:
+    txt = (txt or "").strip()
+    f = _fernet()
+    return ("enc:" + f.encrypt(txt.encode()).decode()) if (f and txt) else txt
+
+
+def _decifrar(txt) -> str:
+    txt = txt or ""
+    if not str(txt).startswith("enc:"):
+        return str(txt)
+    f = _fernet()
+    if not f:
+        return "[cifrado — falta a chave APPO_CHAVE_DADOS]"
+    try:
+        return f.decrypt(str(txt)[4:].encode()).decode()
+    except Exception:
+        return "[não foi possível decifrar]"
+
+
+def _mascarar(txt: str) -> str:
+    t_ = _decifrar(txt)
+    return "—" if not t_ else ("•" * max(len(t_) - 3, 3)) + t_[-3:]
+
+
+def registar_admissao_formal(manifestacao_id: int, nome: str, bi: str, nif: str, nascimento, morada: str, origem: str, consentimento: bool):
+    exigir_admin()
+    import re as _re
+    if not consentimento:
+        raise ValueError("Sem consentimento expresso do titular não é possível guardar estes dados.")
+    for rot, v in (("BI", bi), ("NIF", nif)):
+        if not _re.fullmatch(r"[A-Za-z0-9]{6,20}", (v or "").strip()):
+            raise ValueError(f"{rot} inválido: use 6 a 20 letras e algarismos, sem espaços.")
+    if not (morada or "").strip():
+        raise ValueError("Indique a morada.")
+    if origem not in ORIGENS_FUNDOS:
+        raise ValueError("Indique a origem dos fundos.")
+    if consultar_um("SELECT 1 FROM admissoes_formais WHERE manifestacao_id = %s", (int(manifestacao_id),)):
+        raise ValueError("Já existe uma admissão formal para esta manifestação.")
+    with transaccao() as cur:
+        cur.execute("""INSERT INTO admissoes_formais (manifestacao_id, nome, bi, nif, data_nascimento, morada, origem_fundos, consentimento_formal, consentimento_em, criado_por)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, NOW(), %s) RETURNING id""",
+                    (int(manifestacao_id), nome.strip(), _cifrar(bi), _cifrar(nif), nascimento, _cifrar(morada), origem, utilizador_actual()))
+        novo = cur.fetchone()[0]
+        registar_auditoria("admissao_formal_criada", "admissoes_formais", novo, depois={"manifestacao_id": int(manifestacao_id), "estado": "Em preparação"}, cur=cur)  # sem dados sensíveis na auditoria
+
+
+def actualizar_estado_admissao(aid: int, novo_estado: str, nota: str = ""):
+    exigir_admin()
+    if novo_estado not in ESTADOS_ADMISSAO:
+        raise ValueError("Estado inválido.")
+    antes = consultar_um("SELECT estado FROM admissoes_formais WHERE id = %s", (int(aid),))
+    if not antes:
+        raise ValueError("Admissão inexistente.")
+    with transaccao() as cur:
+        cur.execute("UPDATE admissoes_formais SET estado = %s, nota = COALESCE(nota || ' | ', '') || %s WHERE id = %s", (novo_estado, (nota or "").strip()[:300], int(aid)))
+        registar_auditoria("admissao_formal_estado", "admissoes_formais", aid, antes={"estado": antes[0]}, depois={"estado": novo_estado}, motivo=(nota or "").strip()[:300], cur=cur)
+
+
+def painel_admissao_formal(mid: int, nome_manifestacao: str):
+    """Só administradores. Mostra dados mascarados; ver os dados completos fica registado na auditoria."""
+    exigir_admin()
+    if _fernet():
+        st.caption("🔒 Cifragem activa: BI, NIF e morada são guardados cifrados.")
+    else:
+        st.warning("🔓 Cifragem inactiva: BI, NIF e morada ficariam guardados em texto simples. Defina a variável APPO_CHAVE_DADOS no Render "
+                   "(uma chave Fernet) e adicione «cryptography» ao requirements.txt antes de recolher dados reais.")
+    ex = consultar_um("SELECT id, estado FROM admissoes_formais WHERE manifestacao_id = %s", (int(mid),))
+    if not ex:
+        st.caption("Dados pedidos só nesta fase, depois de o candidato avançar. Não crie esta ficha sem o consentimento expresso do titular.")
+        with st.form(f"form_admissao_{mid}", clear_on_submit=True):
+            a1, a2 = st.columns(2)
+            bi = a1.text_input("Nº do BI", max_chars=20)
+            nif = a2.text_input("NIF", max_chars=20)
+            import datetime as _dt
+            nasc = st.date_input("Data de nascimento", value=_dt.date(1990, 1, 1), min_value=_dt.date(1920, 1, 1), max_value=_dt.date.today(), format="DD/MM/YYYY")
+            morada = st.text_area("Morada", max_chars=300, height=80)
+            origem = st.selectbox("Origem dos fundos", ORIGENS_FUNDOS)
+            cons = st.checkbox(TEXTO_CONSENTIMENTO_FORMAL)
+            gravar = st.form_submit_button("Guardar ficha de admissão")
+        if gravar:
+            try:
+                registar_admissao_formal(mid, nome_manifestacao, bi, nif, nasc, morada, origem, cons)
+                st.success("Ficha de admissão guardada. Isto não atribui cotas nem faz do candidato sócio.")
+                st.rerun()
+            except Exception as e:
+                st.error(str(e))
+        return
+    aid = int(ex[0])
+    d = consultar_um("SELECT nome, bi, nif, data_nascimento, morada, origem_fundos, estado, consentimento_em FROM admissoes_formais WHERE id = %s", (aid,))
+    st.write(f"**Estado:** {d[6]} · **Origem dos fundos:** {d[5]} · Consentimento: {d[7]:%d/%m/%Y}" if d[7] else f"**Estado:** {d[6]}")
+    st.write(f"BI: {_mascarar(d[1])} · NIF: {_mascarar(d[2])}")
+    if st.button("👁️ Ver dados completos (fica registado)", key=f"ver_adm_{aid}"):
+        registar_auditoria("admissao_formal_consulta", "admissoes_formais", aid, motivo="consulta de dados completos")
+        st.info(f"BI: {_decifrar(d[1])}\n\nNIF: {_decifrar(d[2])}\n\nData de nascimento: {d[3]:%d/%m/%Y}\n\nMorada: {_decifrar(d[4])}")
+    ne = st.selectbox("Estado da admissão", ESTADOS_ADMISSAO, index=ESTADOS_ADMISSAO.index(d[6]) if d[6] in ESTADOS_ADMISSAO else 0, key=f"adm_est_{aid}")
+    nt = st.text_input("Nota (opcional)", key=f"adm_nota_{aid}", max_chars=300)
+    if st.button("Guardar estado da admissão", key=f"adm_btn_{aid}"):
+        try:
+            actualizar_estado_admissao(aid, ne, nt)
+            st.rerun()
+        except Exception as e:
+            st.error(str(e))
+    st.caption("A aprovação pela Comissão não atribui cotas: a admissão continua dependente da validação da estrutura aplicável.")
+
+
 def pagina_educacao_servicos():
     st.markdown("### 🎓 APPO — Educação Financeira")
     st.write("O APPO nasceu em Benguela, em 2024, como um grupo de estudo e prática de investimento. Aqui encontra formação, guias e ferramentas educativas "
@@ -5062,6 +5187,8 @@ def painel_educacao_servicos_admin():
                     st.rerun()
                 except Exception as e:
                     st.error(str(e))
+            with st.expander("📝 Admissão formal (dados sensíveis — só administradores)"):
+                painel_admissao_formal(int(mid), str(dfm.loc[dfm["id"] == mid, "nome"].iloc[0]))
     with sub_cat:
         dfc = consultar_df("SELECT id, nome, tipo, preco, nota_preco, activo, visivel_publico, contratavel FROM servicos_catalogo ORDER BY ordem, id")
         st.dataframe(dfc, hide_index=True)
@@ -7780,7 +7907,7 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
-st.sidebar.caption("Versão da app: 2026-10-14 · D (Contabilidade corrigida, Terminal de Decisão)")
+st.sidebar.caption("Versão da app: 2026-10-14 · E (admissão formal)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
