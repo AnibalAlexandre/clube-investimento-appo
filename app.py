@@ -69,7 +69,7 @@ TRADUCOES = {
             "💱 Conversor de Moeda":         "💱 Conversor de Moeda",
             "🧪 Simulador de Investimento": "🧪 Simulador de Investimento",
             "🧮 Princípio 50/30/20":            "🧮 Princípio 50/30/20",
-            "📚 Biblioteca Educativa":       "📚 Biblioteca Educativa",
+            "📚 Biblioteca Educativa":       "📚 Biblioteca & Research",
             "🧾 Adesão de Sócios":          "🧾 Manifestação de Interesse",
             "ℹ️ Sobre Nós & Estatutos":     "ℹ️ Sobre Nós & Estatutos",
             "🔐 Painel do Administrador":   "🔐 Painel do Administrador",
@@ -1131,15 +1131,89 @@ div[data-baseweb="tab-highlight"] { background: var(--fx-grad); height: 3px; }
 """
 
 
+# ---------------------------------------------------------
+# Fase 1 — sistema visual: tipografia, cartões KPI, expansores, botões, serviços, páginas institucionais
+# ---------------------------------------------------------
+CSS_APPO_FASE1 = """
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .appo-hero h1, .fx-kpi-v, .fx-titulo-secao, .fx-nivel-titulo, .fx-servico-nome, .fx-bloco-titulo {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, 'Segoe UI', sans-serif; }
+
+/* Cartões de indicadores (compactos) */
+.fx-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 12px; margin: 4px 0 14px 0; }
+.fx-kpi { background: #FFFFFF; border: 1px solid #EFE9FA; border-radius: 14px; padding: 11px 14px 12px 14px; box-shadow: var(--fx-sombra-suave); }
+.fx-kpi.destaque { background: linear-gradient(135deg, #FFFFFF, #F6F1FF 60%, #FFF1EA); border-color: #E4D4FB; }
+.fx-kpi-topo { display: flex; align-items: center; gap: 8px; }
+.fx-kpi-ico { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; font-size: 0.9rem;
+  background: linear-gradient(135deg, #F3E8FF, #FFE4E6 60%, #FFEDD5); }
+.fx-kpi-t { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: #64748B; font-weight: 700; line-height: 1.2; }
+.fx-kpi-v { font-size: 1.28rem; font-weight: 800; color: var(--fx-tinta); margin-top: 6px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.fx-kpi-s { font-size: 0.72rem; color: #64748B; margin-top: 1px; }
+.fx-kpi-s.up { color: #0D9488; font-weight: 700; } .fx-kpi-s.down { color: #E11D48; font-weight: 700; }
+.fx-bar { height: 6px; border-radius: 99px; background: #EEE9F8; margin-top: 8px; overflow: hidden; }
+.fx-bar > i { display: block; height: 100%; border-radius: 99px; background: var(--fx-grad); }
+
+/* Títulos clicáveis (expansores): vivos, com barra em gradiente */
+div[data-testid="stExpander"] { position: relative; overflow: hidden; border: 1px solid #EFE9FA; border-radius: 16px; background: #FFFFFF;
+  box-shadow: var(--fx-sombra-suave); margin-bottom: 10px; }
+div[data-testid="stExpander"]::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--fx-grad); }
+div[data-testid="stExpander"] summary { padding: 0.7rem 1rem 0.7rem 1.35rem; }
+div[data-testid="stExpander"] summary p { font-weight: 700; font-size: 1.02rem; color: var(--fx-tinta); }
+div[data-testid="stExpander"] summary:hover, div[data-testid="stExpander"] details[open] > summary { background: linear-gradient(90deg, #F6F1FF, #FFF4ED); }
+
+/* Botões secundários e de descarga com a mesma linguagem do botão primário */
+button[kind="secondary"], button[data-testid="stBaseButton-secondary"], div[data-testid="stDownloadButton"] button {
+  border: 1.5px solid #D9C9F7; color: #5B21B6; background: #FFFFFF; font-weight: 700; border-radius: 12px; box-shadow: 0 3px 10px rgba(109, 40, 217, 0.08); }
+button[kind="secondary"]:hover, button[data-testid="stBaseButton-secondary"]:hover, div[data-testid="stDownloadButton"] button:hover {
+  border-color: transparent; color: #FFFFFF; background: var(--fx-grad); }
+button[kind="secondary"]:hover p, button[data-testid="stBaseButton-secondary"]:hover p, div[data-testid="stDownloadButton"] button:hover p { color: #FFFFFF; }
+div[data-testid="stProgress"] div[role="progressbar"] > div { background: var(--fx-grad) !important; }
+
+/* Biblioteca: cartões de nível mais pequenos */
+.fx-nivel { gap: 12px; margin: 2px 0 12px 0; }
+.fx-nivel-card { padding: 12px 18px; border-radius: 16px; }
+.fx-nivel-card .fx-nivel-kicker { font-size: 0.62rem; }
+.fx-nivel-card .fx-nivel-titulo { font-size: 1.12rem; margin: 3px 0 3px 0; }
+.fx-nivel-card p { font-size: 0.78rem; margin: 0 0 6px 0; line-height: 1.35; }
+.fx-nivel-card .fx-nivel-n { font-size: 0.7rem; padding: 2px 10px; }
+
+/* Serviços de educação */
+.fx-servico { background: #FFFFFF; border: 1px solid #EFE9FA; border-radius: 18px; box-shadow: var(--fx-sombra-suave); overflow: hidden; margin: 14px 0 4px 0; }
+.fx-servico-topo { height: 8px; }
+.fx-servico.fx-g0 .fx-servico-topo { background: linear-gradient(90deg, #6D28D9, #E11D48); }
+.fx-servico.fx-g1 .fx-servico-topo { background: linear-gradient(90deg, #E11D48, #F97316); }
+.fx-servico.fx-g2 .fx-servico-topo { background: linear-gradient(90deg, #0EA5E9, #6D28D9); }
+.fx-servico.fx-g3 .fx-servico-topo { background: linear-gradient(90deg, #F97316, #FBBF24); }
+.fx-servico-corpo { padding: 14px 20px 16px 20px; }
+.fx-servico-nome { font-size: 1.2rem; font-weight: 800; color: var(--fx-tinta); letter-spacing: -0.01em; }
+.fx-servico-desc { color: #475569; font-size: 0.92rem; line-height: 1.5; margin: 6px 0 10px 0; }
+.fx-chip { display: inline-block; background: linear-gradient(120deg, #6D28D9, #E11D48 70%, #F97316); color: #FFFFFF; font-weight: 700; font-size: 0.82rem; padding: 4px 14px; border-radius: 999px; }
+.fx-chip-nota { color: #64748B; font-size: 0.8rem; margin-left: 10px; font-style: italic; }
+
+/* Páginas institucionais */
+.fx-bloco-grelha { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 8px 0 16px 0; }
+.fx-bloco { background: #FFFFFF; border: 1px solid #EFE9FA; border-radius: 18px; padding: 18px 20px; box-shadow: var(--fx-sombra-suave); position: relative; overflow: hidden; }
+.fx-bloco::after { content: ""; position: absolute; right: -30px; top: -30px; width: 110px; height: 110px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.16), rgba(109, 40, 217, 0.08) 60%, transparent 72%); }
+.fx-bloco-titulo { font-size: 1.15rem; font-weight: 800; color: var(--fx-tinta); margin: 2px 0 6px 0; }
+.fx-bloco-texto { color: #475569; font-size: 0.92rem; line-height: 1.55; }
+.fx-quem { background: linear-gradient(120deg, #FFFFFF, #F6F1FF 55%, #FFF1EA); border: 1px solid #EEE7FA; border-radius: 20px; padding: 22px 26px; box-shadow: var(--fx-sombra); margin: 6px 0 16px 0; }
+.fx-quem .fx-quem-texto { font-size: 1.08rem; line-height: 1.6; color: #1B1033; font-weight: 500; }
+.fx-aviso-risco { background: #FFF7ED; border: 1px solid #FED7AA; border-left: 5px solid #F97316; border-radius: 14px; padding: 14px 18px; color: #7C2D12; font-size: 0.9rem; line-height: 1.5; margin: 12px 0; }
+"""
+
+
+_FONTE_TITULOS = "@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');\n"
+
+
 def _carregar_css() -> str:
     """Usa appo.css (ao lado do app.py) se existir; caso contrário, o CSS incluído acima."""
     try:
         f = Path(__file__).with_name("appo.css")
         if f.exists():
-            return f.read_text(encoding="utf-8") + CSS_APPO_FINCITE
+            return _FONTE_TITULOS + f.read_text(encoding="utf-8") + CSS_APPO_FINCITE + CSS_APPO_FASE1
     except Exception:
         pass
-    return CSS_APPO_BASE + CSS_APPO_FINCITE
+    return _FONTE_TITULOS + CSS_APPO_BASE + CSS_APPO_FINCITE + CSS_APPO_FASE1
 
 
 st.markdown(f"<style>{_carregar_css()}</style>", unsafe_allow_html=True)
@@ -1209,7 +1283,7 @@ def ticker_tape(df_activos: pd.DataFrame):
     itens = []
     for _, a in df_activos.iterrows():
         v = float(a["variacao"])
-        cor = "#16A34A" if v > 0 else ("#DC2626" if v < 0 else "#6B7280")
+        cor = "#0D9488" if v > 0 else ("#DC2626" if v < 0 else "#6B7280")
         itens.append(f'<span style="color:{cor}; margin-right:36px;">{_esc(a["ticker"] or a["nome"])} &nbsp;{kz(a["preco"])} &nbsp;({pct_bruto(v)})</span>')
     conteudo = "".join(itens) * 3
     render_html(f'<div class="appo-ticker-wrap"><div class="appo-ticker-move"><span>{conteudo}</span></div></div>')
@@ -1306,7 +1380,7 @@ def cor_variacao(v) -> str:
     except (TypeError, ValueError):
         return ""
     if v > 0:
-        return "color:#16A34A; font-weight:600;"
+        return "color:#0D9488; font-weight:600;"
     if v < 0:
         return "color:#DC2626; font-weight:600;"
     return "color:#6B7280;"
@@ -1522,10 +1596,10 @@ def obter_serie_cambio_aoa(moeda: str, periodo: str = "1m") -> pd.DataFrame:
 
 def _camadas_serie(alt, df, eixo_x, eixo_y, base, unidade):
     """Área com gradiente suave, linha fina e, ao passar o rato, guia vertical, ponto e etiqueta com data e valor."""
-    cor = "#7C1F3E"
+    cor = "#4F6BFF"
     try:
         grad = alt.Gradient(gradient="linear", x1=1, x2=1, y1=1, y2=0,
-                            stops=[alt.GradientStop(color="rgba(124,31,62,0.0)", offset=0), alt.GradientStop(color="rgba(124,31,62,0.30)", offset=1)])
+                            stops=[alt.GradientStop(color="rgba(34,211,238,0.0)", offset=0), alt.GradientStop(color="rgba(79,107,255,0.32)", offset=1)])
         area = alt.Chart(df).mark_area(color=grad, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
     except Exception:
         area = alt.Chart(df).mark_area(opacity=0.12, color=cor, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
@@ -1578,7 +1652,7 @@ def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: st
     """Painel no estilo do home broker: cabeçalho, indicadores do período e gráfico de área na cor do Clube."""
     import html as _h
     import altair as alt
-    render_html(f"""<div style="border-bottom:2px solid #7C1F3E;padding-bottom:6px;margin:6px 0 12px 0;">
+    render_html(f"""<div style="border-bottom:3px solid #4F6BFF;padding-bottom:6px;margin:6px 0 12px 0;">
     <span style="font-size:1.2rem;font-weight:800;color:#1A1A2E;">{_h.escape(titulo)}</span>
     <span style="color:#8A7B80;font-size:0.8rem;margin-left:10px;">{_h.escape(subtitulo)}</span></div>""")
     if serie is None or serie.empty:
@@ -4099,7 +4173,7 @@ def _pdf_donut(pdf, itens, cx, cy, r, r_int, titulo, centro=""):
 
 def _rotulo_horiz(a: dict, p: str, curto: bool = True) -> str:
     nomes_c = {"1d": "Intradia", "7d": "Semanal 7D", "3m": "Trimestral", "6m": "Semestral", "1a": "Anual YoY", "5a": "Longo prazo 5A"}
-    nomes_l = dict(HORIZONTES)
+    nomes_l = dict(HORIZ_RENT)
     if p == "5a" and a.get("acumulado") and a.get("inicio_comum") is not None:
         return f"Acum. {a['inicio_comum']:%d/%m/%y}"
     return nomes_c[p] if curto else nomes_l[p]
@@ -4108,7 +4182,7 @@ def _rotulo_horiz(a: dict, p: str, curto: bool = True) -> str:
 def _pdf_bloco_executivo(pdf, a: dict, resumo: dict, mercado, linhas_carteira: list):
     """Sumário executivo, matriz multitemporal (com Alpha), inflação real, risco e composição em anéis."""
     larg = pdf.w - pdf.l_margin - pdf.r_margin
-    ps = [p for p, _ in HORIZONTES]
+    ps = [p for p, _ in HORIZ_RENT]
     # ---- 1. Sumário executivo e teses ----
     pdf.add_page("L")
     _pdf_secao(pdf, "SUMARIO EXECUTIVO E TESES DE INVESTIMENTO")
@@ -4720,14 +4794,12 @@ def pagina_educacao_servicos():
         return
     for _, s in df.iterrows():
         sid = int(s["id"])
-        with st.container(border=True):
-            st.markdown(f"**{s['nome']}**")
-            if str(s["descricao"] or "").strip():
-                st.write(s["descricao"])
-            if pd.notna(s["preco"]):
-                st.markdown(f"💰 **{kz(s['preco'])} por participante**" + (f" — _{s['nota_preco']}_" if str(s["nota_preco"] or "").strip() else ""))
-            else:
-                st.markdown("💰 **Sob consulta**")
+        _preco_txt = (f"{kz(s['preco'])} por participante" if pd.notna(s["preco"]) else "Sob consulta")
+        _nota_p = str(s["nota_preco"] or "").strip() if pd.notna(s["preco"]) else ""
+        render_html(f'<div class="fx-servico fx-g{sid % 4}"><div class="fx-servico-topo"></div><div class="fx-servico-corpo">'
+                    f'<div class="fx-servico-nome">{_esc(s["nome"])}</div><div class="fx-servico-desc">{_esc(s["descricao"] or "")}</div>'
+                    f'<span class="fx-chip">💰 {_esc(_preco_txt)}</span>' + (f'<span class="fx-chip-nota">{_esc(_nota_p)}</span>' if _nota_p else "") + '</div></div>')
+        with st.container():
             rotulo = "Pedir inscrição" if bool(s["contratavel"]) else "Pedir informações"
             with st.expander(rotulo):
                 with st.form(f"form_pedido_{sid}", clear_on_submit=True):
@@ -5260,7 +5332,7 @@ def _mostrar_resultado_cf(res: dict):
     st.caption(f"Nível global: **{res['nivel']}**. Cada componente é a média dos cinco domínios; o índice geral é a média dos três componentes.")
     linhas = {DOMINIOS_CF[d]: {COMPONENTES_CF[c]: res["celulas"].get((d, c)) for c in COMPONENTES_CF} for d in DOMINIOS_CF}
     df = pd.DataFrame(linhas).T
-    st.bar_chart(df.fillna(0), height=300)
+    fx_barras(df.fillna(0), height=300)
     st.dataframe(df.round(0).fillna("—"), use_container_width=True)
     if res["lacuna_kb"] is not None and res["lacuna_kb"] >= 15:
         st.info(f"O seu conhecimento ({res['componentes']['K']:.0f}) está acima do seu comportamento ({res['componentes']['B']:.0f}). "
@@ -5284,11 +5356,12 @@ def diagnostico_cf(prefixo: str, guardar: bool):
     with st.form(f"form_diag_{prefixo}"):
         respostas = {}
         for comp, titulo in (("K", "Parte 1 · Conhecimento"), ("A", "Parte 2 · Atitude e confiança"), ("B", "Parte 3 · Comportamento")):
-            st.markdown(f"##### {titulo}")
-            for it in [x for x in ITENS_CF if x["comp"] == comp]:
-                escala = it.get("opcoes") or (ESCALA_FREQ if it["tipo"] == "freq" else ESCALA_CONC)
-                escolha = st.radio(it["texto"], escala, index=None, key=f"diag_{prefixo}_{it['id']}", horizontal=(it["tipo"] != "mc"))
-                respostas[it["id"]] = escala.index(escolha) if (escolha is not None and it["tipo"] == "mc") else (escala.index(escolha) + 1 if escolha is not None else None)
+            _its = [x for x in ITENS_CF if x["comp"] == comp]
+            with st.expander(f"{titulo}  ·  {len(_its)} perguntas"):
+                for it in _its:
+                    escala = it.get("opcoes") or (ESCALA_FREQ if it["tipo"] == "freq" else ESCALA_CONC)
+                    escolha = st.radio(it["texto"], escala, index=None, key=f"diag_{prefixo}_{it['id']}", horizontal=(it["tipo"] != "mc"))
+                    respostas[it["id"]] = escala.index(escolha) if (escolha is not None and it["tipo"] == "mc") else (escala.index(escolha) + 1 if escolha is not None else None)
         enviar = st.form_submit_button("Ver o meu resultado", type="primary")
     if enviar:
         em_falta = [k for k, v in respostas.items() if v is None]
@@ -5343,7 +5416,7 @@ def ferramenta_orcamento_variavel(prefixo: str):
     a2.metric("Investimento (30%)", kz(r["investimento_30"]))
     a3.metric("Entesouramento (20%)", kz(r["entesouramento_20"]))
     df = pd.DataFrame(r["linhas"]).set_index("Mês")
-    st.line_chart(df[["Rendimento", "«Ordenado» alisado"]], height=240)
+    fx_linhas(df[["Rendimento", "«Ordenado» alisado"]], height=240)
     st.caption(f"Fundo de alisamento ao fim de {len(df)} meses: {kz(r['fundo_final'])}. Os meses acima do rendimento prudente enchem o fundo; os abaixo, esvaziam-no.")
 
 
@@ -5393,7 +5466,7 @@ def ferramenta_comparador(prefixo: str):
                          help="Hipótese do utilizador; dividendos e preços não são garantidos")
     linhas = comparar_instrumentos(infl / 100, imp / 100, {"Depósito a prazo": dp / 100, "Bilhete do Tesouro": bt / 100, "Obrigação do Tesouro": ot / 100, "Acção BODIVA": ac / 100})
     df = pd.DataFrame(linhas)
-    st.bar_chart(df.set_index("Instrumento")[["Real (%)"]], height=240)
+    fx_barras(df.set_index("Instrumento")[["Real (%)"]], height=240)
     st.dataframe(df.round(2), hide_index=True, use_container_width=True)
     pior = df.loc[df["Real (%)"] < 0, "Instrumento"].tolist()
     if pior:
@@ -5455,7 +5528,7 @@ def pagina_capacidade_financeira(autenticado: bool):
                     linhas.append({"Data": pd.to_datetime(r["criado_em"]), "Geral": res.get("geral"),
                                    **{COMPONENTES_CF[c]: (res.get("componentes") or {}).get(c) for c in COMPONENTES_CF}})
                 dv = pd.DataFrame(linhas).set_index("Data")
-                st.line_chart(dv, height=280)
+                fx_linhas(dv, height=280)
                 if len(dv) >= 2 and dv["Geral"].iloc[0] is not None and dv["Geral"].iloc[-1] is not None:
                     st.metric("Evolução do índice geral", f"{dv['Geral'].iloc[-1]:.0f}/100", delta=f"{dv['Geral'].iloc[-1] - dv['Geral'].iloc[0]:+.0f} desde o primeiro diagnóstico")
                 st.dataframe(dv.round(0), use_container_width=True)
@@ -5780,22 +5853,23 @@ def _pode_refazer_perfil(u) -> bool:
 
 
 def _formulario_perfil(conta_id: int):
+    st.caption(f"{len(QUESTOES_PERFIL)} perguntas em {len(TITULOS_SEC_PERFIL)} secções, cerca de 3 minutos. Abre cada título para responder.")
     with st.form("form_perfil_investidor"):
-        respostas, sec = {}, None
-        for q in QUESTOES_PERFIL:
-            if q["sec"] != sec:
-                st.markdown(f"##### {TITULOS_SEC_PERFIL[q['sec']]}")
-                sec = q["sec"]
-            if q.get("multi"):
-                respostas[q["id"]] = st.multiselect(q["t"], BENS_OPCOES, key=f"pf_{q['id']}")
-            else:
-                respostas[q["id"]] = st.radio(q["t"], [o[0] for o in q["op"]], index=None, key=f"pf_{q['id']}")
+        respostas = {}
+        for sec in TITULOS_SEC_PERFIL:
+            _qs = [q for q in QUESTOES_PERFIL if q["sec"] == sec]
+            with st.expander(f"{TITULOS_SEC_PERFIL[sec]}  ·  {len(_qs)} perguntas"):
+                for q in _qs:
+                    if q.get("multi"):
+                        respostas[q["id"]] = st.multiselect(q["t"], BENS_OPCOES, key=f"pf_{q['id']}")
+                    else:
+                        respostas[q["id"]] = st.radio(q["t"], [o[0] for o in q["op"]], index=None, key=f"pf_{q['id']}")
         enviar = st.form_submit_button("Calcular o meu perfil", type="primary")
     if not enviar:
         return
-    em_falta = [q["t"] for q in QUESTOES_PERFIL if not respostas[q["id"]]]
+    em_falta = [q for q in QUESTOES_PERFIL if not respostas[q["id"]]]
     if em_falta:
-        st.error(f"Faltam {len(em_falta)} resposta(s). Primeira por responder: «{em_falta[0]}»")
+        st.error(f"Faltam {len(em_falta)} resposta(s). Primeira por responder, na secção «{TITULOS_SEC_PERFIL[em_falta[0]['sec']]}»: «{em_falta[0]['t']}»")
         return
     if BENS_OPCOES[-1] in respostas["bens"] and len(respostas["bens"]) > 1:
         st.error("Em «Que bens possuis?», «Nenhum dos anteriores» não pode ser escolhido junto com outros bens.")
@@ -6018,7 +6092,7 @@ def _painel_indices(df_activos: pd.DataFrame):
 # Rentabilidade (1D · 7D · 3M · 6M · 1A · 5A/acumulado) da carteira e dos índices APPO e BODIVA,
 # Alpha, ajuste à inflação de Angola (homóloga, vigente, projectada) e métricas de risco.
 # =========================================================
-HORIZONTES = [("1d", "Intradia (1D)"), ("7d", "Semanal (7D)"), ("3m", "Trimestral (3M)"),
+HORIZ_RENT = [("1d", "Intradia (1D)"), ("7d", "Semanal (7D)"), ("3m", "Trimestral (3M)"),
               ("6m", "Semestral (6M)"), ("1a", "Anual (YoY)"), ("5a", "Longo prazo (5A)")]
 
 
@@ -6163,7 +6237,7 @@ def calcular_analise_multitemporal(painel, carteira, tk_accoes, premissas, df_ac
     usar_acum = not all(janela_periodo(s, "5a")[2] for s in base_series)
     inicio_comum = max(s.index[0] for s in base_series) if usar_acum else None
 
-    ps = [p for p, _ in HORIZONTES]
+    ps = [p for p, _ in HORIZ_RENT]
     linha = lambda s: {p: _ret_pct(s, p, inicio_comum) for p in ps}
     ret_c, ret_a, ret_b = linha(s_cart), linha(s_appo), linha(s_bod)
     dif = lambda x, y: {p: (x[p] - y[p]) if x[p] is not None and y[p] is not None else None for p in ps}
@@ -6245,7 +6319,7 @@ def obter_analise() -> dict:
 
 
 def _melhor_horizonte(a: dict):
-    for p, _ in reversed(HORIZONTES):
+    for p, _ in reversed(HORIZ_RENT):
         if a["ret_carteira"].get(p) is not None:
             return p
     return None
@@ -6579,7 +6653,7 @@ def _mercado_corpo():
         g1, g2 = st.columns(2)
         with g1:
             grafico_anel(pd.DataFrame({"Estado": ["A subir", "A descer", "Estáveis / s.d."], "Títulos": [sobem, descem, estaveis]}),
-                         "Estado", "Títulos", "Amplitude do mercado", centro_valor=str(len(df)), paleta=["#16A34A", "#E11D48", "#94A3B8"], formato="num", chave="anel_amplitude")
+                         "Estado", "Títulos", "Amplitude do mercado", centro_valor=str(len(df)), paleta=["#0D9488", "#E11D48", "#94A3B8"], formato="num", chave="anel_amplitude")
         with g2:
             tp = df.assign(Tipo=df["tipo"].replace("", "Sem tipo")).groupby("Tipo").size().reset_index(name="Títulos")
             grafico_anel(tp, "Tipo", "Títulos", "Títulos por tipo", centro_valor=str(len(df)), formato="num", chave="anel_tipos")
@@ -6711,10 +6785,10 @@ def grafico_anel(df: pd.DataFrame, cat: str, val: str, titulo: str = "", centro_
 def _css_niveis_biblioteca():
     render_html("""<style>
     div[data-baseweb="tab-list"] { gap: 12px; border-bottom: 0; padding: 4px 0 10px 0; }
-    button[data-baseweb="tab"] { height: auto; padding: 14px 26px; border-radius: 16px; background: #FFFFFF; border: 2px solid #EDE7F6;
+    button[data-baseweb="tab"] { height: auto; padding: 8px 18px; border-radius: 12px; background: #FFFFFF; border: 2px solid #EDE7F6;
       box-shadow: 0 6px 18px rgba(76, 29, 149, 0.08); transition: transform .12s ease, box-shadow .12s ease; }
     button[data-baseweb="tab"]:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(76, 29, 149, 0.16); }
-    button[data-baseweb="tab"] p { font-size: 1.12rem; font-weight: 800; letter-spacing: -0.01em; }
+    button[data-baseweb="tab"] p { font-size: 0.95rem; font-weight: 800; letter-spacing: -0.01em; }
     button[data-baseweb="tab"]:nth-of-type(1)[aria-selected="true"] { background: linear-gradient(120deg, #1D4ED8, #6D28D9); border-color: transparent; }
     button[data-baseweb="tab"]:nth-of-type(2)[aria-selected="true"] { background: linear-gradient(120deg, #6D28D9, #E11D48 60%, #F97316); border-color: transparent; }
     button[data-baseweb="tab"][aria-selected="true"] p { color: #FFFFFF; }
@@ -6787,7 +6861,7 @@ def _xlsx_preencher_folha(ws, titulo, subtitulo, colunas, linhas, larguras, form
 def gerar_xlsx_analise(a: dict) -> bytes:
     import io
     from openpyxl import Workbook
-    ps = [p for p, _ in HORIZONTES]
+    ps = [p for p, _ in HORIZ_RENT]
     rot = [_rotulo_horiz(a, p, curto=False) for p in ps]
     fpp = '+0.00;-0.00;0.00'
     wb = Workbook()
@@ -6832,7 +6906,7 @@ def gerar_xlsx_analise(a: dict) -> bytes:
 # Página Histórico & Relatórios
 # ---------------------------------------------------------
 def _df_matriz(a: dict) -> pd.DataFrame:
-    ps = [p for p, _ in HORIZONTES]
+    ps = [p for p, _ in HORIZ_RENT]
     cols = [_rotulo_horiz(a, p, curto=False) for p in ps]
     inf, real = a["inflacao"], a["real"]
     linhas = {
@@ -6851,7 +6925,7 @@ def _fmt_pct_nd(v):
 
 
 def _aba_rentabilidade(a: dict, tx):
-    ps = [p for p, _ in HORIZONTES]
+    ps = [p for p, _ in HORIZ_RENT]
     p = _melhor_horizonte(a)
     c1, c2, c3, c4 = st.columns(4)
     if p:
@@ -6880,7 +6954,7 @@ def _aba_rentabilidade(a: dict, tx):
         comp = pd.concat([a["serie_carteira"].rename("Carteira"), a["serie_appo"].rename("Índice APPO"), a["serie_bodiva"].rename("Índice BODIVA")], axis=1).ffill()
         comp = comp[comp.index >= ini].dropna()
         if len(comp) >= 2:
-            st.line_chart(comp / comp.iloc[0] * 100)
+            fx_linhas(comp / comp.iloc[0] * 100)
 
 
 def _aba_inflacao(a: dict):
@@ -6893,7 +6967,7 @@ def _aba_inflacao(a: dict):
     c2.metric("Inflação vigente (mensal)", f"{pr['inflacao_vigente_m'] * 100:.2f}% m/m", delta=f"≈ {((1 + pr['inflacao_vigente_m']) ** 12 - 1) * 100:.1f}% anualizada", delta_color="off", help="Pulso conjuntural imediato.")
     c3.metric("Inflação projectada (12M)", f"{pr['inflacao_projectada'] * 100:.2f}%", help="Teste de stress e preservação de capital.")
     st.caption(f"Fonte/data: {pr.get('inflacao_ref') or 'por confirmar'}")
-    ps = [p for p, _ in HORIZONTES]
+    ps = [p for p, _ in HORIZ_RENT]
     cols = [_rotulo_horiz(a, p, curto=False) for p in ps]
     real = a["real"]
     tab = pd.DataFrame({"Carteira (nominal)": [a["ret_carteira"][p] for p in ps],
@@ -6957,7 +7031,7 @@ def _aba_composicao(a: dict, resumo: dict):
         grafico_anel(fundo, "Componente", "Valor", "Estrutura do fundo global", centro_titulo="Fundo global", chave="anel_fundo")
     mv = pd.DataFrame({"Item": ["Custo de aquisição", "Mais-valia"], "Valor": [min(a["custo_total"], a["valor_total"]), max(a["valor_total"] - a["custo_total"], 0)]})
     if a["valor_total"] > a["custo_total"] > 0:
-        grafico_anel(mv, "Item", "Valor", "Valor actual: custo vs mais-valia", centro_titulo="Valor actual", paleta=["#6D28D9", "#16A34A"], chave="anel_mv")
+        grafico_anel(mv, "Item", "Valor", "Valor actual: custo vs mais-valia", centro_titulo="Valor actual", paleta=["#6D28D9", "#0D9488"], chave="anel_mv")
 
 
 def _aba_historico_movimentos(tx, df_movimentos):
@@ -7036,6 +7110,171 @@ def pagina_historico_relatorios(tx):
     with abas[5]:
         _aba_relatorios(tx, a, df_movimentos)
 
+
+
+# =========================================================
+# FASE 1 — componentes: cartões KPI, gráficos na paleta do Clube, conteúdo institucional editável
+# =========================================================
+_PALETA_SERIES = ["#7C3AED", "#F97316", "#06B6D4", "#E11D48", "#4F46E5", "#FB923C", "#14B8A6", "#BE185D"]
+COR_PRECO = "#4F6BFF"          # cotações/preços: azul-eléctrico vivo (nunca negativos, por isso sem verde/vermelho)
+
+
+def kpi_card(icone: str, titulo: str, valor: str, sub: str = None, progresso: float = None, tom: str = None, destaque: bool = False) -> str:
+    barra = ""
+    if progresso is not None:
+        barra = f'<div class="fx-bar"><i style="width:{max(0.0, min(float(progresso), 1.0)) * 100:.0f}%"></i></div>'
+    s = f'<div class="fx-kpi-s {tom or ""}">{_esc(sub)}</div>' if sub else ""
+    return (f'<div class="fx-kpi{" destaque" if destaque else ""}"><div class="fx-kpi-topo"><span class="fx-kpi-ico">{icone}</span>'
+            f'<span class="fx-kpi-t">{_esc(titulo)}</span></div><div class="fx-kpi-v">{_esc(valor)}</div>{s}{barra}</div>')
+
+
+def kpi_linha(cartoes: list):
+    render_html('<div class="fx-kpis">' + "".join(cartoes) + "</div>")
+
+
+def fx_barras(df: pd.DataFrame, height: int = 300, **_):
+    """Barras na paleta do Clube: uma série = gradiente ciano→violeta; várias = barras agrupadas."""
+    try:
+        import altair as alt
+        d = df.copy()
+        d.index = d.index.astype(str)
+        d.index.name = "Item"
+        L = d.reset_index().melt("Item", var_name="Série", value_name="Valor")
+        x = alt.X("Item:N", sort=None, title=None, axis=alt.Axis(labelAngle=0, labelLimit=150, labelColor="#475569"))
+        y = alt.Y("Valor:Q", title=None, axis=alt.Axis(format="~s", gridColor="#EDE9F7", labelColor="#64748B"))
+        tip = [alt.Tooltip("Item:N", title="Item"), alt.Tooltip("Série:N", title="Série"), alt.Tooltip("Valor:Q", format=",.2f", title="Valor")]
+        if d.shape[1] == 1:
+            grad = alt.Gradient(gradient="linear", x1=1, x2=1, y1=0, y2=1,
+                                stops=[alt.GradientStop(color="#7C3AED", offset=0), alt.GradientStop(color="#22D3EE", offset=1)])
+            ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=8, cornerRadiusTopRight=8, color=grad, size=46).encode(x=x, y=y, tooltip=tip)
+        else:
+            ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
+                x=x, xOffset="Série:N", y=y, tooltip=tip,
+                color=alt.Color("Série:N", scale=alt.Scale(range=_PALETA_SERIES), legend=alt.Legend(orient="bottom", title=None)))
+        st.altair_chart(ch.properties(height=height).configure_view(strokeWidth=0), use_container_width=True)
+    except Exception:
+        traceback.print_exc()
+        getattr(st, "bar_chart")(df, height=height)
+
+
+def fx_linhas(df: pd.DataFrame, height: int = 260, **_):
+    """Linhas suaves na paleta do Clube, com pontos e dicas ao passar o rato."""
+    try:
+        import altair as alt
+        d = df.copy()
+        temporal = isinstance(d.index, pd.DatetimeIndex)
+        d.index.name = "Data"
+        L = d.reset_index().melt("Data", var_name="Série", value_name="Valor").dropna()
+        x = (alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y", grid=False, labelColor="#64748B")) if temporal
+             else alt.X("Data:N", sort=None, title=None, axis=alt.Axis(labelAngle=0, labelColor="#64748B")))
+        cor = (alt.Color("Série:N", scale=alt.Scale(range=_PALETA_SERIES), legend=alt.Legend(orient="bottom", title=None)))
+        ch = alt.Chart(L).mark_line(strokeWidth=2.4, interpolate="monotone", point=alt.OverlayMarkDef(size=36, filled=True)).encode(
+            x=x, y=alt.Y("Valor:Q", title=None, scale=alt.Scale(zero=False), axis=alt.Axis(gridColor="#EDE9F7", labelColor="#64748B")), color=cor,
+            tooltip=[alt.Tooltip("Data:T" if temporal else "Data:N", title="Data"), alt.Tooltip("Série:N", title="Série"), alt.Tooltip("Valor:Q", format=",.2f", title="Valor")])
+        st.altair_chart(ch.properties(height=height).configure_view(strokeWidth=0), use_container_width=True)
+    except Exception:
+        traceback.print_exc()
+        getattr(st, "line_chart")(df, height=height)
+
+
+ORC_GRUPOS = [
+    ("Consumo (50%)", "🏠", 0.50, "Necessidades e estilo de vida: renda ou prestação da casa, alimentação, transporte, saúde, educação, água/luz/internet, telefone, lazer…"),
+    ("Investimento (30%)", "📈", 0.30, "O que pões a render: acções, BT/OT, fundos, cotas do Clube, formação que aumenta o teu rendimento…"),
+    ("Entesouramento (20%)", "🛡️", 0.20, "A tua rede de segurança: reserva de emergência, depósito a prazo, poupança para objectivos…"),
+]
+
+
+# ---------------------------------------------------------
+# Conteúdo institucional editável (Sobre Nós, FAQ, avisos) — o administrador gere no Painel › Site & Sobre Nós
+# ---------------------------------------------------------
+_SITE_SEMENTES = [
+    ("cartao", "Missão", "Promover a literacia financeira e o acesso disciplinado ao mercado de capitais angolano, permitindo que os sócios construam património de forma colectiva, informada e sustentável.", 10),
+    ("cartao", "Visão", "Ser uma referência angolana de educação e prática de investimento em grupo, com decisões transparentes e fundamentadas. (Texto-base: edita-o no Painel do Administrador.)", 20),
+    ("cartao", "Valores", "Disciplina, transparência, prestação de contas, diversificação prudente e decisões colectivas.", 30),
+    ("faq", "O APPO é uma corretora ou dá conselhos personalizados?", "Não. O APPO é uma iniciativa independente de educação financeira e de investimento em grupo, sem vínculo com a BODIVA, a CMC ou corretoras. O conteúdo é educativo e não constitui recomendação personalizada.", 40),
+    ("faq", "Como posso tornar-me sócio?", "Através da página **Adesão de Sócios**. A admissão está sujeita a aprovação da Comissão de Gestão.", 50),
+    ("faq", "O que significa investir no mercado de capitais?", "Comprar títulos (acções, obrigações, etc.) esperando valorização ou rendimento. Há risco de perda do capital; por isso começamos pela formação.", 60),
+    ("aviso", "Aviso de risco", "Investir envolve risco, incluindo a perda total ou parcial do capital. Rentabilidades passadas não garantem resultados futuros. A informação desta plataforma é educativa.", 90),
+]
+
+
+@st.cache_resource
+def _garantir_tabela_site() -> bool:
+    executar("""CREATE TABLE IF NOT EXISTS conteudo_site (id SERIAL PRIMARY KEY, secao TEXT NOT NULL DEFAULT 'sobre', tipo TEXT NOT NULL DEFAULT 'cartao',
+                titulo TEXT NOT NULL, texto TEXT NOT NULL DEFAULT '', ordem INTEGER NOT NULL DEFAULT 100, visivel BOOLEAN NOT NULL DEFAULT TRUE)""")
+    if consultar_um("SELECT COUNT(*) FROM conteudo_site")[0] == 0:
+        for tp, ti, tx_, od in _SITE_SEMENTES:
+            executar("INSERT INTO conteudo_site (secao, tipo, titulo, texto, ordem) VALUES ('sobre', %s, %s, %s, %s)", (tp, ti, tx_, od))
+    return True
+
+
+def obter_conteudo_site(todos: bool = False) -> pd.DataFrame:
+    _garantir_tabela_site()
+    return consultar_df("SELECT id, tipo, titulo, texto, ordem, visivel FROM conteudo_site " + ("" if todos else "WHERE visivel ") + "ORDER BY ordem, id")
+
+
+def guardar_conteudo_site(df: pd.DataFrame):
+    exigir_admin()
+    _garantir_tabela_site()
+    n = 0
+    executar("DELETE FROM conteudo_site")
+    for _, r in df.iterrows():
+        titulo = str(r.get("titulo") or "").strip()
+        if not titulo:
+            continue
+        tipo = str(r.get("tipo") or "cartao").strip()
+        executar("INSERT INTO conteudo_site (secao, tipo, titulo, texto, ordem, visivel) VALUES ('sobre', %s, %s, %s, %s, %s)",
+                 (tipo if tipo in ("cartao", "faq", "aviso") else "cartao", titulo, str(r.get("texto") or ""),
+                  int(_num_seguro(r.get("ordem"), 100)), bool(r.get("visivel", True)) if pd.notna(r.get("visivel")) else True))
+        n += 1
+    registar_auditoria("conteudo_site", "site", "sobre", depois={"blocos": n})
+
+
+def painel_site_admin():
+    st.subheader("Site & Sobre Nós")
+    st.caption("Gere os blocos da página «Sobre Nós». **Cartão** = aparece na grelha (texto simples); **FAQ** = pergunta clicável (aceita markdown); "
+               "**Aviso** = faixa de alerta. A ordem é numérica (menor primeiro).")
+    df = obter_conteudo_site(todos=True)[["tipo", "titulo", "texto", "ordem", "visivel"]]
+    ed = st.data_editor(df, num_rows="dynamic", hide_index=True, key="ed_site", column_config={
+        "tipo": st.column_config.SelectboxColumn("Tipo", options=["cartao", "faq", "aviso"], required=True, width="small"),
+        "titulo": st.column_config.TextColumn("Título", width="medium"), "texto": st.column_config.TextColumn("Texto", width="large"),
+        "ordem": st.column_config.NumberColumn("Ordem", step=10, width="small"), "visivel": st.column_config.CheckboxColumn("Visível", width="small")})
+    if st.button("💾 Guardar blocos", type="primary", key="site_guardar"):
+        guardar_conteudo_site(ed)
+        st.success("Conteúdo actualizado.")
+        st.rerun()
+
+
+def pagina_sobre_nos(tx: dict):
+    render_html(f'<div class="fx-quem"><div class="fx-kicker">Quem somos</div><div class="fx-quem-texto">{_esc(tx["sobre_quem_texto"].replace("**", ""))}</div></div>')
+    try:
+        blocos = obter_conteudo_site()
+    except Exception:
+        blocos = pd.DataFrame(columns=["tipo", "titulo", "texto"])
+    cart = blocos[blocos["tipo"] == "cartao"]
+    if not cart.empty:
+        render_html('<div class="fx-bloco-grelha">' + "".join(
+            f'<div class="fx-bloco"><div class="fx-kicker">APPO</div><div class="fx-bloco-titulo">{_esc(r["titulo"])}</div>'
+            f'<div class="fx-bloco-texto">{_esc(r["texto"]).replace(chr(10), "<br>")}</div></div>' for _, r in cart.iterrows()) + "</div>")
+    with st.expander("🧭 " + tx["sobre_principios"]):
+        st.markdown(TEXTO_PRINCIPIOS)
+    with st.expander("📜 " + tx["sobre_estatutos"]):
+        st.markdown(tx["sobre_estatutos_texto"])
+        _df_est = obter_documentos("estatuto") if eh_participante() else pd.DataFrame()
+        if not _df_est.empty:
+            _est = _df_est.iloc[0]
+            st.markdown(f"**📜 {_est['titulo']}**")
+            st.caption(f"{_est['criado_em']} · {_est['tamanho'] / 1048576:.1f} MB")
+            bloco_documento_pdf(int(_est["id"]), _est["nome_ficheiro"], f"estatuto_{int(_est['id'])}", altura=820)
+    faqs = blocos[blocos["tipo"] == "faq"]
+    if not faqs.empty:
+        st.markdown("##### Perguntas frequentes")
+        for _, r in faqs.iterrows():
+            with st.expander("❓ " + str(r["titulo"])):
+                st.markdown(r["texto"])
+    for _, r in blocos[blocos["tipo"] == "aviso"].iterrows():
+        render_html(f'<div class="fx-aviso-risco"><b>⚠️ {_esc(r["titulo"])}.</b> {_esc(r["texto"])}</div>')
+    nota_interna(tx["sobre_nota"])
 
 
 def _painel_inicio_aluno():
@@ -7232,29 +7471,29 @@ try:
         resumo = obter_resumo_patrimonial()
         total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são parte do realizado
 
-        col1, col2 = st.columns(2)
-        col1.metric(tx["inicio_capital_subscrito"], kz(resumo["capital_subscrito"]))
-        col2.metric(tx["inicio_capital_realizado"],  kz(resumo["capital_realizado"]),
-                    delta=(f"{resumo['capital_realizado']/resumo['capital_subscrito']*100:.0f}{tx['inicio_pct_subscrito']}" if resumo["capital_subscrito"] else None),
-                    delta_color="off")
-        col3, col4, col5 = st.columns(3)
-        col3.metric(tx["inicio_investimentos"],   kz(resumo["investimentos"]))
-        col4.metric(tx["inicio_reservas"],        kz(resumo["reservas"]))
-        col5.metric(tx["inicio_patrimonio_total"], kz(total_patrimonio))
-
+        _sub, _real, _inv, _res = (float(resumo[k] or 0) for k in ("capital_subscrito", "capital_realizado", "investimentos", "reservas"))
+        _cartoes = [
+            kpi_card("🏦", tx["inicio_capital_subscrito"], kz(_sub), "Compromisso total dos sócios"),
+            kpi_card("💳", tx["inicio_capital_realizado"], kz(_real), (f"{_real / _sub * 100:.0f}{tx['inicio_pct_subscrito']}" if _sub else None), (_real / _sub if _sub else None)),
+            kpi_card("📈", tx["inicio_investimentos"], kz(_inv), (f"{_inv / _real * 100:.0f}% do realizado" if _real else None), (_inv / _real if _real else None)),
+            kpi_card("🛡️", tx["inicio_reservas"], kz(_res), (f"{_res / _real * 100:.0f}% do realizado" if _real else None), (_res / _real if _real else None)),
+            kpi_card("🧮", tx["inicio_patrimonio_total"], kz(total_patrimonio), "Capital realizado", destaque=True),
+        ]
         _res_idx = resumo_indice_appo(_df_activos_ticker)
         if _res_idx:
-            st.metric("📊 Índice APPO (100 = 19/08/2026)", f"{_res_idx[0]:.2f}", delta=(f"{_res_idx[1]:+.2f}% em 1d" if _res_idx[1] is not None else None))
-            st.caption("Variação média de todas as acções cotadas desde o dia em que o Clube começou a investir.")
+            _v1 = _res_idx[1]
+            _cartoes.append(kpi_card("📊", "Índice APPO (100 = 19/08/2026)", f"{_res_idx[0]:.2f}",
+                                     (f"{_v1:+.2f}% em 1d" if _v1 is not None else None), None, ("up" if (_v1 or 0) > 0 else "down" if (_v1 or 0) < 0 else None)))
         else:
-            indice = calcular_indice_mercado(_df_activos_ticker)
-            st.metric(tx["inicio_indice_label"], pct_bruto(indice), delta=pct_bruto(indice))
-            st.caption(tx["inicio_indice_caption"])
+            _ind = calcular_indice_mercado(_df_activos_ticker)
+            _cartoes.append(kpi_card("📊", tx["inicio_indice_label"], pct_bruto(_ind), None, None, ("up" if _ind > 0 else "down" if _ind < 0 else None)))
+        kpi_linha(_cartoes)
+        st.caption("Índice APPO: variação média de todas as acções cotadas desde o dia em que o Clube começou a investir." if _res_idx else tx["inicio_indice_caption"])
         st.divider()
 
         st.subheader(tx["inicio_distribuicao"])
         cats = tx["inicio_distribuicao_cats"]
-        st.bar_chart(pd.DataFrame({"Categoria": cats,
+        fx_barras(pd.DataFrame({"Categoria": cats,
                                    "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]]}).set_index("Categoria"))
 
         st.divider()
@@ -7316,7 +7555,7 @@ try:
                 st.divider()
                 st.subheader(tx["cot_comparacao"])
                 cols_tb = tx["cot_tabela_cols"]
-                st.bar_chart(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": tx["cot_preco_kz"]}))
+                fx_barras(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": tx["cot_preco_kz"]}))
 
             with aba_graf:
                 registar_cotacoes_hoje(df_activos)
@@ -7592,7 +7831,7 @@ try:
     .bfa-tbl tr.sel td{background:#F1E2E7;}
     .bfa-tbl tr.tot td{background:#F4ECEF;font-weight:700;border-top:2px solid #7C1F3E;}
     .bfa-tbl th.l,.bfa-tbl td.l{text-align:left;}
-    .bfa-up{color:#16A34A;}.bfa-dn{color:#DC2626;}.bfa-fl{color:#6B7280;}
+    .bfa-up{color:#0D9488;}.bfa-dn{color:#DC2626;}.bfa-fl{color:#6B7280;}
     .bfa-bar{background:#FBF8F6;border:1px solid #ECDEE3;border-radius:8px;padding:12px 20px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
     .bfa-bar .k{font-size:0.62rem;color:#8A7B80;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:3px;}
     .bfa-bar .v{font-size:1.02rem;color:#1A1A2E;font-weight:700;background:#F4ECEF;padding:4px 10px;border-radius:4px;display:inline-block;}
@@ -7861,7 +8100,7 @@ try:
             col_a.metric("Saldo Final (nominal)", kz(saldo_c))
             col_b.metric("Total Investido",       kz(total_inv))
             col_c.metric("Juros Compostos",       kz(saldo_c - total_inv))
-            st.bar_chart(df_sim[["Saldo Nominal", "Total Investido"]])
+            fx_barras(df_sim[["Saldo Nominal", "Total Investido"]])
             saldo_real_f = df_sim["Saldo Real"].iloc[-1]
             st.caption(f"Saldo final em poder de compra de hoje (inflação {inflacao_sim:.1f}%/ano): {kz(saldo_real_f)}")
             nota_indicador(f"Com inflação de {inflacao_sim:.1f}%/ano, o teu saldo nominal de {kz(saldo_c)} equivale apenas a {kz(saldo_real_f)} em poder de compra actual.")
@@ -7886,7 +8125,7 @@ try:
             col1.metric(tx["r50_consumo"],       kz(alvo_consumo))
             col2.metric(tx["r50_investimento"],  kz(alvo_inv))
             col3.metric(tx["r50_entesouramento"],kz(alvo_entes))
-            st.bar_chart(pd.DataFrame({"Categoria": [tx["r50_consumo"], tx["r50_investimento"], tx["r50_entesouramento"]],
+            fx_barras(pd.DataFrame({"Categoria": [tx["r50_consumo"], tx["r50_investimento"], tx["r50_entesouramento"]],
                                        "Valor recomendado (Kz)": [alvo_consumo, alvo_inv, alvo_entes]}).set_index("Categoria"))
 
             st.divider()
@@ -7926,13 +8165,27 @@ try:
             df_rec = st.data_editor(
                 st.session_state["orc_rec_base"], num_rows="dynamic", key=f"orc_rec_{_ver}", hide_index=True,
                 column_config={"Descrição": st.column_config.TextColumn("Descrição"), "Valor (Kz)": _cfg_valor})
-            st.markdown("**2. Despesas e poupança do mês** — escolha a categoria de cada linha")
-            df_desp = st.data_editor(
-                st.session_state["orc_desp_base"], num_rows="dynamic", key=f"orc_desp_{_ver}", hide_index=True,
-                column_config={
-                    "Categoria": st.column_config.SelectboxColumn("Categoria", options=ORC_CATEGORIAS, required=True),
-                    "Descrição": st.column_config.TextColumn("Descrição"),
-                    "Valor (Kz)": _cfg_valor})
+            st.markdown("**2. Despesas e poupança do mês** — abre cada grupo e detalha o que vais comprar ou pagar")
+            _bd = st.session_state["orc_desp_base"].copy()
+            _bd.loc[~_bd["Categoria"].isin(ORC_CATEGORIAS), "Categoria"] = ORC_CATEGORIAS[0]
+            _rec_prev = float(sum(_num_seguro(v) for v in df_rec["Valor (Kz)"]))
+            _partes = []
+            for _gi, (_cat, _ico, _meta, _sug) in enumerate(ORC_GRUPOS):
+                _b = _bd[_bd["Categoria"] == _cat][["Descrição", "Valor (Kz)"]].reset_index(drop=True)
+                with st.expander(f"{_ico} {_cat}"):
+                    st.caption(_sug)
+                    _e = st.data_editor(_b, num_rows="dynamic", key=f"orc_desp_{_gi}_{_ver}", hide_index=True,
+                                        column_config={"Descrição": st.column_config.TextColumn("O que vais comprar / pagar"), "Valor (Kz)": _cfg_valor})
+                    _sub = float(sum(_num_seguro(v) for v in _e["Valor (Kz)"]))
+                    if _rec_prev > 0:
+                        st.progress(min(_sub / (_rec_prev * _meta), 1.0))
+                        st.caption(f"Subtotal {kz(_sub)} · meta {_meta * 100:.0f}% das receitas = {kz(_rec_prev * _meta)}")
+                    else:
+                        st.caption(f"Subtotal {kz(_sub)}")
+                _e = _e.copy()
+                _e["Categoria"] = _cat
+                _partes.append(_e[["Categoria", "Descrição", "Valor (Kz)"]])
+            df_desp = pd.concat(_partes, ignore_index=True)
 
             rec_total = float(sum(_num_seguro(v) for v in df_rec["Valor (Kz)"]))
             _dd = df_desp.copy()
@@ -7960,7 +8213,7 @@ try:
                 c1, c2, c3 = st.columns(3)
                 for col, cat, inv in ((c1, ORC_CATEGORIAS[0], "inverse"), (c2, ORC_CATEGORIAS[1], "normal"), (c3, ORC_CATEGORIAS[2], "normal")):
                     col.metric(f"{cat}", kz(tot_cat[cat]), delta=f"{kz(tot_cat[cat] - alvos[cat])} face à meta ({kz(alvos[cat])})", delta_color=inv)
-                st.bar_chart(pd.DataFrame(
+                fx_barras(pd.DataFrame(
                     {"O seu orçamento (Kz)": [tot_cat[c] for c in ORC_CATEGORIAS], "Recomendado 50/30/20 (Kz)": [alvos[c] for c in ORC_CATEGORIAS]},
                     index=ORC_CATEGORIAS))
 
@@ -8078,19 +8331,7 @@ try:
     elif pagina == "ℹ️ Sobre Nós & Estatutos":
         tx = t()
         hero("ℹ️ " + tx["nav_map"]["ℹ️ Sobre Nós & Estatutos"].replace("ℹ️ ", ""), tx["sobre_hero_sub"])
-        st.subheader(tx["sobre_quem_somos"])
-        st.markdown(tx["sobre_quem_texto"])
-        st.subheader(tx["sobre_principios"])
-        st.markdown(TEXTO_PRINCIPIOS)   # mantém-se em PT
-        st.subheader(tx["sobre_estatutos"])
-        st.markdown(tx["sobre_estatutos_texto"])
-        _df_est = obter_documentos("estatuto") if eh_participante() else pd.DataFrame()
-        if not _df_est.empty:
-            _est = _df_est.iloc[0]
-            st.markdown(f"**📜 {_est['titulo']}**")
-            st.caption(f"{_est['criado_em']} · {_est['tamanho'] / 1048576:.1f} MB")
-            bloco_documento_pdf(int(_est["id"]), _est["nome_ficheiro"], f"estatuto_{int(_est['id'])}", altura=820)
-        nota_interna(tx["sobre_nota"])
+        pagina_sobre_nos(tx)
 
     # =========================================================
     # PÁGINA: PAINEL DO ADMINISTRADOR (mantém-se em PT)
@@ -8098,12 +8339,14 @@ try:
     elif pagina == "🔐 Painel do Administrador":
         hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
 
-        aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca, aba_edu_serv, aba_despesas = st.tabs(
-            ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança", "Educação & Serviços", "Despesas do grupo"])
+        aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca, aba_edu_serv, aba_despesas, aba_site = st.tabs(
+            ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança", "Educação & Serviços", "Despesas do grupo", "Site & Sobre Nós"])
         with aba_edu_serv:
             painel_educacao_servicos_admin()
         with aba_despesas:
             painel_despesas_admin()
+        with aba_site:
+            painel_site_admin()
 
         with aba_resumo:
             st.subheader("Editar Resumo Patrimonial")
