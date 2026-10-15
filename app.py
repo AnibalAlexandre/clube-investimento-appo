@@ -2199,6 +2199,7 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS teses_activos (ticker TEXT PRIMARY KEY, tese TEXT, fair_value NUMERIC, decisao TEXT, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW(), actualizado_por TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS admissoes_formais (id SERIAL PRIMARY KEY, manifestacao_id INTEGER UNIQUE, nome TEXT NOT NULL, bi TEXT, nif TEXT, data_nascimento DATE, morada TEXT, origem_fundos TEXT, consentimento_formal BOOLEAN NOT NULL DEFAULT FALSE, consentimento_em TIMESTAMP, estado TEXT NOT NULL DEFAULT 'Em preparação', nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS transaccoes (id SERIAL PRIMARY KEY, data DATE NOT NULL, ticker TEXT NOT NULL, nome TEXT NOT NULL, tipo TEXT NOT NULL, qtd NUMERIC NOT NULL, preco_unit NUMERIC NOT NULL, comissao NUMERIC NOT NULL DEFAULT 0, nota TEXT, anulada BOOLEAN NOT NULL DEFAULT FALSE, motivo_anulacao TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS subscritores (id SERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, consentimento BOOLEAN NOT NULL DEFAULT FALSE, consentimento_em TIMESTAMP, activo BOOLEAN NOT NULL DEFAULT TRUE, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS lancamentos_contab (id SERIAL PRIMARY KEY, data DATE NOT NULL, rubrica TEXT NOT NULL, descricao TEXT, valor NUMERIC NOT NULL, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS despesas_admin (id SERIAL PRIMARY KEY, data DATE NOT NULL, descricao TEXT NOT NULL, categoria TEXT, valor NUMERIC NOT NULL, fornecedor TEXT, estado TEXT NOT NULL DEFAULT 'Proposta', aprovada_por TEXT, aprovada_em TIMESTAMP, nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     _seed_servicos = [
@@ -5297,6 +5298,8 @@ def painel_educacao_servicos_admin():
                         except Exception as e:
                             st.error(str(e))
     with sub_man:
+        with st.expander("📬 Subscritores de novidades"):
+            painel_subscritores()
         dfm = consultar_df("SELECT id, criado_em, nome, email, telefone, profissao, localidade, interesse, contribuicao, como_soube, mensagem, consentimento, estado FROM manifestacoes_interesse ORDER BY id DESC LIMIT 500")
         st.caption("Registos de interesse. Não são admissões nem dão direito a cotas. A admissão futura continua desactivada.")
         if dfm.empty:
@@ -8559,6 +8562,48 @@ def guardar_subscritor(email: str) -> None:
     executar("INSERT INTO subscritores (email) VALUES (%s) ON CONFLICT (email) DO NOTHING", (email.strip().lower(),))
 
 
+# ---------------- Subscrição de novidades por e-mail (sem criar conta) ----------------
+def registar_subscricao(email: str, consentimento: bool):
+    e = (email or "").strip().lower()
+    if not _REGEX_EMAIL.match(e):
+        raise ValueError("Indica um e-mail válido.")
+    if not consentimento:
+        raise ValueError("Para subscrever, tens de dar o teu consentimento.")
+    executar("""INSERT INTO subscritores (email, consentimento, consentimento_em, activo) VALUES (%s, TRUE, NOW(), TRUE)
+                ON CONFLICT (email) DO UPDATE SET activo = TRUE, consentimento = TRUE, consentimento_em = NOW()""", (e,))
+
+
+def formulario_subscricao():
+    st.markdown("**Recebe novidades do Clube** — fechos de mercado, conteúdos educativos e avisos — sem precisares de criar conta.")
+    with st.form("form_subscricao", clear_on_submit=True):
+        em = st.text_input("O teu e-mail", max_chars=200, key="sub_email")
+        ok = st.checkbox("Autorizo o APPO a usar este e-mail apenas para me enviar novidades do Clube, nos termos da Lei n.º 22/11. Posso pedir a remoção a qualquer momento.")
+        env = st.form_submit_button("Subscrever", type="primary")
+    if env:
+        if not _pode_enviar("ultima_subscricao", 20):
+            st.warning("Aguarda alguns segundos antes de tentar outra vez.")
+        else:
+            try:
+                registar_subscricao(em, ok)
+                st.success("Subscrição registada. Obrigado!")
+            except ValueError as e:
+                st.error(str(e))
+            except Exception:
+                traceback.print_exc()
+                st.error("Não foi possível registar agora. Tenta mais tarde.")
+
+
+def painel_subscritores():
+    exigir_admin()
+    d = consultar_df("SELECT email, consentimento_em, activo, criado_em FROM subscritores ORDER BY criado_em DESC")
+    if d.empty:
+        st.caption("Ainda não há subscritores.")
+        return
+    st.caption(f"{int(d['activo'].sum())} activos em {len(d)} registos. O envio de e-mails ainda não está ligado: por agora, a lista serve para contactar quem subscreveu.")
+    st.dataframe(d, hide_index=True)
+    st.download_button("Descarregar lista (CSV)", d.to_csv(index=False).encode("utf-8-sig"), "subscritores_appo.csv", "text/csv")
+
+
 def formulario_conta_gratuita():
     st.markdown("**Cria a tua conta gratuita** e começa a aprender e a praticar com o APPO.")
     st.markdown("- 🧭 Descobre o teu **perfil de investidor**\n- 🧠 Faz o diagnóstico de **capacidade financeira** e o treino\n"
@@ -8694,7 +8739,7 @@ def pagina_login():
         logo_com_texto(110)
         render_html(f'<p style="text-align:center; opacity:0.75; margin-top:6px;">{tx["tagline"]}</p>')
         st.markdown(f"#### {tx['login_titulo']}")
-        _t_entrar, _t_criar = st.tabs(["🔑 Entrar", "✨ Criar conta gratuita"])
+        _t_entrar, _t_criar, _t_sub = st.tabs(["🔑 Entrar", "✨ Criar conta gratuita", "📬 Novidades"])
         with _t_entrar:
             with st.form("form_login"):
                 email    = st.text_input(tx["email"])
@@ -8720,6 +8765,8 @@ def pagina_login():
                         st.success("Pedido enviado. Se existir uma conta com este e-mail, o administrador vai contactar-te em breve.")
         with _t_criar:
             formulario_conta_gratuita()
+        with _t_sub:
+            formulario_subscricao()
         if submeter:
             conta = obter_conta_por_email(email.strip().lower())
             if conta and verificar_password(password, conta[3]) and str(conta[9] or "activa") != "activa":
@@ -8814,7 +8861,7 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
-st.sidebar.caption("Versão da app: 2026-10-15 · H (cabeçalho fixo, partilha discreta, aviso de actualização)")
+st.sidebar.caption("Versão da app: 2026-10-15 · I (subscrição por e-mail)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
