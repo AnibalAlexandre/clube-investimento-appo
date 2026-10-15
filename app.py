@@ -1057,7 +1057,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
 
 /* Cotações em fita */
 /* cabeçalho fixo: marca + esteira de cotações ficam no topo ao rolar a página */
-div[data-testid="stVerticalBlock"]:has(> :is(.element-container, [data-testid="stElementContainer"]):has(.appo-sticky-anchor)) {
+.st-key-appo_topo, div[data-testid="stVerticalBlock"]:has(> :is(.element-container, [data-testid="stElementContainer"]):has(.appo-sticky-anchor)) {
   position: sticky; top: 2.875rem; z-index: 990; background: #FFFFFF; gap: 0 !important; box-shadow: 0 1px 0 var(--appo-borda), 0 6px 14px -12px rgba(15, 23, 42, 0.25);
 }
 .appo-topbar { display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px; }
@@ -1066,12 +1066,24 @@ div[data-testid="stVerticalBlock"]:has(> :is(.element-container, [data-testid="s
 .appo-topbar .appo-pagina { font-size: 12px; color: #94A3B8; margin-left: auto; }
 .appo-topbar + div .appo-ticker-wrap, .appo-ticker-wrap { margin-bottom: 0; }
 /* partilha discreta */
-.appo-share-disc { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.appo-share-disc { display: flex; align-items: center; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
 .appo-share-disc span { font-size: 12px; color: #94A3B8; margin-right: 2px; }
-.appo-share-disc a { font-size: 12px; line-height: 1; padding: 5px 10px; border: 1px solid #E2E8F0; border-radius: 999px; color: #64748B !important; background: transparent; text-decoration: none !important; transition: color .15s, border-color .15s, background .15s; }
-.appo-share-disc a:hover { color: #1F2937 !important; border-color: #CBD5E1; background: #F8FAFC; }
+.appo-share-disc a { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid #E2E8F0; border-radius: 50%; color: #64748B !important; background: transparent; text-decoration: none !important; transition: color .15s, border-color .15s, background .15s; }
+.appo-share-disc a:hover { background: #F8FAFC; }
+.appo-share-disc a.wa:hover { color: #16A34A !important; border-color: #86EFAC; }
+.appo-share-disc a.tw:hover { color: #0F172A !important; border-color: #94A3B8; }
+.appo-share-disc a.fb:hover { color: #1877F2 !important; border-color: #93C5FD; }
+/* perguntas frequentes em destaque */
+.appo-faq-cab { background: linear-gradient(120deg, #6D5BA8, #B05A7A 60%, #E39A63); color: #fff; border-radius: 16px; padding: 18px 22px; margin: 10px 0 14px; }
+.appo-faq-cab .t { font-size: 1.25rem; font-weight: 700; }
+.appo-faq-cab .s { font-size: .9rem; opacity: .92; margin-top: 2px; }
+.st-key-appo_faq [data-testid="stExpander"] { border: 1px solid #E7DEF5; border-left: 5px solid #8E7CC3; border-radius: 12px; background: linear-gradient(90deg, #FAF7FF, #FFFFFF); margin-bottom: 8px; transition: box-shadow .15s, transform .15s; }
+.st-key-appo_faq [data-testid="stExpander"]:hover { box-shadow: 0 6px 18px -10px rgba(76, 29, 149, .45); transform: translateY(-1px); }
+.st-key-appo_faq [data-testid="stExpander"] summary { font-weight: 600; color: #3B2F63; }
+.st-key-appo_faq [data-testid="stExpander"]:nth-of-type(3n+2) { border-left-color: #C98BA0; background: linear-gradient(90deg, #FFF6F8, #FFFFFF); }
+.st-key-appo_faq [data-testid="stExpander"]:nth-of-type(3n) { border-left-color: #E8A06A; background: linear-gradient(90deg, #FFF8F1, #FFFFFF); }
 .appo-ticker-wrap { overflow: hidden; white-space: nowrap; background: #FFFFFF; border-top: 1px solid var(--appo-borda); border-bottom: 1px solid var(--appo-borda); padding: 8px 0; margin-bottom: 16px; }
-.appo-ticker-move { display: inline-block; padding-left: 100%; animation: appo-scroll 135s linear infinite; font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; font-size: 0.8rem; }
+.appo-ticker-move { display: inline-block; padding-left: 100%; animation: appo-scroll 135s linear infinite; font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; font-size: 0.85rem; font-weight: 600; }
 @keyframes appo-scroll { 0% { transform: translate(0,0); } 100% { transform: translate(-100%,0); } }
 
 .appo-share a { text-decoration: none; color: #FFFFFF; padding: 6px 14px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; }
@@ -1413,8 +1425,8 @@ def ticker_tape(df_activos: pd.DataFrame):
     itens = []
     for _, a in df_activos.iterrows():
         v = float(a["variacao"])
-        cor = "#0D9488" if v > 0 else ("#DC2626" if v < 0 else "#6B7280")
-        itens.append(f'<span style="color:{cor}; margin-right:36px;">{logo_activo_html(a["ticker"], a["nome"])}{_esc(a["ticker"] or a["nome"])} &nbsp;{kz(a["preco"])} &nbsp;({pct_bruto(v)})</span>')
+        cor = "#15803D" if v > 0 else ("#DC2626" if v < 0 else "#475569")
+        itens.append(f'<span style="color:{cor}; margin-right:36px;">{logo_activo_html(a["ticker"], a["nome"], 24)}<b>{_esc(a["ticker"] or a["nome"])}</b> &nbsp;{kz(a["preco"])} &nbsp;({pct_bruto(v)})</span>')
     conteudo = "".join(itens) * 3
     render_html(f'<div class="appo-ticker-wrap"><div class="appo-ticker-move"><span>{conteudo}</span></div></div>')
 
@@ -1429,9 +1441,9 @@ def botoes_partilha(texto: str):
         f"""
         <div class="appo-share-disc">
             <span>Partilhar</span>
-            <a href="{wa}" target="_blank" rel="noopener">WhatsApp</a>
-            <a href="{tw}" target="_blank" rel="noopener">X</a>
-            <a href="{fb}" target="_blank" rel="noopener">Facebook</a>
+            <a class="wa" href="{wa}" target="_blank" rel="noopener" title="WhatsApp" aria-label="Partilhar no WhatsApp"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></a>
+            <a class="tw" href="{tw}" target="_blank" rel="noopener" title="X" aria-label="Partilhar no X"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></a>
+            <a class="fb" href="{fb}" target="_blank" rel="noopener" title="Facebook" aria-label="Partilhar no Facebook"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073Z"/></svg></a>
         </div>
         """
     )
@@ -8185,10 +8197,21 @@ def pagina_sobre_nos(tx: dict):
             bloco_documento_pdf(int(_est["id"]), _est["nome_ficheiro"], f"estatuto_{int(_est['id'])}", altura=820)
     faqs = blocos[blocos["tipo"] == "faq"]
     if not faqs.empty:
-        st.markdown("##### Perguntas frequentes")
-        for _, r in faqs.iterrows():
-            with st.expander("❓ " + str(r["titulo"])):
-                st.markdown(r["texto"])
+        render_html('<div class="appo-faq-cab"><div class="t">💬 Perguntas frequentes</div>'
+                    '<div class="s">Respostas rápidas sobre o Clube. Escreve uma palavra para filtrar as perguntas.</div></div>')
+        _busca = st.text_input("Procurar nas perguntas", key="faq_busca", placeholder="🔎  ex.: quotas, risco, adesão…", label_visibility="collapsed")
+        _q = (_busca or "").strip().lower()
+        _sel = faqs[faqs.apply(lambda r: _q in (str(r["titulo"]) + " " + str(r["texto"])).lower(), axis=1)] if _q else faqs
+        try:
+            _faq_box = st.container(key="appo_faq")
+        except TypeError:
+            _faq_box = st.container()
+        with _faq_box:
+            if _sel.empty:
+                st.info("Nenhuma pergunta encontrada. Tenta outra palavra ou escreve-nos.")
+            for _n, (_, r) in enumerate(_sel.iterrows(), 1):
+                with st.expander(f"{_n}. {r['titulo']}", expanded=bool(_q) and len(_sel) == 1):
+                    st.markdown(r["texto"])
     for _, r in blocos[blocos["tipo"] == "aviso"].iterrows():
         render_html(f'<div class="fx-aviso-risco"><b>⚠️ {_esc(r["titulo"])}.</b> {_esc(r["texto"])}</div>')
     nota_interna(tx["sobre_nota"])
@@ -8861,7 +8884,7 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
-st.sidebar.caption("Versão da app: 2026-10-15 · I (subscrição por e-mail)")
+st.sidebar.caption("Versão da app: 2026-10-15 · J (cabeçalho fixo v2, FAQ, partilha com ícones)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
@@ -8883,7 +8906,11 @@ if st.sidebar.button(tx["terminar_sessao"]):
 st.sidebar.caption(f"Última actualização da página: {agora()}")
 
 _df_activos_ticker = obter_activos()
-with st.container():
+try:
+    _topo = st.container(key="appo_topo")
+except TypeError:   # versões antigas do Streamlit sem «key»
+    _topo = st.container()
+with _topo:
     render_html('<span class="appo-sticky-anchor"></span><div class="appo-topbar"><div class="appo-marca">APPO</div>'
                 '<div class="appo-nome">Clube de Investimento APPO</div>'
                 f'<div class="appo-pagina">{_esc(tx["nav_map"].get(pagina, pagina))}</div></div>')
@@ -10521,6 +10548,9 @@ except PermissionError:
 except (psycopg2.Error, requests.RequestException):
     traceback.print_exc()
     st.error("Não foi possível concluir o pedido neste momento (base de dados ou serviço externo). Tente novamente dentro de instantes.")
+    if st.session_state.get("is_admin"):
+        with st.expander("🔧 Diagnóstico técnico (só administradores)"):
+            st.code(traceback.format_exc()[-1800:])
 except Exception:
     traceback.print_exc()
     st.error("Ocorreu um erro inesperado nesta página. Tente novamente; se persistir, contacte o administrador.")
