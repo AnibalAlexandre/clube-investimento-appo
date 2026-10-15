@@ -1056,6 +1056,20 @@ div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
 .appo-kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--appo-suave); font-weight: 600; }
 
 /* Cotações em fita */
+/* cabeçalho fixo: marca + esteira de cotações ficam no topo ao rolar a página */
+div[data-testid="stVerticalBlock"]:has(> :is(.element-container, [data-testid="stElementContainer"]):has(.appo-sticky-anchor)) {
+  position: sticky; top: 2.875rem; z-index: 990; background: #FFFFFF; gap: 0 !important; box-shadow: 0 1px 0 var(--appo-borda), 0 6px 14px -12px rgba(15, 23, 42, 0.25);
+}
+.appo-topbar { display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px; }
+.appo-topbar .appo-marca { height: 24px; width: 24px; border-radius: 50%; background: linear-gradient(135deg, #8E7CC3, #C98BA0 60%, #EFB988); color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; letter-spacing: .3px; }
+.appo-topbar .appo-nome { font-size: 14px; font-weight: 600; color: #334155; }
+.appo-topbar .appo-pagina { font-size: 12px; color: #94A3B8; margin-left: auto; }
+.appo-topbar + div .appo-ticker-wrap, .appo-ticker-wrap { margin-bottom: 0; }
+/* partilha discreta */
+.appo-share-disc { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.appo-share-disc span { font-size: 12px; color: #94A3B8; margin-right: 2px; }
+.appo-share-disc a { font-size: 12px; line-height: 1; padding: 5px 10px; border: 1px solid #E2E8F0; border-radius: 999px; color: #64748B !important; background: transparent; text-decoration: none !important; transition: color .15s, border-color .15s, background .15s; }
+.appo-share-disc a:hover { color: #1F2937 !important; border-color: #CBD5E1; background: #F8FAFC; }
 .appo-ticker-wrap { overflow: hidden; white-space: nowrap; background: #FFFFFF; border-top: 1px solid var(--appo-borda); border-bottom: 1px solid var(--appo-borda); padding: 8px 0; margin-bottom: 16px; }
 .appo-ticker-move { display: inline-block; padding-left: 100%; animation: appo-scroll 135s linear infinite; font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; font-size: 0.8rem; }
 @keyframes appo-scroll { 0% { transform: translate(0,0); } 100% { transform: translate(-100%,0); } }
@@ -1413,10 +1427,11 @@ def botoes_partilha(texto: str):
     tx  = t()
     render_html(
         f"""
-        <div class="appo-share" style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
-            <a href="{wa}" target="_blank" style="background:#25D366;">{tx['partilha_wa']}</a>
-            <a href="{tw}" target="_blank" style="background:#111;">{tx['partilha_tw']}</a>
-            <a href="{fb}" target="_blank" style="background:#1877F2;">{tx['partilha_fb']}</a>
+        <div class="appo-share-disc">
+            <span>Partilhar</span>
+            <a href="{wa}" target="_blank" rel="noopener">WhatsApp</a>
+            <a href="{tw}" target="_blank" rel="noopener">X</a>
+            <a href="{fb}" target="_blank" rel="noopener">Facebook</a>
         </div>
         """
     )
@@ -8489,7 +8504,7 @@ def _painel_inicio_aluno():
     with st.expander("📈 Cotações de referência"):
         if not _df_activos_ticker.empty:
             st.dataframe(tabela_cotacoes_estilizada(_df_activos_ticker), hide_index=True, column_config=cfg_logo())
-        aviso_discreto("Dados de mercado de referência actualizados pelo administrador; não são cotações em tempo real.")
+        aviso_discreto("Dados de mercado de referência, não em tempo real. Os fechos e volumes são carregados pelo APPO depois de cada sessão de mercado.")
 
 
 
@@ -8799,7 +8814,7 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
-st.sidebar.caption("Versão da app: 2026-10-15 · G (barras claras, logótipos no Início)")
+st.sidebar.caption("Versão da app: 2026-10-15 · H (cabeçalho fixo, partilha discreta, aviso de actualização)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
@@ -8821,7 +8836,11 @@ if st.sidebar.button(tx["terminar_sessao"]):
 st.sidebar.caption(f"Última actualização da página: {agora()}")
 
 _df_activos_ticker = obter_activos()
-ticker_tape(_df_activos_ticker)
+with st.container():
+    render_html('<span class="appo-sticky-anchor"></span><div class="appo-topbar"><div class="appo-marca">APPO</div>'
+                '<div class="appo-nome">Clube de Investimento APPO</div>'
+                f'<div class="appo-pagina">{_esc(tx["nav_map"].get(pagina, pagina))}</div></div>')
+    ticker_tape(_df_activos_ticker)
 
 # =========================================================
 # PÁGINA: INÍCIO & ANÁLISES
@@ -9198,7 +9217,7 @@ try:
                             "tk": a["tk"], "qtd": qtd_op, "preco": a["preco"]}
                         st.rerun()
 
-                aviso_discreto("Ambiente de treino pedagógico com dados de mercado de referência, actualizados pelo administrador (não em tempo real). "
+                aviso_discreto("Ambiente de treino pedagógico com dados de mercado de referência (não em tempo real): os fechos e volumes são carregados pelo APPO depois de cada sessão de mercado. "
                                "As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.")
 
         # ══════════════════════════════════════════════════════════════
