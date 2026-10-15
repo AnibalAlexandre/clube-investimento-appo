@@ -2211,7 +2211,10 @@ def inicializar_bd():
     executar("""CREATE TABLE IF NOT EXISTS teses_activos (ticker TEXT PRIMARY KEY, tese TEXT, fair_value NUMERIC, decisao TEXT, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW(), actualizado_por TEXT)""")
     executar("""CREATE TABLE IF NOT EXISTS admissoes_formais (id SERIAL PRIMARY KEY, manifestacao_id INTEGER UNIQUE, nome TEXT NOT NULL, bi TEXT, nif TEXT, data_nascimento DATE, morada TEXT, origem_fundos TEXT, consentimento_formal BOOLEAN NOT NULL DEFAULT FALSE, consentimento_em TIMESTAMP, estado TEXT NOT NULL DEFAULT 'Em preparação', nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS transaccoes (id SERIAL PRIMARY KEY, data DATE NOT NULL, ticker TEXT NOT NULL, nome TEXT NOT NULL, tipo TEXT NOT NULL, qtd NUMERIC NOT NULL, preco_unit NUMERIC NOT NULL, comissao NUMERIC NOT NULL DEFAULT 0, nota TEXT, anulada BOOLEAN NOT NULL DEFAULT FALSE, motivo_anulacao TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
-    executar("""CREATE TABLE IF NOT EXISTS subscritores (id SERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, consentimento BOOLEAN NOT NULL DEFAULT FALSE, consentimento_em TIMESTAMP, activo BOOLEAN NOT NULL DEFAULT TRUE, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS subscritores (id SERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("ALTER TABLE subscritores ADD COLUMN IF NOT EXISTS consentimento BOOLEAN NOT NULL DEFAULT TRUE")
+    executar("ALTER TABLE subscritores ADD COLUMN IF NOT EXISTS consentimento_em TIMESTAMP")
+    executar("ALTER TABLE subscritores ADD COLUMN IF NOT EXISTS activo BOOLEAN NOT NULL DEFAULT TRUE")
     executar("""CREATE TABLE IF NOT EXISTS lancamentos_contab (id SERIAL PRIMARY KEY, data DATE NOT NULL, rubrica TEXT NOT NULL, descricao TEXT, valor NUMERIC NOT NULL, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     executar("""CREATE TABLE IF NOT EXISTS despesas_admin (id SERIAL PRIMARY KEY, data DATE NOT NULL, descricao TEXT NOT NULL, categoria TEXT, valor NUMERIC NOT NULL, fornecedor TEXT, estado TEXT NOT NULL DEFAULT 'Proposta', aprovada_por TEXT, aprovada_em TIMESTAMP, nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
     _seed_servicos = [
@@ -5310,8 +5313,6 @@ def painel_educacao_servicos_admin():
                         except Exception as e:
                             st.error(str(e))
     with sub_man:
-        with st.expander("📬 Subscritores de novidades"):
-            painel_subscritores()
         dfm = consultar_df("SELECT id, criado_em, nome, email, telefone, profissao, localidade, interesse, contribuicao, como_soube, mensagem, consentimento, estado FROM manifestacoes_interesse ORDER BY id DESC LIMIT 500")
         st.caption("Registos de interesse. Não são admissões nem dão direito a cotas. A admissão futura continua desactivada.")
         if dfm.empty:
@@ -7078,7 +7079,7 @@ def painel_mercado_bodiva():
 # =========================================================
 # COMPONENTES VISUAIS: gráficos de anel, biblioteca por níveis, Histórico & Relatórios avançado
 # =========================================================
-_PALETA_FX = ["#8E7CC3", "#A8607B", "#D98A82", "#EFB988", "#B3A5DB", "#C98BA0", "#F3CBA4", "#B59A86", "#9AA0C8", "#D6A3B3"]
+_PALETA_FX = ["#7C3AED", "#B0124A", "#F97316", "#E11D48", "#2563EB", "#F59E0B", "#A855F7", "#0EA5A4", "#D946EF", "#9D174D"]   # vivas; o vinho (#B0124A) é carregado, não acastanhado
 
 
 def grafico_anel(df: pd.DataFrame, cat: str, val: str, titulo: str = "", centro_titulo: str = "Total", centro_valor: str = "",
@@ -7099,7 +7100,7 @@ def grafico_anel(df: pd.DataFrame, cat: str, val: str, titulo: str = "", centro_
         import altair as alt
         cores = alt.Scale(domain=d[cat].tolist(), range=(paleta or _PALETA_FX)[:max(len(d), 1)] if paleta else (_PALETA_FX * 3)[:len(d)])
         base = alt.Chart(d).encode(theta=alt.Theta(f"{val}:Q", stack=True),
-                                   color=alt.Color(f"{cat}:N", scale=cores, legend=alt.Legend(orient="bottom", title=None, columns=2, labelLimit=220)),
+                                   color=alt.Color(f"{cat}:N", scale=cores, legend=alt.Legend(orient="right", direction="vertical", title=None, labelLimit=170, labelFontSize=12, symbolType="circle", symbolSize=110, padding=8)),
                                    tooltip=[alt.Tooltip(f"{cat}:N", title="Item"), alt.Tooltip("Valor:N", title="Valor"), alt.Tooltip("Peso:Q", format=".1%", title="Peso")])
         arco = base.mark_arc(innerRadius=78, outerRadius=128, cornerRadius=5, padAngle=0.02, stroke="#FFFFFF", strokeWidth=2)
         rotulos = base.transform_filter(alt.datum.Peso >= 0.06).mark_text(radius=103, size=11, fontWeight="bold", color="#FFFFFF").encode(text=alt.Text("Peso:Q", format=".0%"))
@@ -7107,7 +7108,7 @@ def grafico_anel(df: pd.DataFrame, cat: str, val: str, titulo: str = "", centro_
         centro = alt.Chart(pd.DataFrame({"t": [centro_valor or (kz(total) if formato == "kz" else f"{total:,.0f}".replace(",", " "))], "s": [centro_titulo]}))
         c1 = centro.mark_text(size=20, fontWeight="bold", color="#1B1033", dy=-6).encode(text="t:N", x=alt.value(L / 2), y=alt.value(L / 2))
         c2 = centro.mark_text(size=11, color="#64748B", dy=14).encode(text="s:N", x=alt.value(L / 2), y=alt.value(L / 2))
-        graf = alt.layer(arco, rotulos, c1, c2).properties(width=L, height=altura - 20).configure_view(strokeWidth=0)
+        graf = alt.layer(arco, rotulos, c1, c2).properties(width=L, height=altura - 20, padding={"left": 6, "right": 12, "top": 6, "bottom": 6}).configure_view(strokeWidth=0)
         st.altair_chart(graf, use_container_width=True)
     except Exception:
         st.dataframe(d[[cat, "Valor", "Peso"]].assign(Peso=d["Peso"].map("{:.1%}".format)), hide_index=True)
@@ -7997,8 +7998,8 @@ def pagina_historico_relatorios(tx):
 # =========================================================
 _PALETA_SERIES = ["#7C3AED", "#FB923C", "#F43F5E", "#A78BFA", "#FDBA74", "#FB7185", "#C084FC", "#FCA5A5"]
 COR_PRECO = "#7C1F3E"          # linha dos preços (o resto do gráfico usa o gradiente roxo → vinho → vermelho → laranja)
-_COR_BARRA = "#8DB9E8"   # azul claro e limpo (barras de uma série, sem gradiente)
-_PALETA_BARRAS = ["#8DB9E8", "#F4B98C", "#9ED3C1", "#C9B6E8", "#F2A9B8", "#B7D58F"]
+_COR_BARRA = "#5B9BE6"   # azul claro e limpo (barras de uma série, sem gradiente)
+_PALETA_BARRAS = ["#5B9BE6", "#F58A3B", "#3FB68B", "#9B7BE6", "#EE6C8A", "#8CC63F"]
 _GRAD_SUAVE = [("#A78BFA", 0.0), ("#C65D86", 0.36), ("#F2707E", 0.70), ("#FDBA74", 1.0)]   # as cores do Clube, em tons mais claros
 
 
@@ -8058,7 +8059,7 @@ def fx_barras_div(df: pd.DataFrame, height: int = 280, formato: str = "+.1f"):
         pin, pout = _padding_barras(len(d))
         x = alt.X("Item:N", sort=None, title=None, scale=alt.Scale(paddingInner=pin, paddingOuter=pout), axis=alt.Axis(labelAngle=0, labelColor="#475569", domain=False, ticks=False))
         y = alt.Y("Valor:Q", title=None, axis=alt.Axis(gridColor="#F0EBFA", labelColor="#94A3B8", domain=False, ticks=False))
-        cor = alt.condition(alt.datum.Valor >= 0, alt.value("#8DB9E8"), alt.value("#F2A9B8"))
+        cor = alt.condition(alt.datum.Valor >= 0, alt.value("#5B9BE6"), alt.value("#EE6C8A"))
         ch = alt.Chart(L).mark_bar(cornerRadius=8).encode(x=x, y=y, color=cor, tooltip=[alt.Tooltip("Item:N"), alt.Tooltip("Valor:Q", format=formato)])
         ch = ch + alt.Chart(L).mark_text(dy=-9, fontSize=11, fontWeight="bold", color="#6B5B8C").encode(x=x, y=alt.Y("Valor:Q"), text=alt.Text("Valor:Q", format=formato))
         st.altair_chart(ch.properties(height=height).configure_view(strokeWidth=0), use_container_width=True)
@@ -8436,8 +8437,17 @@ def pagina_avaliacao_activos(tx: dict):
         kes = [ke_base - 0.02, ke_base, ke_base + 0.02]
         num = pd.DataFrame([[((m["dps"] * (1 + g_c)) / (ke_c - g_c)) if ke_c > g_c else None for g_c in gs] for ke_c in kes],
                            index=[f"Ke={k * 100:.1f}%" for k in kes], columns=[f"g={g * 100:.1f}%" for g in gs])
-        cor = lambda v: "" if v is None or pd.isna(v) else ("background-color:#F3E8FF;color:#5B21B6;font-weight:700" if v >= av["preco"] else "background-color:#FFE4E6;color:#9F1239;font-weight:700")
-        st.dataframe(num.style.format(lambda v: "—" if v is None or pd.isna(v) else kz(v)).map(cor))
+        cor = lambda v: "" if v is None or pd.isna(v) else ("color:#6D28D9;font-weight:700" if v >= av["preco"] else "color:#BE123C;font-weight:700")
+        _zebra_bg = lambda i: "background-color:#F5F3FF" if i % 2 == 0 else "background-color:#FFFFFF"
+        sty_sens = (num.style.format(lambda v: "—" if v is None or pd.isna(v) else kz(v))
+                    .apply(lambda d_: pd.DataFrame([[_zebra_bg(i)] * d_.shape[1] for i in range(d_.shape[0])], index=d_.index, columns=d_.columns), axis=None)
+                    .map(cor))
+        try:
+            sty_sens = sty_sens.apply_index(lambda ix: [_zebra_bg(i) for i in range(len(ix))], axis=0)
+        except Exception:
+            pass
+        st.dataframe(sty_sens)
+        st.caption("Roxo: valor justo igual ou acima do preço actual. Vinho: abaixo do preço actual.")
         st.caption("Roxo: valor justo acima do preço actual · rosa: abaixo. Mostra como o valor justo muda se o crescimento (g) ou o custo de capital (Ke) variarem ±2 p.p.")
     rows, xl_rows, nomes, precos, justos, ups = [], [], [], [], [], []
     for _, r in df_aval.iterrows():
@@ -8585,48 +8595,6 @@ def guardar_subscritor(email: str) -> None:
     executar("INSERT INTO subscritores (email) VALUES (%s) ON CONFLICT (email) DO NOTHING", (email.strip().lower(),))
 
 
-# ---------------- Subscrição de novidades por e-mail (sem criar conta) ----------------
-def registar_subscricao(email: str, consentimento: bool):
-    e = (email or "").strip().lower()
-    if not _REGEX_EMAIL.match(e):
-        raise ValueError("Indica um e-mail válido.")
-    if not consentimento:
-        raise ValueError("Para subscrever, tens de dar o teu consentimento.")
-    executar("""INSERT INTO subscritores (email, consentimento, consentimento_em, activo) VALUES (%s, TRUE, NOW(), TRUE)
-                ON CONFLICT (email) DO UPDATE SET activo = TRUE, consentimento = TRUE, consentimento_em = NOW()""", (e,))
-
-
-def formulario_subscricao():
-    st.markdown("**Recebe novidades do Clube** — fechos de mercado, conteúdos educativos e avisos — sem precisares de criar conta.")
-    with st.form("form_subscricao", clear_on_submit=True):
-        em = st.text_input("O teu e-mail", max_chars=200, key="sub_email")
-        ok = st.checkbox("Autorizo o APPO a usar este e-mail apenas para me enviar novidades do Clube, nos termos da Lei n.º 22/11. Posso pedir a remoção a qualquer momento.")
-        env = st.form_submit_button("Subscrever", type="primary")
-    if env:
-        if not _pode_enviar("ultima_subscricao", 20):
-            st.warning("Aguarda alguns segundos antes de tentar outra vez.")
-        else:
-            try:
-                registar_subscricao(em, ok)
-                st.success("Subscrição registada. Obrigado!")
-            except ValueError as e:
-                st.error(str(e))
-            except Exception:
-                traceback.print_exc()
-                st.error("Não foi possível registar agora. Tenta mais tarde.")
-
-
-def painel_subscritores():
-    exigir_admin()
-    d = consultar_df("SELECT email, consentimento_em, activo, criado_em FROM subscritores ORDER BY criado_em DESC")
-    if d.empty:
-        st.caption("Ainda não há subscritores.")
-        return
-    st.caption(f"{int(d['activo'].sum())} activos em {len(d)} registos. O envio de e-mails ainda não está ligado: por agora, a lista serve para contactar quem subscreveu.")
-    st.dataframe(d, hide_index=True)
-    st.download_button("Descarregar lista (CSV)", d.to_csv(index=False).encode("utf-8-sig"), "subscritores_appo.csv", "text/csv")
-
-
 def formulario_conta_gratuita():
     st.markdown("**Cria a tua conta gratuita** e começa a aprender e a praticar com o APPO.")
     st.markdown("- 🧭 Descobre o teu **perfil de investidor**\n- 🧠 Faz o diagnóstico de **capacidade financeira** e o treino\n"
@@ -8690,12 +8658,12 @@ def formulario_conta_gratuita():
         st.error("Não foi possível registar o pedido neste momento. Tenta novamente daqui a pouco.")
 
 
-def formulario_subscricao():
+def formulario_subscricao(key_prefix: str = "sub"):
     with st.expander("🔔 Receber novidades do APPO por e-mail"):
         st.caption("Sem criar conta: deixa o teu e-mail para saberes quando houver novidades, formações e actualizações. Podes sair quando quiseres.")
-        with st.form("form_subscricao", clear_on_submit=True):
-            em = st.text_input("E-mail", max_chars=200, key="sub_email")
-            ok = st.checkbox("Aceito receber novidades do APPO neste e-mail.", key="sub_ok")
+        with st.form(f"{key_prefix}_form_subscricao", clear_on_submit=True):
+            em = st.text_input("E-mail", max_chars=200, key=f"{key_prefix}_sub_email")
+            ok = st.checkbox("Aceito receber novidades do APPO neste e-mail.", key=f"{key_prefix}_sub_ok")
             env = st.form_submit_button("Subscrever")
         if env:
             if not _REGEX_EMAIL.match((em or "").strip()):
@@ -8762,7 +8730,7 @@ def pagina_login():
         logo_com_texto(110)
         render_html(f'<p style="text-align:center; opacity:0.75; margin-top:6px;">{tx["tagline"]}</p>')
         st.markdown(f"#### {tx['login_titulo']}")
-        _t_entrar, _t_criar, _t_sub = st.tabs(["🔑 Entrar", "✨ Criar conta gratuita", "📬 Novidades"])
+        _t_entrar, _t_criar = st.tabs(["🔑 Entrar", "✨ Criar conta gratuita"])
         with _t_entrar:
             with st.form("form_login"):
                 email    = st.text_input(tx["email"])
@@ -8788,8 +8756,6 @@ def pagina_login():
                         st.success("Pedido enviado. Se existir uma conta com este e-mail, o administrador vai contactar-te em breve.")
         with _t_criar:
             formulario_conta_gratuita()
-        with _t_sub:
-            formulario_subscricao()
         if submeter:
             conta = obter_conta_por_email(email.strip().lower())
             if conta and verificar_password(password, conta[3]) and str(conta[9] or "activa") != "activa":
@@ -8818,7 +8784,7 @@ def pagina_login():
             else:
                 registar_acesso(email, False)
                 st.error(tx["erro_login"])
-        formulario_subscricao()
+        formulario_subscricao(key_prefix="login")
 
 
 if not st.session_state["autenticado"]:
@@ -8884,7 +8850,7 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
-st.sidebar.caption("Versão da app: 2026-10-15 · J (cabeçalho fixo v2, FAQ, partilha com ícones)")
+st.sidebar.caption("Versão da app: 2026-10-15 · K (correcção urgente, cores vivas, zebra)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
