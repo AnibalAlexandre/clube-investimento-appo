@@ -2304,7 +2304,7 @@ def transaccao():
 
 # ---------------- Contas ----------------
 def obter_conta_por_email(email: str):
-    return consultar_um("SELECT id, nome, email, password_hash, is_admin, is_premium, is_participante, nivel, trocar_password FROM contas WHERE email = %s", (email,))
+    return consultar_um("SELECT id, nome, email, password_hash, is_admin, is_premium, is_participante, nivel, trocar_password, estado FROM contas WHERE email = %s", (email,))
 
 def inserir_conta(nome, email, password, is_admin):
     exigir_admin()
@@ -2312,7 +2312,7 @@ def inserir_conta(nome, email, password, is_admin):
 
 def listar_contas() -> pd.DataFrame:
     exigir_admin()
-    return consultar_df("SELECT id, nome, email, is_admin, is_premium, is_participante, criado_em FROM contas ORDER BY criado_em DESC")
+    return consultar_df("SELECT id, nome, email, is_admin, is_premium, is_participante, criado_em FROM contas WHERE COALESCE(estado, 'activa') <> 'pendente' ORDER BY criado_em DESC")
 
 def contar_admins() -> int:
     return consultar_um("SELECT COUNT(*) FROM contas WHERE is_admin = TRUE")[0]
@@ -4078,6 +4078,14 @@ def _garantir_tabelas_extra() -> bool:
     for _col, _tp in (("inflacao_homologa", "NUMERIC"), ("inflacao_vigente_m", "NUMERIC"), ("inflacao_projectada", "NUMERIC"),
                       ("inflacao_ref", "TEXT"), ("inflacao_data", "DATE")):
         executar(f"ALTER TABLE premissas_macro ADD COLUMN IF NOT EXISTS {_col} {_tp}")
+    for _ddl in ("ALTER TABLE contas ADD COLUMN IF NOT EXISTS estado TEXT NOT NULL DEFAULT 'activa'",     # contas antigas ficam 'activa'
+                 "ALTER TABLE contas ADD COLUMN IF NOT EXISTS origem TEXT NOT NULL DEFAULT 'admin'",
+                 "ALTER TABLE contas ADD COLUMN IF NOT EXISTS telefone TEXT",
+                 "CREATE TABLE IF NOT EXISTS subscritores (id SERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())"):
+        try:
+            executar(_ddl)
+        except Exception:
+            traceback.print_exc()
     return True
 
 
@@ -8043,6 +8051,183 @@ def _painel_inicio_aluno():
 
 
 
+# =========================================================
+# CONTA GRATUITA (auto-registo com aprovação do administrador) + SUBSCRIÇÃO DE NOVIDADES
+# =========================================================
+def validar_password_nova(pw: str, email: str = "") -> str:
+    """Devolve a mensagem de erro, ou '' se a palavra-passe for aceitável."""
+    pw = pw or ""
+    if len(pw) < 8:
+        return "A palavra-passe deve ter pelo menos 8 caracteres."
+    if len(pw) > 128:
+        return "A palavra-passe é demasiado longa (máximo 128 caracteres)."
+    if not any(c.isalpha() for c in pw) or not any(c.isdigit() for c in pw):
+        return "A palavra-passe deve ter letras e números."
+    if email and pw.lower() == email.strip().lower():
+        return "A palavra-passe não pode ser igual ao e-mail."
+    return ""
+
+
+def registar_conta_gratuita(nome: str, email: str, password: str, telefone: str = "") -> None:
+    """Cria uma conta PENDENTE (não entra até um administrador aprovar). Sem privilégios: não é admin, premium nem participante.
+    Se o e-mail já existir, não faz nada (a interface responde sempre da mesma forma, para não revelar quem tem conta)."""
+    email = email.strip().lower()
+    if consultar_um("SELECT 1 FROM contas WHERE email = %s", (email,)):
+        return
+    executar("INSERT INTO contas (nome, email, password_hash, is_admin, estado, origem, telefone) VALUES (%s, %s, %s, FALSE, 'pendente', 'auto', %s) ON CONFLICT (email) DO NOTHING",
+             (nome.strip(), email, hash_password(password), (telefone or "").strip()[:30] or None))
+
+
+def contas_auto_ultimas_24h() -> int:
+    return int(consultar_um("SELECT COUNT(*) FROM contas WHERE origem = 'auto' AND criado_em > NOW() - INTERVAL '24 hours'")[0])
+
+
+def listar_contas_pendentes() -> pd.DataFrame:
+    exigir_admin()
+    return consultar_df("SELECT id, nome, email, telefone, criado_em FROM contas WHERE estado = 'pendente' ORDER BY criado_em")
+
+
+def decidir_conta_pendente(conta_id: int, aprovar: bool):
+    """Aprova ou rejeita um pedido de conta. Devolve (nome, email)."""
+    exigir_admin()
+    c = consultar_um("SELECT nome, email, estado FROM contas WHERE id = %s", (int(conta_id),))
+    if not c or c[2] != "pendente":
+        raise ValueError("Este pedido já foi tratado ou não existe.")
+    executar("UPDATE contas SET estado = %s WHERE id = %s AND estado = 'pendente'", ("activa" if aprovar else "rejeitada", int(conta_id)))
+    registar_auditoria("conta_gratuita_" + ("aprovada" if aprovar else "rejeitada"), "contas", str(conta_id), depois={"email": c[1]})
+    return c[0], c[1]
+
+
+def guardar_subscritor(email: str) -> None:
+    executar("INSERT INTO subscritores (email) VALUES (%s) ON CONFLICT (email) DO NOTHING", (email.strip().lower(),))
+
+
+def formulario_conta_gratuita():
+    st.markdown("**Cria a tua conta gratuita** e começa a aprender e a praticar com o APPO.")
+    st.markdown("- 🧭 Descobre o teu **perfil de investidor**\n- 🧠 Faz o diagnóstico de **capacidade financeira** e o treino\n"
+                "- 📚 Acede à **biblioteca educativa**\n- 🚀 Se o teu perfil for de investidor, abres o portal com **cotações, simulador e ferramentas**")
+    if "cap_a" not in st.session_state:
+        import random
+        st.session_state["cap_a"], st.session_state["cap_b"] = random.randint(2, 9), random.randint(2, 9)
+    with st.form("form_conta_gratuita", clear_on_submit=False):
+        n1, n2 = st.columns(2)
+        nome_p = n1.text_input("Nome próprio", max_chars=60, key="cg_nome")
+        apelido = n2.text_input("Apelido(s)", max_chars=60, key="cg_apelido")
+        e1, e2 = st.columns(2)
+        email = e1.text_input("E-mail (será o teu utilizador)", max_chars=200, key="cg_email")
+        tel = e2.text_input("Telemóvel / WhatsApp (opcional)", max_chars=30, key="cg_tel")
+        p1, p2 = st.columns(2)
+        pw1 = p1.text_input("Palavra-passe", type="password", max_chars=128, key="cg_pw1", help="Mínimo 8 caracteres, com letras e números.")
+        pw2 = p2.text_input("Repete a palavra-passe", type="password", max_chars=128, key="cg_pw2")
+        cap = st.number_input(f"Para confirmar que és uma pessoa: quanto é {st.session_state['cap_a']} + {st.session_state['cap_b']}?", min_value=0, max_value=99, value=0, step=1, key="cg_cap")
+        maior = st.checkbox("Tenho 18 anos ou mais.", key="cg_maior")
+        ok = st.checkbox("Aceito que o APPO use estes dados para gerir a minha conta e me contactar sobre ela. Podes pedir a eliminação quando quiseres.", key="cg_ok")
+        enviar = st.form_submit_button("Criar conta gratuita", type="primary")
+    if not enviar:
+        st.caption("A conta é analisada por um administrador antes de ficar activa. Recebes um e-mail quando for aprovada.")
+        return
+    nome = f"{nome_p.strip()} {apelido.strip()}".strip()
+    erro = None
+    if not (nome_p.strip() and apelido.strip()):
+        erro = "Indica o nome próprio e o apelido."
+    elif not _REGEX_EMAIL.match((email or "").strip()):
+        erro = "O e-mail indicado não parece válido."
+    elif validar_password_nova(pw1, email):
+        erro = validar_password_nova(pw1, email)
+    elif pw1 != pw2:
+        erro = "As duas palavras-passe não coincidem."
+    elif int(cap) != st.session_state["cap_a"] + st.session_state["cap_b"]:
+        erro = "A resposta à soma não está certa."
+    elif not maior:
+        erro = "É necessário confirmar que tens 18 anos ou mais."
+    elif not ok:
+        erro = "É necessário aceitar o tratamento dos dados para criar a conta."
+    if erro:
+        st.error(erro)
+        return
+    if not _pode_enviar("ultimo_signup", 45):
+        st.warning("Aguarda alguns segundos antes de tentar outra vez.")
+        return
+    try:
+        if contas_auto_ultimas_24h() >= 40:
+            st.warning("Recebemos muitos pedidos hoje e as novas contas estão temporariamente fechadas. Tenta amanhã ou escreve-nos.")
+            return
+        registar_conta_gratuita(nome, email, pw1, tel)
+        for k in ("cap_a", "cap_b"):
+            st.session_state.pop(k, None)
+        try:
+            enviar_email(SMTP_USER, "APPO · novo pedido de conta gratuita", f"{nome} ({email.strip().lower()}) pediu uma conta gratuita. Aprova-a em Painel do Administrador › Contas.")
+        except Exception:
+            pass
+        st.success("Pedido recebido. Um administrador vai analisar a tua conta e recebes um e-mail quando estiver aprovada. Se já tinhas conta, entra no separador «Entrar».")
+    except Exception:
+        traceback.print_exc()
+        st.error("Não foi possível registar o pedido neste momento. Tenta novamente daqui a pouco.")
+
+
+def formulario_subscricao():
+    with st.expander("🔔 Receber novidades do APPO por e-mail"):
+        st.caption("Sem criar conta: deixa o teu e-mail para saberes quando houver novidades, formações e actualizações. Podes sair quando quiseres.")
+        with st.form("form_subscricao", clear_on_submit=True):
+            em = st.text_input("E-mail", max_chars=200, key="sub_email")
+            ok = st.checkbox("Aceito receber novidades do APPO neste e-mail.", key="sub_ok")
+            env = st.form_submit_button("Subscrever")
+        if env:
+            if not _REGEX_EMAIL.match((em or "").strip()):
+                st.error("O e-mail indicado não parece válido.")
+            elif not ok:
+                st.error("É necessário aceitar para subscrever.")
+            elif not _pode_enviar("ultima_subscricao", 20):
+                st.warning("Aguarda alguns segundos.")
+            else:
+                try:
+                    guardar_subscritor(em)
+                    st.success("Subscrição registada. Obrigado!")
+                except Exception:
+                    traceback.print_exc()
+                    st.error("Não foi possível registar neste momento.")
+
+
+def painel_contas_pendentes():
+    """Topo do separador Contas do administrador: aprovar ou rejeitar pedidos de conta gratuita."""
+    dfp = listar_contas_pendentes()
+    st.subheader(f"Pedidos de conta gratuita ({len(dfp)} pendente{'s' if len(dfp) != 1 else ''})")
+    if dfp.empty:
+        st.caption("Sem pedidos por tratar.")
+    for _, p in dfp.iterrows():
+        a, b, c = st.columns([3, 1, 1])
+        a.write(f"**{p['nome']}** — {p['email']}" + (f" · {p['telefone']}" if p["telefone"] else "") + f" · {str(p['criado_em'])[:16]}")
+        if b.button("Aprovar", key=f"cg_apr_{int(p['id'])}", type="primary"):
+            try:
+                nome, em = decidir_conta_pendente(int(p["id"]), True)
+                ok, erro = enviar_email(em, "A tua conta APPO foi aprovada", f"Olá {nome},\n\nA tua conta gratuita no Clube de Investimento APPO foi aprovada. Já podes entrar em {APP_URL} com o e-mail e a palavra-passe que escolheste.\n\nBem-vindo(a)!\nAPPO")
+                st.session_state["cg_msg"] = f"Conta de {em} aprovada." + ("" if ok else " Não foi possível enviar o e-mail: avisa a pessoa por outro canal.")
+            except Exception as e:
+                st.session_state["cg_msg"] = str(e)
+            st.rerun()
+        if c.button("Rejeitar", key=f"cg_rej_{int(p['id'])}"):
+            try:
+                decidir_conta_pendente(int(p["id"]), False)
+                st.session_state["cg_msg"] = f"Pedido de {p['email']} rejeitado."
+            except Exception as e:
+                st.session_state["cg_msg"] = str(e)
+            st.rerun()
+    _m = st.session_state.pop("cg_msg", None)
+    if _m:
+        st.info(_m)
+    try:
+        subs = consultar_df("SELECT email, criado_em FROM subscritores ORDER BY criado_em DESC")
+        with st.expander(f"🔔 Subscritores de novidades ({len(subs)})"):
+            if subs.empty:
+                st.caption("Ainda não há subscritores.")
+            else:
+                st.dataframe(subs, hide_index=True)
+                st.download_button("⬇️ Descarregar CSV", data=subs.to_csv(index=False, sep=";").encode("utf-8-sig"), file_name="subscritores_appo.csv", mime="text/csv", key="dl_subs")
+    except Exception:
+        pass
+    st.divider()
+
+
 def pagina_login():
     col_esq, col_centro, col_dir = st.columns([1, 1.4, 1])
     with col_centro:
@@ -8052,31 +8237,41 @@ def pagina_login():
         logo_com_texto(110)
         render_html(f'<p style="text-align:center; opacity:0.75; margin-top:6px;">{tx["tagline"]}</p>')
         st.markdown(f"#### {tx['login_titulo']}")
-        with st.form("form_login"):
-            email    = st.text_input(tx["email"])
-            password = st.text_input(tx["password"], type="password")
-            submeter = st.form_submit_button(tx["entrar"])
-        with st.expander("Esqueci-me da palavra-passe"):
-            st.caption("Indica o e-mail da tua conta e um telemóvel ou WhatsApp. O administrador contacta-te para confirmar que és tu e repor o acesso.")
-            with st.form("form_recuperar_pw", clear_on_submit=True):
-                rec_email = st.text_input("E-mail da conta", key="rec_email", max_chars=200)
-                rec_tel = st.text_input("Telemóvel ou WhatsApp", key="rec_tel", max_chars=30)
-                rec_enviar = st.form_submit_button("Pedir ajuda")
-            if rec_enviar:
-                _e = (rec_email or "").strip()
-                if not _REGEX_EMAIL.match(_e) or len((rec_tel or "").strip()) < 6:
-                    st.error("Indica um e-mail válido e um telemóvel para te podermos contactar.")
-                elif not _pode_enviar("ultimo_pedido_recup", 30):
-                    st.warning("Aguarda alguns segundos antes de enviar outro pedido.")
-                else:
-                    try:
-                        registar_pedido_recuperacao(_e, rec_tel)
-                    except Exception:
-                        traceback.print_exc()
-                    st.success("Pedido enviado. Se existir uma conta com este e-mail, o administrador vai contactar-te em breve.")
+        _t_entrar, _t_criar = st.tabs(["🔑 Entrar", "✨ Criar conta gratuita"])
+        with _t_entrar:
+            with st.form("form_login"):
+                email    = st.text_input(tx["email"])
+                password = st.text_input(tx["password"], type="password")
+                submeter = st.form_submit_button(tx["entrar"])
+            with st.expander("Esqueci-me da palavra-passe"):
+                st.caption("Indica o e-mail da tua conta e um telemóvel ou WhatsApp. O administrador contacta-te para confirmar que és tu e repor o acesso.")
+                with st.form("form_recuperar_pw", clear_on_submit=True):
+                    rec_email = st.text_input("E-mail da conta", key="rec_email", max_chars=200)
+                    rec_tel = st.text_input("Telemóvel ou WhatsApp", key="rec_tel", max_chars=30)
+                    rec_enviar = st.form_submit_button("Pedir ajuda")
+                if rec_enviar:
+                    _e = (rec_email or "").strip()
+                    if not _REGEX_EMAIL.match(_e) or len((rec_tel or "").strip()) < 6:
+                        st.error("Indica um e-mail válido e um telemóvel para te podermos contactar.")
+                    elif not _pode_enviar("ultimo_pedido_recup", 30):
+                        st.warning("Aguarda alguns segundos antes de enviar outro pedido.")
+                    else:
+                        try:
+                            registar_pedido_recuperacao(_e, rec_tel)
+                        except Exception:
+                            traceback.print_exc()
+                        st.success("Pedido enviado. Se existir uma conta com este e-mail, o administrador vai contactar-te em breve.")
+        with _t_criar:
+            formulario_conta_gratuita()
         if submeter:
             conta = obter_conta_por_email(email.strip().lower())
-            if conta and verificar_password(password, conta[3]):
+            if conta and verificar_password(password, conta[3]) and str(conta[9] or "activa") != "activa":
+                registar_acesso(email, False)
+                if str(conta[9]) == "pendente":
+                    st.info("A tua conta foi criada e aguarda aprovação de um administrador. Recebes um e-mail quando estiver activa.")
+                else:
+                    st.error("Esta conta não foi aprovada. Se achas que é um engano, escreve-nos.")
+            elif conta and verificar_password(password, conta[3]):
                 registar_acesso(email, True)
                 st.session_state["autenticado"]     = True
                 st.session_state["login_timestamp"] = time.time()
@@ -8096,6 +8291,7 @@ def pagina_login():
             else:
                 registar_acesso(email, False)
                 st.error(tx["erro_login"])
+        formulario_subscricao()
 
 
 if not st.session_state["autenticado"]:
@@ -9860,6 +10056,7 @@ try:
                                                                "criado_em": "Submetido em"}), hide_index=True)
 
         with aba_contas:
+            painel_contas_pendentes()
             st.subheader("Criar conta de acesso para um sócio")
             with st.form("form_nova_conta", clear_on_submit=True):
                 _np_c, _ap_c   = st.columns(2)
