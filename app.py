@@ -19,7 +19,10650 @@ from datetime import datetime
 from pathlib import Path
 
 import bcrypt
+import pandas as pd"""
+Clube de Investimento APPO
+APPO — Educação Financeira e Área Privada de Investimentos
+Aplicação web corporativa privada — Streamlit + PostgreSQL (Neon)
+"""
+
+import os
+import secrets
+import html as _html_pub
+import textwrap
+import time
+import traceback
+import urllib.parse
+import smtplib
+import socket
+import ssl
+from email.message import EmailMessage
+from datetime import datetime
+from pathlib import Path
+
+import bcrypt
 import pandas as pd
+import psycopg2
+import psycopg2.extras
+import requests
+import streamlit as st
+from fpdf import FPDF
+from pypdf import PdfReader
+
+# =========================================================
+# CONFIGURAÇÃO DA PÁGINA
+# =========================================================
+st.set_page_config(page_title="Clube de Investimento APPO", page_icon="🕐", layout="wide", initial_sidebar_state="expanded")
+
+
+def render_html(html: str):
+    st.markdown(textwrap.dedent(html).strip(), unsafe_allow_html=True)
+
+
+# =========================================================
+# IMAGENS
+# =========================================================
+# Painel de cotações tipo Bloomberg — azul néon, gráficos de velas, dados vibrantes (Pexels CC0)
+IMG_SKYLINE = "https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&cs=tinysrgb&w=1600"
+IMG_GRAFICO = "https://images.pexels.com/photos/6802042/pexels-photo-6802042.jpeg?auto=compress&cs=tinysrgb&w=1600"
+IMG_REUNIAO = "https://images.pexels.com/photos/7567443/pexels-photo-7567443.jpeg?auto=compress&cs=tinysrgb&w=1600"
+IMG_LIVROS  = "https://images.pexels.com/photos/6801874/pexels-photo-6801874.jpeg?auto=compress&cs=tinysrgb&w=1600"
+IMAGENS_CATEGORIA = {"Institucional": IMG_REUNIAO, "Educação": IMG_LIVROS, "Análise de Mercado": IMG_GRAFICO, "Referência": IMG_SKYLINE}
+
+# =========================================================
+# TRADUÇÕES COMPLETAS
+# =========================================================
+TRADUCOES = {
+    # ─────────────────────────────────────────────────────
+    "Português": {
+        # ── sistema / login ──────────────────────────────
+        "tagline": "APPO — Educação Financeira e Área Privada de Investimentos",
+        "login_titulo": "Acesso reservado a sócios",
+        "email": "E-mail", "password": "Palavra-passe", "entrar": "Entrar",
+        "erro_login": "E-mail ou palavra-passe incorrectos. Contacta um administrador do Clube.",
+        "sessao": "Sessão", "terminar_sessao": "Terminar sessão",
+        # ── navegação ────────────────────────────────────
+        "nav_map": {
+            "🏠 Início & Análises":         "🏠 Início & Análises",
+            "📈 Cotações & Activos":         "📈 Cotações & Activos",
+            "💰 Contabilidade & Finanças":  "💰 Contabilidade & Finanças",
+            "📊 Histórico & Relatórios":    "📊 Histórico & Relatórios",
+            "📐 Avaliação de Activos":       "📐 Avaliação de Activos",
+            "💱 Conversor de Moeda":         "💱 Conversor de Moeda",
+            "🧪 Simulador de Investimento": "🧪 Simulador de Investimento",
+            "🧮 Princípio 50/30/20":            "🧮 Princípio 50/30/20",
+            "📚 Biblioteca Educativa":       "📚 Biblioteca & Research",
+            "🧾 Adesão de Sócios":          "🧾 Manifestação de Interesse",
+            "ℹ️ Sobre Nós & Estatutos":     "ℹ️ Sobre Nós & Estatutos",
+            "🔐 Painel do Administrador":   "🔐 Painel do Administrador",
+        },
+        # ── página início ────────────────────────────────
+        "inicio_hero_sub": "APPO — Capacidade Financeira Prática. Organize o seu dinheiro e tome decisões autónomas.",
+        "inicio_capital_subscrito": "Capital Subscrito",
+        "inicio_capital_realizado": "Capital Realizado",
+        "inicio_pct_subscrito": "% do subscrito",
+        "inicio_investimentos": "Investimentos",
+        "inicio_reservas": "Reservas",
+        "inicio_patrimonio_total": "Património Total",
+        "inicio_indice_label": "📊 Índice APPO (média das acções cotadas)",
+        "inicio_indice_caption": "Como teria valorizado uma carteira investida em partes iguais em todas as acções acompanhadas pelo Clube.",
+        "inicio_distribuicao": "Distribuição do Património",
+        "inicio_distribuicao_cats": ["Capital Realizado", "Investimentos", "Reservas"],
+        "inicio_cotacoes_destaque": "📌 Cotações em destaque",
+        "inicio_capa_texto": "Disciplina, transparência e visão de longo prazo",
+        # ── cotações ────────────────────────────────────
+        "cot_hero_sub": "Instrumentos financeiros cotados na BODIVA acompanhados pelo Clube",
+        "cot_indice_titulo": "📊 Índice APPO — cotação média do mercado",
+        "cot_indice_metric": "Variação média de hoje",
+        "cot_indice_caption": "Se tivesses investido em partes iguais em todas as acções cotadas pelo Clube, a tua carteira teria variado, em média, este valor.",
+        "cot_indice_hist_label": "Índice APPO — diário (%)",
+        "cot_indice_hist_info": "O histórico diário do Índice APPO vai-se formando a cada dia em que o administrador actualizar as cotações.",
+        "cot_tendencia_semanal": "##### Tendência semanal do Índice APPO",
+        "cot_tendencia_sem_caption1": "Ainda não há pelo menos duas semanas de histórico para mostrar a tendência semanal.",
+        "cot_tendencia_sem_caption2": "Ainda não há histórico suficiente para a vista semanal.",
+        "cot_tab_favoritos": "⭐ Os meus favoritos",
+        "cot_tab_todos": "🔭 Universo do Clube",
+        "cot_fav_escolher": "Escolher os teus activos favoritos",
+        "cot_fav_info": "Ainda não marcaste nenhum activo como favorito. Usa a caixa acima.",
+        "cot_filtrar_tipo": "Filtrar por tipo de activo",
+        "cot_filtrar_todos": "Todos",
+        "cot_ultima_actualizacao": "Última actualização:",
+        "cot_descarregar_csv": "⬇️ Descarregar tabela em CSV",
+        "cot_comparacao": "Comparação de preços",
+        "cot_preco_kz": "Preço (Kz)",
+        "cot_tabela_cols": {"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Preço", "variacao": "Variação", "mercado": "Mercado"},
+        # ── contabilidade ────────────────────────────────
+        "cont_hero_sub": "Resumo Contabilístico e Patrimonial do Clube",
+        "cont_df_cols": ["Categoria", "Descrição", "Montante", "Moeda"],
+        "cont_df_rows": [
+            ("Capital Subscrito",  "Total de capital comprometido pelos sócios",                    "AOA"),
+            ("Capital Realizado",  "Parte do capital subscrito já efectivamente paga",              "AOA"),
+            ("Investimentos",      "Carteira de acções e instrumentos financeiros cotados na BODIVA","AOA"),
+            ("Reservas",           "Fundo de estabilização e liquidez para novas oportunidades",    "AOA"),
+        ],
+        "cont_patrimonio_metric": "Património Total do Clube",
+        "cont_ultima_actualizacao": "Última actualização:",
+        # ── histórico ────────────────────────────────────
+        "hist_hero_sub": "Evolução do património do Clube ao longo do tempo, e exportação de relatórios",
+        "hist_poucos_pontos": "Ainda há poucos pontos de histórico. Este gráfico vai ganhando forma com o tempo.",
+        "hist_caption": "Cada ponto representa uma actualização do resumo patrimonial. Eixo vertical em Kwanzas (Kz).",
+        "hist_patrimonio_label": "Património Total (Kz)",
+        "hist_movimentos": "Movimentos registados",
+        "hist_sem_movimentos": "Ainda não existem movimentos registados.",
+        "hist_cols": {"tipo": "Tipo", "descricao": "Descrição", "montante_fmt": "Montante", "data_movimento": "Data", "criado_em": "Registado em"},
+        "hist_descarregar_mov": "⬇️ Descarregar movimentos em CSV",
+        "hist_exportar": "Exportar relatório",
+        "hist_gerar_pdf": "Gerar relatório em PDF",
+        "hist_descarregar_pdf": "Descarregar relatório em PDF",
+        # ── avaliação ────────────────────────────────────
+        "aval_hero_sub": "Múltiplos e valor justo (DDM) das empresas cotadas, com dados reais do Clube",
+        "aval_empresa": "Empresa",
+        "aval_sector": "Sector",
+        "aval_cap_mercado": "Capitalização de mercado:",
+        "aval_preco": "Preço Actual",
+        "aval_pe": "P/E", "aval_pbv": "P/BV", "aval_dy": "Dividend Yield",
+        "aval_nota1": "<b>P/E</b> = anos de lucro que pagas pelo preço. <b>P/BV</b> = preço face ao valor contabilístico. <b>Dividend Yield</b> = retorno anual em dividendos.",
+        "aval_vj": "Valor Justo (DDM)", "aval_upside": "Upside / Downside", "aval_ke": "Custo de Capital (Ke)",
+        "aval_nota2": "<b>Valor Justo (DDM)</b> é uma estimativa. <b>Upside/Downside</b> compara com o mercado. <b>Ke</b> é o retorno mínimo exigido pelo risco do sector.",
+        "aval_subvalorizado": "O modelo DDM sugere uma acção potencialmente subvalorizada face ao mercado.",
+        "aval_sobrevalorizado": "O modelo DDM sugere uma acção potencialmente sobrevalorizada face ao mercado.",
+        "aval_justo": "O modelo DDM sugere que o preço de mercado está próximo do valor estimado.",
+        "aval_ddm_caption": "DDM/Gordon Growth: Valor Justo = D1 ÷ (Ke − g). Usar como cross-check, nunca isoladamente.",
+        "aval_premium_titulo": "⭐ Análise Aprofundada (Premium)",
+        "aval_premium_lock": "<div class='appo-premium-lock'><strong>Esta secção é exclusiva para sócios Premium.</strong><br/>Comparação sectorial, sensibilidade, ROE e Dividend Yield real.<br/><br/>Fala com um administrador para activares o Premium.</div>",
+        "aval_roe": "ROE", "aval_payout": "Payout", "aval_dy_real": "Dividend Yield Real",
+        "aval_nota3": "<b>ROE</b> = rentabilidade sobre o capital próprio. <b>Payout</b> = fracção do lucro distribuída. <b>DY Real</b> = yield descontado da inflação.",
+        "aval_sensibilidade": "##### Tabela de Sensibilidade — Valor Justo (Kz por acção)",
+        "aval_comparacao": "##### Comparação Sectorial (todas as empresas)",
+        "aval_comp_cols": {"Empresa": "Empresa", "Sector": "Sector", "P/E": "P/E", "P/BV": "P/BV", "ROE": "ROE", "DY Nominal": "DY Nominal", "Upside DDM": "Upside DDM"},
+        "aval_descarregar_comp": "⬇️ Descarregar comparação sectorial em CSV",
+        "aval_sem_dados": "Ainda não existem avaliações registadas.",
+        # ── conversor ────────────────────────────────────
+        "conv_hero_sub": "Taxas de câmbio automáticas, actualizadas diariamente, com o Kwanza incluído",
+        "conv_de": "De", "conv_para": "Para", "conv_valor": "Valor",
+        "conv_equivale": "equivale a",
+        "conv_taxa": "Taxa:",
+        "conv_actualizado": "Actualizado:",
+        "conv_erro": "Esta moeda não está disponível na fonte de dados neste momento.",
+        "conv_aviso": "Não foi possível obter as taxas de câmbio neste momento. Tenta novamente dentro de instantes.",
+        "conv_tabela_titulo": "Tabela rápida (a partir de 1 Kz)",
+        "conv_tabela_col": "1 Kz equivale a",
+        "conv_tabela_indisponivel": "Tabela indisponível de momento.",
+        "conv_historico_titulo": "📈 Tendência do Kwanza (histórico próprio, acumulado automaticamente)",
+        "conv_historico_select": "Ver tendência de",
+        "conv_historico_label": "1 AOA em",
+        "conv_historico_info": "Ainda há poucos dias de histórico acumulado. Volta aqui em dias diferentes para veres a tendência a formar-se sozinha.",
+        "conv_historico_caption": "Este histórico é construído automaticamente pela própria app — sem ninguém precisar de inserir nada — sempre que alguém abre esta página num novo dia.",
+        # ── simulador ────────────────────────────────────
+        "sim_hero_sub": "Projecta o crescimento do teu investimento ao longo do tempo, com juros compostos",
+        "sim_valor_inicial": "Valor inicial (Kz)",
+        "sim_contrib_mensal": "Contribuição mensal (Kz)",
+        "sim_taxa": "Taxa de retorno anual esperada (%)",
+        "sim_anos": "Prazo (anos)",
+        "sim_inflacao": "Inflação anual assumida (%)",
+        "sim_saldo_nominal": "Saldo Final (nominal)",
+        "sim_total_investido": "Total Investido",
+        "sim_juros": "Juros Compostos Ganhos",
+        "sim_chart_cols": {"Saldo Nominal": "Saldo Nominal", "Total Investido": "Total Investido"},
+        "sim_caption1": "Saldo final em poder de compra de hoje (descontada a inflação assumida de",
+        "sim_caption2": "%/ano):",
+        "sim_disclaimer": "Ambiente de treino pedagógico com dados de mercado de referência. As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.",
+        "sim_partilha": "Simulei {vi} + {cm}/mês durante {a} anos a {t}%/ano = {sf} — Clube de Investimento APPO",
+        # ── regra 50/30/20 ───────────────────────────────
+        "r50_hero_sub": "Princípio nº 8: 50% Consumo · 30% Investimento · 20% Entesouramento",
+        "r50_rendimento": "Rendimento mensal total (Kz)",
+        "r50_alocacao": "Alocação recomendada",
+        "r50_consumo": "Consumo (50%)", "r50_investimento": "Investimento (30%)", "r50_entesouramento": "Entesouramento (20%)",
+        "r50_comparar_titulo": "Compara com os teus gastos reais (opcional)",
+        "r50_real_consumo": "Gasto real — Consumo (Kz)",
+        "r50_real_investimento": "Gasto real — Investimento (Kz)",
+        "r50_real_entesouramento": "Entesouramento real (Kz)",
+        "r50_comparar_btn": "Comparar",
+        "r50_resultado": "#### Resultado da comparação",
+        "r50_aviso": "O teu entesouramento real está abaixo dos 20% recomendados pelo princípio do Clube.",
+        "r50_sucesso": "Estás a cumprir, ou a superar, a meta de 20% de entesouramento.",
+        # ── biblioteca ───────────────────────────────────
+        "bib_hero_sub": "Princípios do Clube e artigos sobre o mercado de capitais angolano",
+        "bib_sem_artigos": "Ainda não existem artigos publicados.",
+        "bib_filtrar": "Filtrar por categoria",
+        "bib_todas": "Todas",
+        "bib_publicado": "Publicado em",
+        # ── adesão ───────────────────────────────────────
+        "ades_hero_sub": "Preenche o formulário para solicitar a tua adesão ao Clube de Investimento APPO",
+        "ades_nome": "Nome completo *",
+        "ades_email": "E-mail",
+        "ades_telefone": "Telefone / WhatsApp",
+        "ades_bi": "Número do Bilhete de Identidade",
+        "ades_contribuicao": "Contribuição inicial pretendida (Kz)",
+        "ades_aceite": "Declaro que li e aceite os Estatutos do Clube de Investimento APPO *",
+        "ades_btn": "Submeter pedido de adesão",
+        "ades_erro": "Preenche o nome completo e aceita os Estatutos para submeter o pedido.",
+        "ades_sucesso": "Pedido de adesão submetido com sucesso! Um administrador do Clube irá entrar em contacto.",
+        # ── sobre nós ────────────────────────────────────
+        "sobre_hero_sub": "A missão, os princípios e o enquadramento estatutário do Clube",
+        "sobre_quem_somos": "Quem somos",
+        "sobre_quem_texto": "O **Clube de Investimento APPO** é uma associação de investidores angolanos que junta capital de forma colectiva para investir no mercado de capitais nacional, através da Bolsa de Dívida e Valores de Angola (BODIVA).",
+        "sobre_principios": "Princípios e Filosofia de Investimento",
+        "sobre_estatutos": "Estatutos — pontos-chave",
+        "sobre_estatutos_texto": """
+- **Natureza:** associação de investidores, conforme Estatutos formalmente registados.
+- **Órgãos sociais:** Assembleia de Sócios, Comissão de Gestão e Conselho Fiscal.
+- **Admissão de sócios:** sujeita a aprovação da Comissão de Gestão.
+- **Deliberações:** decisões de investimento relevantes exigem deliberação colectiva.
+- **Distribuição de resultados:** proporcional à quota de capital de cada sócio.
+""",
+        "sobre_nota": "Nota interna: modelo de referência, a substituir pelos Estatutos formalmente aprovados e registados do Clube.",
+        # ── partilha ─────────────────────────────────────
+        "partilha_wa": "💬 WhatsApp", "partilha_tw": "𝕏 X / Twitter", "partilha_fb": "📘 Facebook",
+        "conv_partilha": "{v} {de} = {r} {para} — Clube de Investimento APPO",
+        # ── pdf ──────────────────────────────────────────
+        "pdf_titulo": "Clube de Investimento APPO",
+        "pdf_gerado": "Relatorio gerado em",
+        "pdf_resumo": "Resumo Patrimonial",
+        "pdf_subscrito": "Capital Subscrito:",
+        "pdf_realizado": "Capital Realizado:",
+        "pdf_investimentos": "Investimentos:",
+        "pdf_reservas": "Reservas:",
+        "pdf_total": "Total:",
+        "pdf_activos": "Activos em Carteira",
+        "pdf_movimentos": "Movimentos Recentes",
+        "pdf_sem_mov": "Sem movimentos registados.",
+        "pdf_nome_ficheiro": "relatorio_appo_{data}.pdf",
+        # ── barómetro (hero) ─────────────────────────────
+        "bodiva_badge": "🇦🇴 Mercado angolano · Kwanzas (Kz)",
+    },
+
+    # ─────────────────────────────────────────────────────
+    "English": {
+        "tagline": "APPO — Financial Education and Private Investment Area",
+        "login_titulo": "Members-only access",
+        "email": "E-mail", "password": "Password", "entrar": "Sign in",
+        "erro_login": "Incorrect e-mail or password. Contact a Club administrator.",
+        "sessao": "Session", "terminar_sessao": "Sign out",
+        "nav_map": {
+            "🏠 Início & Análises":         "🏠 Home & Analysis",
+            "📈 Cotações & Activos":         "📈 Quotes & Assets",
+            "💰 Contabilidade & Finanças":  "💰 Accounting & Finance",
+            "📊 Histórico & Relatórios":    "📊 History & Reports",
+            "📐 Avaliação de Activos":       "📐 Asset Valuation",
+            "💱 Conversor de Moeda":         "💱 Currency Converter",
+            "🧪 Simulador de Investimento": "🧪 Investment Simulator",
+            "🧮 Princípio 50/30/20":            "🧮 50/30/20 Rule",
+            "📚 Biblioteca Educativa":       "📚 Learning Library",
+            "🧾 Adesão de Sócios":          "🧾 Expression of Interest",
+            "ℹ️ Sobre Nós & Estatutos":     "ℹ️ About Us & Bylaws",
+            "🔐 Painel do Administrador":   "🔐 Admin Panel",
+        },
+        "inicio_hero_sub": "APPO — Financial Education and Private Investment Area",
+        "inicio_capital_subscrito": "Subscribed Capital",
+        "inicio_capital_realizado": "Paid-up Capital",
+        "inicio_pct_subscrito": "% of subscribed",
+        "inicio_investimentos": "Investments",
+        "inicio_reservas": "Reserves",
+        "inicio_patrimonio_total": "Total Net Assets",
+        "inicio_indice_label": "📊 APPO Index (average of listed shares)",
+        "inicio_indice_caption": "How a portfolio invested equally across all Club-tracked shares would have performed.",
+        "inicio_distribuicao": "Asset Distribution",
+        "inicio_distribuicao_cats": ["Paid-up Capital", "Investments", "Reserves"],
+        "inicio_cotacoes_destaque": "📌 Featured Quotes",
+        "inicio_capa_texto": "Discipline, transparency and long-term vision",
+        "cot_hero_sub": "Financial instruments listed on BODIVA tracked by the Club",
+        "cot_indice_titulo": "📊 APPO Index — average market quote",
+        "cot_indice_metric": "Average change today",
+        "cot_indice_caption": "If you had invested equally across all Club-tracked listed shares, your portfolio would have changed by this average.",
+        "cot_indice_hist_label": "APPO Index — daily (%)",
+        "cot_indice_hist_info": "The daily APPO Index history builds up each day the administrator updates quotes.",
+        "cot_tendencia_semanal": "##### APPO Index — Weekly Trend",
+        "cot_tendencia_sem_caption1": "Not enough weeks of history yet to show the weekly trend.",
+        "cot_tendencia_sem_caption2": "Not enough history for the weekly view yet.",
+        "cot_tab_favoritos": "⭐ Favourites",
+        "cot_tab_todos": "📋 All Assets",
+        "cot_fav_escolher": "Choose your favourite assets",
+        "cot_fav_info": "You haven't marked any asset as a favourite yet. Use the box above.",
+        "cot_filtrar_tipo": "Filter by asset type",
+        "cot_filtrar_todos": "All",
+        "cot_ultima_actualizacao": "Last updated:",
+        "cot_descarregar_csv": "⬇️ Download table as CSV",
+        "cot_comparacao": "Price comparison",
+        "cot_preco_kz": "Price (Kz)",
+        "cot_tabela_cols": {"ticker": "Ticker", "nome": "Asset", "tipo": "Type", "preco": "Price", "variacao": "Change", "mercado": "Market"},
+        "cont_hero_sub": "Accounting and Balance Sheet Summary of the Club",
+        "cont_df_cols": ["Category", "Description", "Amount", "Currency"],
+        "cont_df_rows": [
+            ("Subscribed Capital",  "Total capital committed by members",                          "AOA"),
+            ("Paid-up Capital",     "Portion of subscribed capital already paid in",               "AOA"),
+            ("Investments",         "Portfolio of shares and financial instruments listed on BODIVA","AOA"),
+            ("Reserves",            "Stabilisation and liquidity fund for new opportunities",      "AOA"),
+        ],
+        "cont_patrimonio_metric": "Club Total Net Assets",
+        "cont_ultima_actualizacao": "Last updated:",
+        "hist_hero_sub": "Club asset evolution over time and report exports",
+        "hist_poucos_pontos": "Not enough data points yet. This chart will fill in over time.",
+        "hist_caption": "Each point represents a balance-sheet update. Vertical axis in Kwanzas (Kz).",
+        "hist_patrimonio_label": "Total Net Assets (Kz)",
+        "hist_movimentos": "Recorded Transactions",
+        "hist_sem_movimentos": "No transactions recorded yet.",
+        "hist_cols": {"tipo": "Type", "descricao": "Description", "montante_fmt": "Amount", "data_movimento": "Date", "criado_em": "Recorded at"},
+        "hist_descarregar_mov": "⬇️ Download transactions as CSV",
+        "hist_exportar": "Export report",
+        "hist_gerar_pdf": "Generate PDF report",
+        "hist_descarregar_pdf": "Download PDF report",
+        "aval_hero_sub": "Multiples and fair value (DDM) of listed companies, using real Club data",
+        "aval_empresa": "Company",
+        "aval_sector": "Sector",
+        "aval_cap_mercado": "Market capitalisation:",
+        "aval_preco": "Current Price",
+        "aval_pe": "P/E", "aval_pbv": "P/BV", "aval_dy": "Dividend Yield",
+        "aval_nota1": "<b>P/E</b> = years of earnings you pay for the price. <b>P/BV</b> = price vs book value. <b>Dividend Yield</b> = annual dividend return.",
+        "aval_vj": "Fair Value (DDM)", "aval_upside": "Upside / Downside", "aval_ke": "Cost of Equity (Ke)",
+        "aval_nota2": "<b>Fair Value (DDM)</b> is an estimate. <b>Upside/Downside</b> compares to the market. <b>Ke</b> is the minimum return required for the sector's risk.",
+        "aval_subvalorizado": "The DDM model suggests a potentially undervalued share.",
+        "aval_sobrevalorizado": "The DDM model suggests a potentially overvalued share.",
+        "aval_justo": "The DDM model suggests the market price is close to the estimated value.",
+        "aval_ddm_caption": "DDM/Gordon Growth: Fair Value = D1 ÷ (Ke − g). Use as a cross-check, never in isolation.",
+        "aval_premium_titulo": "⭐ In-depth Analysis (Premium)",
+        "aval_premium_lock": "<div class='appo-premium-lock'><strong>This section is exclusive to Premium members.</strong><br/>Sector comparison, sensitivity, ROE and real Dividend Yield.<br/><br/>Contact an administrator to activate Premium.</div>",
+        "aval_roe": "ROE", "aval_payout": "Payout", "aval_dy_real": "Real Dividend Yield",
+        "aval_nota3": "<b>ROE</b> = return on equity. <b>Payout</b> = share of profit distributed. <b>Real DY</b> = yield net of inflation.",
+        "aval_sensibilidade": "##### Sensitivity Table — Fair Value (Kz per share)",
+        "aval_comparacao": "##### Sector Comparison (all companies)",
+        "aval_comp_cols": {"Empresa": "Company", "Sector": "Sector", "P/E": "P/E", "P/BV": "P/BV", "ROE": "ROE", "DY Nominal": "Nominal DY", "Upside DDM": "DDM Upside"},
+        "aval_descarregar_comp": "⬇️ Download sector comparison as CSV",
+        "aval_sem_dados": "No valuations recorded yet.",
+        "conv_hero_sub": "Automatic exchange rates, updated daily, with the Kwanza included",
+        "conv_de": "From", "conv_para": "To", "conv_valor": "Amount",
+        "conv_equivale": "is equivalent to",
+        "conv_taxa": "Rate:",
+        "conv_actualizado": "Updated:",
+        "conv_erro": "This currency is not available in the data source at the moment.",
+        "conv_aviso": "Could not fetch exchange rates at this moment. Please try again shortly.",
+        "conv_tabela_titulo": "Quick table (from 1 Kz)",
+        "conv_tabela_col": "1 Kz equals",
+        "conv_tabela_indisponivel": "Table unavailable at the moment.",
+        "conv_historico_titulo": "📈 Kwanza Trend (own history, accumulated automatically)",
+        "conv_historico_select": "Show trend for",
+        "conv_historico_label": "1 AOA in",
+        "conv_historico_info": "Not enough days of history yet. Come back on different days to watch the trend build itself.",
+        "conv_historico_caption": "This history is built automatically by the app — without anyone entering anything — each time someone opens this page on a new day.",
+        "sim_hero_sub": "Project the growth of your investment over time using compound interest",
+        "sim_valor_inicial": "Initial amount (Kz)",
+        "sim_contrib_mensal": "Monthly contribution (Kz)",
+        "sim_taxa": "Expected annual return rate (%)",
+        "sim_anos": "Time horizon (years)",
+        "sim_inflacao": "Assumed annual inflation (%)",
+        "sim_saldo_nominal": "Final Balance (nominal)",
+        "sim_total_investido": "Total Invested",
+        "sim_juros": "Compound Interest Earned",
+        "sim_chart_cols": {"Saldo Nominal": "Nominal Balance", "Total Investido": "Total Invested"},
+        "sim_caption1": "Final balance in today's purchasing power (discounting assumed inflation of",
+        "sim_caption2": "%/year):",
+        "sim_disclaimer": "Educational simulation with constant monthly compound interest — real market returns vary and are not guaranteed. This is not investment advice.",
+        "sim_partilha": "I simulated {vi} + {cm}/month for {a} years at {t}%/year = {sf} — APPO Investment Club",
+        "r50_hero_sub": "Principle #8: 50% Spending · 30% Investing · 20% Saving",
+        "r50_rendimento": "Total monthly income (Kz)",
+        "r50_alocacao": "Recommended allocation",
+        "r50_consumo": "Spending (50%)", "r50_investimento": "Investing (30%)", "r50_entesouramento": "Saving (20%)",
+        "r50_comparar_titulo": "Compare with your actual spending (optional)",
+        "r50_real_consumo": "Actual spending — Consumption (Kz)",
+        "r50_real_investimento": "Actual spending — Investment (Kz)",
+        "r50_real_entesouramento": "Actual saving (Kz)",
+        "r50_comparar_btn": "Compare",
+        "r50_resultado": "#### Comparison result",
+        "r50_aviso": "Your actual saving is below the 20% recommended by the Club's principle.",
+        "r50_sucesso": "You are meeting, or exceeding, the 20% saving target.",
+        "bib_hero_sub": "Club principles and articles on the Angolan capital market",
+        "bib_sem_artigos": "No articles published yet.",
+        "bib_filtrar": "Filter by category",
+        "bib_todas": "All",
+        "bib_publicado": "Published on",
+        "ades_hero_sub": "Fill in the form to apply for membership of the APPO Investment Club",
+        "ades_nome": "Full name *",
+        "ades_email": "E-mail",
+        "ades_telefone": "Phone / WhatsApp",
+        "ades_bi": "Identity Card number",
+        "ades_contribuicao": "Intended initial contribution (Kz)",
+        "ades_aceite": "I declare that I have read and accepted the Bylaws of the APPO Investment Club *",
+        "ades_btn": "Submit membership application",
+        "ades_erro": "Please fill in the full name and accept the Bylaws to submit the application.",
+        "ades_sucesso": "Membership application submitted successfully! A Club administrator will be in touch.",
+        "sobre_hero_sub": "The mission, principles and statutory framework of the Club",
+        "sobre_quem_somos": "Who we are",
+        "sobre_quem_texto": "The **APPO Investment Club** is an association of Angolan investors that pools capital collectively to invest in the national capital market through the Angola Debt and Securities Exchange (BODIVA).",
+        "sobre_principios": "Investment Principles and Philosophy",
+        "sobre_estatutos": "Bylaws — key points",
+        "sobre_estatutos_texto": """
+- **Nature:** investor association, under formally registered Bylaws.
+- **Governing bodies:** Members' Assembly, Management Committee and Supervisory Board.
+- **Membership:** subject to approval by the Management Committee.
+- **Resolutions:** significant investment decisions require collective deliberation.
+- **Profit distribution:** proportional to each member's capital share.
+""",
+        "sobre_nota": "Internal note: reference model, to be replaced by the Club's formally approved and registered Bylaws.",
+        "partilha_wa": "💬 WhatsApp", "partilha_tw": "𝕏 X / Twitter", "partilha_fb": "📘 Facebook",
+        "conv_partilha": "{v} {de} = {r} {para} — APPO Investment Club",
+        "pdf_titulo": "APPO Investment Club",
+        "pdf_gerado": "Report generated on",
+        "pdf_resumo": "Balance Sheet Summary",
+        "pdf_subscrito": "Subscribed Capital:",
+        "pdf_realizado": "Paid-up Capital:",
+        "pdf_investimentos": "Investments:",
+        "pdf_reservas": "Reserves:",
+        "pdf_total": "Total:",
+        "pdf_activos": "Portfolio Assets",
+        "pdf_movimentos": "Recent Transactions",
+        "pdf_sem_mov": "No transactions recorded.",
+        "pdf_nome_ficheiro": "appo_report_{data}.pdf",
+        "bodiva_badge": "🇦🇴 Mercado angolano · Kwanzas (Kz)",
+    },
+
+    # ─────────────────────────────────────────────────────
+    "Français": {
+        "tagline": "APPO — Éducation financière et espace privé d'investissement",
+        "login_titulo": "Accès réservé aux membres",
+        "email": "E-mail", "password": "Mot de passe", "entrar": "Se connecter",
+        "erro_login": "E-mail ou mot de passe incorrect. Contactez un administrateur du Club.",
+        "sessao": "Session", "terminar_sessao": "Se déconnecter",
+        "nav_map": {
+            "🏠 Início & Análises":         "🏠 Accueil & Analyses",
+            "📈 Cotações & Activos":         "📈 Cotations & Actifs",
+            "💰 Contabilidade & Finanças":  "💰 Comptabilité & Finances",
+            "📊 Histórico & Relatórios":    "📊 Historique & Rapports",
+            "📐 Avaliação de Activos":       "📐 Évaluation des Actifs",
+            "💱 Conversor de Moeda":         "💱 Convertisseur de Devises",
+            "🧪 Simulador de Investimento": "🧪 Simulateur d'Investissement",
+            "🧮 Princípio 50/30/20":            "🧮 Règle 50/30/20",
+            "📚 Biblioteca Educativa":       "📚 Bibliothèque Éducative",
+            "🧾 Adesão de Sócios":          "🧾 Manifestation d'intérêt",
+            "ℹ️ Sobre Nós & Estatutos":     "ℹ️ À propos & Statuts",
+            "🔐 Painel do Administrador":   "🔐 Panneau d'Administration",
+        },
+        "inicio_hero_sub": "APPO — Éducation financière et espace privé d'investissement",
+        "inicio_capital_subscrito": "Capital Souscrit",
+        "inicio_capital_realizado": "Capital Libéré",
+        "inicio_pct_subscrito": "% du souscrit",
+        "inicio_investimentos": "Investissements",
+        "inicio_reservas": "Réserves",
+        "inicio_patrimonio_total": "Actif Net Total",
+        "inicio_indice_label": "📊 Indice APPO (moyenne des actions cotées)",
+        "inicio_indice_caption": "Comment un portefeuille investi à parts égales dans toutes les actions suivies par le Club aurait évolué.",
+        "inicio_distribuicao": "Répartition du Patrimoine",
+        "inicio_distribuicao_cats": ["Capital Libéré", "Investissements", "Réserves"],
+        "inicio_cotacoes_destaque": "📌 Cotations en vedette",
+        "inicio_capa_texto": "Discipline, transparence et vision à long terme",
+        "cot_hero_sub": "Instruments financiers cotés à la BODIVA suivis par le Club",
+        "cot_indice_titulo": "📊 Indice APPO — cotation moyenne du marché",
+        "cot_indice_metric": "Variation moyenne aujourd'hui",
+        "cot_indice_caption": "Si vous aviez investi à parts égales dans toutes les actions cotées suivies par le Club, votre portefeuille aurait varié en moyenne de cette valeur.",
+        "cot_indice_hist_label": "Indice APPO — journalier (%)",
+        "cot_indice_hist_info": "L'historique journalier de l'Indice APPO se constitue chaque jour où l'administrateur met à jour les cotations.",
+        "cot_tendencia_semanal": "##### Tendance hebdomadaire de l'Indice APPO",
+        "cot_tendencia_sem_caption1": "Pas encore assez de semaines d'historique pour afficher la tendance hebdomadaire.",
+        "cot_tendencia_sem_caption2": "Pas encore assez d'historique pour la vue hebdomadaire.",
+        "cot_tab_favoritos": "⭐ Favoris",
+        "cot_tab_todos": "📋 Tous les Actifs",
+        "cot_fav_escolher": "Choisir vos actifs favoris",
+        "cot_fav_info": "Vous n'avez pas encore marqué d'actif comme favori. Utilisez la liste ci-dessus.",
+        "cot_filtrar_tipo": "Filtrer par type d'actif",
+        "cot_filtrar_todos": "Tous",
+        "cot_ultima_actualizacao": "Dernière mise à jour :",
+        "cot_descarregar_csv": "⬇️ Télécharger le tableau en CSV",
+        "cot_comparacao": "Comparaison des prix",
+        "cot_preco_kz": "Prix (Kz)",
+        "cot_tabela_cols": {"ticker": "Ticker", "nome": "Actif", "tipo": "Type", "preco": "Prix", "variacao": "Variation", "mercado": "Marché"},
+        "cont_hero_sub": "Résumé Comptable et Patrimonial du Club",
+        "cont_df_cols": ["Catégorie", "Description", "Montant", "Devise"],
+        "cont_df_rows": [
+            ("Capital Souscrit",   "Total du capital engagé par les membres",                      "AOA"),
+            ("Capital Libéré",     "Partie du capital souscrit déjà effectivement versée",         "AOA"),
+            ("Investissements",    "Portefeuille d'actions et instruments financiers cotés BODIVA", "AOA"),
+            ("Réserves",           "Fonds de stabilisation et de liquidité pour nouvelles opportunités","AOA"),
+        ],
+        "cont_patrimonio_metric": "Actif Net Total du Club",
+        "cont_ultima_actualizacao": "Dernière mise à jour :",
+        "hist_hero_sub": "Évolution du patrimoine du Club dans le temps et exports de rapports",
+        "hist_poucos_pontos": "Pas encore assez de points de données. Ce graphique se précisera avec le temps.",
+        "hist_caption": "Chaque point représente une mise à jour du bilan. Axe vertical en Kwanzas (Kz).",
+        "hist_patrimonio_label": "Actif Net Total (Kz)",
+        "hist_movimentos": "Transactions enregistrées",
+        "hist_sem_movimentos": "Aucune transaction enregistrée pour l'instant.",
+        "hist_cols": {"tipo": "Type", "descricao": "Description", "montante_fmt": "Montant", "data_movimento": "Date", "criado_em": "Enregistré le"},
+        "hist_descarregar_mov": "⬇️ Télécharger les transactions en CSV",
+        "hist_exportar": "Exporter le rapport",
+        "hist_gerar_pdf": "Générer un rapport PDF",
+        "hist_descarregar_pdf": "Télécharger le rapport PDF",
+        "aval_hero_sub": "Multiples et juste valeur (DDM) des sociétés cotées, avec données réelles du Club",
+        "aval_empresa": "Société",
+        "aval_sector": "Secteur",
+        "aval_cap_mercado": "Capitalisation boursière :",
+        "aval_preco": "Prix Actuel",
+        "aval_pe": "P/E", "aval_pbv": "P/VNC", "aval_dy": "Rendement du dividende",
+        "aval_nota1": "<b>P/E</b> = années de bénéfices payés. <b>P/VNC</b> = prix vs valeur comptable. <b>Rendement du dividende</b> = retour annuel en dividendes.",
+        "aval_vj": "Juste Valeur (DDM)", "aval_upside": "Potentiel / Risque", "aval_ke": "Coût des Fonds Propres (Ke)",
+        "aval_nota2": "<b>Juste Valeur (DDM)</b> est une estimation. <b>Potentiel/Risque</b> compare au marché. <b>Ke</b> = rendement minimum exigé selon le risque du secteur.",
+        "aval_subvalorizado": "Le modèle DDM suggère une action potentiellement sous-évaluée.",
+        "aval_sobrevalorizado": "Le modèle DDM suggère une action potentiellement surévaluée.",
+        "aval_justo": "Le modèle DDM suggère que le prix de marché est proche de la valeur estimée.",
+        "aval_ddm_caption": "DDM/Gordon Growth : Juste Valeur = D1 ÷ (Ke − g). À utiliser comme vérification croisée, jamais isolément.",
+        "aval_premium_titulo": "⭐ Analyse Approfondie (Premium)",
+        "aval_premium_lock": "<div class='appo-premium-lock'><strong>Cette section est réservée aux membres Premium.</strong><br/>Comparaison sectorielle, sensibilité, ROE et rendement réel.<br/><br/>Contactez un administrateur pour activer le Premium.</div>",
+        "aval_roe": "ROE", "aval_payout": "Taux de distribution", "aval_dy_real": "Rendement Réel",
+        "aval_nota3": "<b>ROE</b> = rentabilité des fonds propres. <b>Taux de distribution</b> = part du bénéfice distribuée. <b>Rendement Réel</b> = rendement net d'inflation.",
+        "aval_sensibilidade": "##### Tableau de Sensibilité — Juste Valeur (Kz par action)",
+        "aval_comparacao": "##### Comparaison Sectorielle (toutes les sociétés)",
+        "aval_comp_cols": {"Empresa": "Société", "Sector": "Secteur", "P/E": "P/E", "P/BV": "P/VNC", "ROE": "ROE", "DY Nominal": "Rendement Nominal", "Upside DDM": "Potentiel DDM"},
+        "aval_descarregar_comp": "⬇️ Télécharger la comparaison sectorielle en CSV",
+        "aval_sem_dados": "Aucune évaluation enregistrée pour l'instant.",
+        "conv_hero_sub": "Taux de change automatiques, mis à jour quotidiennement, avec le Kwanza inclus",
+        "conv_de": "De", "conv_para": "Vers", "conv_valor": "Montant",
+        "conv_equivale": "équivaut à",
+        "conv_taxa": "Taux :",
+        "conv_actualizado": "Mis à jour :",
+        "conv_erro": "Cette devise n'est pas disponible dans la source de données pour le moment.",
+        "conv_aviso": "Impossible d'obtenir les taux de change pour le moment. Réessayez dans quelques instants.",
+        "conv_tabela_titulo": "Tableau rapide (à partir de 1 Kz)",
+        "conv_tabela_col": "1 Kz équivaut à",
+        "conv_tabela_indisponivel": "Tableau indisponible pour le moment.",
+        "conv_historico_titulo": "📈 Tendance du Kwanza (historique propre, accumulé automatiquement)",
+        "conv_historico_select": "Afficher la tendance pour",
+        "conv_historico_label": "1 AOA en",
+        "conv_historico_info": "Pas encore assez de jours d'historique. Revenez à différentes dates pour voir la tendance se former.",
+        "conv_historico_caption": "Cet historique est constitué automatiquement par l'application — sans aucune saisie manuelle — chaque fois que quelqu'un ouvre cette page un nouveau jour.",
+        "sim_hero_sub": "Projetez la croissance de votre investissement dans le temps avec les intérêts composés",
+        "sim_valor_inicial": "Montant initial (Kz)",
+        "sim_contrib_mensal": "Contribution mensuelle (Kz)",
+        "sim_taxa": "Taux de rendement annuel attendu (%)",
+        "sim_anos": "Horizon (années)",
+        "sim_inflacao": "Inflation annuelle supposée (%)",
+        "sim_saldo_nominal": "Solde Final (nominal)",
+        "sim_total_investido": "Total Investi",
+        "sim_juros": "Intérêts Composés Gagnés",
+        "sim_chart_cols": {"Saldo Nominal": "Solde Nominal", "Total Investido": "Total Investi"},
+        "sim_caption1": "Solde final en pouvoir d'achat d'aujourd'hui (inflation supposée de",
+        "sim_caption2": "%/an) :",
+        "sim_disclaimer": "Simulation éducative avec intérêts composés mensuels constants — les rendements réels varient et ne sont pas garantis. Ne constitue pas un conseil en investissement.",
+        "sim_partilha": "J'ai simulé {vi} + {cm}/mois pendant {a} ans à {t}%/an = {sf} — Club d'Investissement APPO",
+        "r50_hero_sub": "Principe n°8 : 50% Dépenses · 30% Investissement · 20% Épargne",
+        "r50_rendimento": "Revenu mensuel total (Kz)",
+        "r50_alocacao": "Allocation recommandée",
+        "r50_consumo": "Dépenses (50%)", "r50_investimento": "Investissement (30%)", "r50_entesouramento": "Épargne (20%)",
+        "r50_comparar_titulo": "Comparez avec vos dépenses réelles (optionnel)",
+        "r50_real_consumo": "Dépenses réelles — Consommation (Kz)",
+        "r50_real_investimento": "Dépenses réelles — Investissement (Kz)",
+        "r50_real_entesouramento": "Épargne réelle (Kz)",
+        "r50_comparar_btn": "Comparer",
+        "r50_resultado": "#### Résultat de la comparaison",
+        "r50_aviso": "Votre épargne réelle est inférieure aux 20% recommandés par le principe du Club.",
+        "r50_sucesso": "Vous respectez, ou dépassez, l'objectif d'épargne de 20%.",
+        "bib_hero_sub": "Principes du Club et articles sur le marché des capitaux angolais",
+        "bib_sem_artigos": "Aucun article publié pour l'instant.",
+        "bib_filtrar": "Filtrer par catégorie",
+        "bib_todas": "Toutes",
+        "bib_publicado": "Publié le",
+        "ades_hero_sub": "Remplissez le formulaire pour demander votre adhésion au Club d'Investissement APPO",
+        "ades_nome": "Nom complet *",
+        "ades_email": "E-mail",
+        "ades_telefone": "Téléphone / WhatsApp",
+        "ades_bi": "Numéro de carte d'identité",
+        "ades_contribuicao": "Contribution initiale souhaitée (Kz)",
+        "ades_aceite": "Je déclare avoir lu et accepté les Statuts du Club d'Investissement APPO *",
+        "ades_btn": "Soumettre la demande d'adhésion",
+        "ades_erro": "Veuillez saisir votre nom complet et accepter les Statuts pour soumettre la demande.",
+        "ades_sucesso": "Demande d'adhésion soumise avec succès ! Un administrateur du Club vous contactera.",
+        "sobre_hero_sub": "La mission, les principes et le cadre statutaire du Club",
+        "sobre_quem_somos": "Qui sommes-nous",
+        "sobre_quem_texto": "Le **Club d'Investissement APPO** est une association d'investisseurs angolais qui met en commun des capitaux pour investir sur le marché des capitaux national via la Bourse angolaise (BODIVA).",
+        "sobre_principios": "Principes et Philosophie d'Investissement",
+        "sobre_estatutos": "Statuts — points clés",
+        "sobre_estatutos_texto": """
+- **Nature :** association d'investisseurs, régie par des Statuts formellement enregistrés.
+- **Organes :** Assemblée des Membres, Commission de Gestion et Conseil de Surveillance.
+- **Admission :** soumise à l'approbation de la Commission de Gestion.
+- **Délibérations :** les décisions d'investissement importantes requièrent une délibération collective.
+- **Répartition des résultats :** proportionnelle à la quote-part de capital de chaque membre.
+""",
+        "sobre_nota": "Note interne : modèle de référence, à remplacer par les Statuts formellement approuvés et enregistrés du Club.",
+        "partilha_wa": "💬 WhatsApp", "partilha_tw": "𝕏 X / Twitter", "partilha_fb": "📘 Facebook",
+        "conv_partilha": "{v} {de} = {r} {para} — Club d'Investissement APPO",
+        "pdf_titulo": "Club d'Investissement APPO",
+        "pdf_gerado": "Rapport généré le",
+        "pdf_resumo": "Résumé du Bilan",
+        "pdf_subscrito": "Capital Souscrit :",
+        "pdf_realizado": "Capital Libéré :",
+        "pdf_investimentos": "Investissements :",
+        "pdf_reservas": "Réserves :",
+        "pdf_total": "Total :",
+        "pdf_activos": "Actifs en Portefeuille",
+        "pdf_movimentos": "Transactions Récentes",
+        "pdf_sem_mov": "Aucune transaction enregistrée.",
+        "pdf_nome_ficheiro": "rapport_appo_{data}.pdf",
+        "bodiva_badge": "🇦🇴 Mercado angolano · Kwanzas (Kz)",
+    },
+
+    # ─────────────────────────────────────────────────────
+    "Español": {
+        "tagline": "APPO — Educación financiera y área privada de inversiones",
+        "login_titulo": "Acceso reservado a socios",
+        "email": "Correo electrónico", "password": "Contraseña", "entrar": "Entrar",
+        "erro_login": "Correo o contraseña incorrectos. Contacta a un administrador del Club.",
+        "sessao": "Sesión", "terminar_sessao": "Cerrar sesión",
+        "nav_map": {
+            "🏠 Início & Análises":         "🏠 Inicio y Análisis",
+            "📈 Cotações & Activos":         "📈 Cotizaciones y Activos",
+            "💰 Contabilidade & Finanças":  "💰 Contabilidad y Finanzas",
+            "📊 Histórico & Relatórios":    "📊 Historial e Informes",
+            "📐 Avaliação de Activos":       "📐 Valoración de Activos",
+            "💱 Conversor de Moeda":         "💱 Conversor de Moneda",
+            "🧪 Simulador de Investimento": "🧪 Simulador de Inversión",
+            "🧮 Princípio 50/30/20":            "🧮 Regla 50/30/20",
+            "📚 Biblioteca Educativa":       "📚 Biblioteca Educativa",
+            "🧾 Adesão de Sócios":          "🧾 Manifestación de interés",
+            "ℹ️ Sobre Nós & Estatutos":     "ℹ️ Sobre Nosotros y Estatutos",
+            "🔐 Painel do Administrador":   "🔐 Panel de Administrador",
+        },
+        "inicio_hero_sub": "APPO — Educación financiera y área privada de inversiones",
+        "inicio_capital_subscrito": "Capital Suscrito",
+        "inicio_capital_realizado": "Capital Desembolsado",
+        "inicio_pct_subscrito": "% del suscrito",
+        "inicio_investimentos": "Inversiones",
+        "inicio_reservas": "Reservas",
+        "inicio_patrimonio_total": "Patrimonio Neto Total",
+        "inicio_indice_label": "📊 Índice APPO (media de acciones cotizadas)",
+        "inicio_indice_caption": "Cómo habría evolucionado una cartera invertida a partes iguales en todas las acciones seguidas por el Club.",
+        "inicio_distribuicao": "Distribución del Patrimonio",
+        "inicio_distribuicao_cats": ["Capital Desembolsado", "Inversiones", "Reservas"],
+        "inicio_cotacoes_destaque": "📌 Cotizaciones destacadas",
+        "inicio_capa_texto": "Disciplina, transparencia y visión a largo plazo",
+        "cot_hero_sub": "Instrumentos financieros cotizados en BODIVA seguidos por el Club",
+        "cot_indice_titulo": "📊 Índice APPO — cotización media del mercado",
+        "cot_indice_metric": "Variación media hoy",
+        "cot_indice_caption": "Si hubieras invertido a partes iguales en todas las acciones cotizadas del Club, tu cartera habría variado, en promedio, este valor.",
+        "cot_indice_hist_label": "Índice APPO — diario (%)",
+        "cot_indice_hist_info": "El historial diario del Índice APPO se va formando cada día que el administrador actualiza las cotizaciones.",
+        "cot_tendencia_semanal": "##### Tendencia semanal del Índice APPO",
+        "cot_tendencia_sem_caption1": "Aún no hay suficientes semanas de historial para mostrar la tendencia semanal.",
+        "cot_tendencia_sem_caption2": "Aún no hay historial suficiente para la vista semanal.",
+        "cot_tab_favoritos": "⭐ Favoritos",
+        "cot_tab_todos": "📋 Todos los Activos",
+        "cot_fav_escolher": "Elige tus activos favoritos",
+        "cot_fav_info": "Aún no has marcado ningún activo como favorito. Usa la lista de arriba.",
+        "cot_filtrar_tipo": "Filtrar por tipo de activo",
+        "cot_filtrar_todos": "Todos",
+        "cot_ultima_actualizacao": "Última actualización:",
+        "cot_descarregar_csv": "⬇️ Descargar tabla en CSV",
+        "cot_comparacao": "Comparación de precios",
+        "cot_preco_kz": "Precio (Kz)",
+        "cot_tabela_cols": {"ticker": "Ticker", "nome": "Activo", "tipo": "Tipo", "preco": "Precio", "variacao": "Variación", "mercado": "Mercado"},
+        "cont_hero_sub": "Resumen Contable y Patrimonial del Club",
+        "cont_df_cols": ["Categoría", "Descripción", "Importe", "Divisa"],
+        "cont_df_rows": [
+            ("Capital Suscrito",      "Total de capital comprometido por los socios",               "AOA"),
+            ("Capital Desembolsado",  "Parte del capital suscrito ya efectivamente pagada",         "AOA"),
+            ("Inversiones",           "Cartera de acciones e instrumentos financieros en BODIVA",   "AOA"),
+            ("Reservas",              "Fondo de estabilización y liquidez para nuevas oportunidades","AOA"),
+        ],
+        "cont_patrimonio_metric": "Patrimonio Neto Total del Club",
+        "cont_ultima_actualizacao": "Última actualización:",
+        "hist_hero_sub": "Evolución del patrimonio del Club a lo largo del tiempo y exportación de informes",
+        "hist_poucos_pontos": "Aún hay pocos puntos de datos. Este gráfico irá tomando forma con el tiempo.",
+        "hist_caption": "Cada punto representa una actualización del balance. Eje vertical en Kwanzas (Kz).",
+        "hist_patrimonio_label": "Patrimonio Neto Total (Kz)",
+        "hist_movimentos": "Transacciones registradas",
+        "hist_sem_movimentos": "Aún no hay transacciones registradas.",
+        "hist_cols": {"tipo": "Tipo", "descricao": "Descripción", "montante_fmt": "Importe", "data_movimento": "Fecha", "criado_em": "Registrado el"},
+        "hist_descarregar_mov": "⬇️ Descargar transacciones en CSV",
+        "hist_exportar": "Exportar informe",
+        "hist_gerar_pdf": "Generar informe PDF",
+        "hist_descarregar_pdf": "Descargar informe PDF",
+        "aval_hero_sub": "Múltiplos y valor razonable (DDM) de las empresas cotizadas, con datos reales del Club",
+        "aval_empresa": "Empresa",
+        "aval_sector": "Sector",
+        "aval_cap_mercado": "Capitalización de mercado:",
+        "aval_preco": "Precio Actual",
+        "aval_pe": "P/E", "aval_pbv": "P/VC", "aval_dy": "Rentabilidad por dividendo",
+        "aval_nota1": "<b>P/E</b> = años de beneficio que pagas. <b>P/VC</b> = precio vs valor contable. <b>Rentabilidad por dividendo</b> = retorno anual en dividendos.",
+        "aval_vj": "Valor Razonable (DDM)", "aval_upside": "Potencial / Riesgo", "aval_ke": "Coste del Capital (Ke)",
+        "aval_nota2": "<b>Valor Razonable (DDM)</b> es una estimación. <b>Potencial/Riesgo</b> compara con el mercado. <b>Ke</b> = retorno mínimo exigido por el riesgo del sector.",
+        "aval_subvalorizado": "El modelo DDM sugiere una acción potencialmente infravalorada.",
+        "aval_sobrevalorizado": "El modelo DDM sugiere una acción potencialmente sobrevalorada.",
+        "aval_justo": "El modelo DDM sugiere que el precio de mercado está próximo al valor estimado.",
+        "aval_ddm_caption": "DDM/Gordon Growth: Valor Razonable = D1 ÷ (Ke − g). Usar como verificación cruzada, nunca de forma aislada.",
+        "aval_premium_titulo": "⭐ Análisis Profundo (Premium)",
+        "aval_premium_lock": "<div class='appo-premium-lock'><strong>Esta sección es exclusiva para socios Premium.</strong><br/>Comparación sectorial, sensibilidad, ROE y rentabilidad real.<br/><br/>Habla con un administrador para activar el Premium.</div>",
+        "aval_roe": "ROE", "aval_payout": "Tasa de distribución", "aval_dy_real": "Rentabilidad Real",
+        "aval_nota3": "<b>ROE</b> = rentabilidad sobre fondos propios. <b>Tasa de distribución</b> = fracción del beneficio distribuida. <b>Rentabilidad Real</b> = yield descontado de la inflación.",
+        "aval_sensibilidade": "##### Tabla de Sensibilidad — Valor Razonable (Kz por acción)",
+        "aval_comparacao": "##### Comparación Sectorial (todas las empresas)",
+        "aval_comp_cols": {"Empresa": "Empresa", "Sector": "Sector", "P/E": "P/E", "P/BV": "P/VC", "ROE": "ROE", "DY Nominal": "Rentab. Nominal", "Upside DDM": "Potencial DDM"},
+        "aval_descarregar_comp": "⬇️ Descargar comparación sectorial en CSV",
+        "aval_sem_dados": "Aún no hay valoraciones registradas.",
+        "conv_hero_sub": "Tipos de cambio automáticos, actualizados diariamente, con el Kwanza incluido",
+        "conv_de": "De", "conv_para": "A", "conv_valor": "Importe",
+        "conv_equivale": "equivale a",
+        "conv_taxa": "Tipo:",
+        "conv_actualizado": "Actualizado:",
+        "conv_erro": "Esta divisa no está disponible en la fuente de datos en este momento.",
+        "conv_aviso": "No se pudieron obtener los tipos de cambio en este momento. Inténtalo de nuevo en unos instantes.",
+        "conv_tabela_titulo": "Tabla rápida (a partir de 1 Kz)",
+        "conv_tabela_col": "1 Kz equivale a",
+        "conv_tabela_indisponivel": "Tabla no disponible en este momento.",
+        "conv_historico_titulo": "📈 Tendencia del Kwanza (historial propio, acumulado automáticamente)",
+        "conv_historico_select": "Ver tendencia de",
+        "conv_historico_label": "1 AOA en",
+        "conv_historico_info": "Aún hay pocos días de historial acumulado. Vuelve en días diferentes para ver cómo se va formando la tendencia.",
+        "conv_historico_caption": "Este historial se construye automáticamente por la propia app — sin que nadie tenga que introducir nada — cada vez que alguien abre esta página un nuevo día.",
+        "sim_hero_sub": "Proyecta el crecimiento de tu inversión a lo largo del tiempo con interés compuesto",
+        "sim_valor_inicial": "Importe inicial (Kz)",
+        "sim_contrib_mensal": "Aportación mensual (Kz)",
+        "sim_taxa": "Tasa de rentabilidad anual esperada (%)",
+        "sim_anos": "Plazo (años)",
+        "sim_inflacao": "Inflación anual supuesta (%)",
+        "sim_saldo_nominal": "Saldo Final (nominal)",
+        "sim_total_investido": "Total Invertido",
+        "sim_juros": "Interés Compuesto Ganado",
+        "sim_chart_cols": {"Saldo Nominal": "Saldo Nominal", "Total Investido": "Total Invertido"},
+        "sim_caption1": "Saldo final en poder adquisitivo de hoy (descontando la inflación supuesta de",
+        "sim_caption2": "%/año):",
+        "sim_disclaimer": "Simulación educativa con interés compuesto mensual constante — los rendimientos reales del mercado varían y no están garantizados. No constituye asesoramiento de inversión.",
+        "sim_partilha": "Simulé {vi} + {cm}/mes durante {a} años al {t}%/año = {sf} — Club de Inversión APPO",
+        "r50_hero_sub": "Principio n.º 8: 50% Gastos · 30% Inversión · 20% Ahorro",
+        "r50_rendimento": "Renta mensual total (Kz)",
+        "r50_alocacao": "Asignación recomendada",
+        "r50_consumo": "Gastos (50%)", "r50_investimento": "Inversión (30%)", "r50_entesouramento": "Ahorro (20%)",
+        "r50_comparar_titulo": "Compara con tus gastos reales (opcional)",
+        "r50_real_consumo": "Gasto real — Consumo (Kz)",
+        "r50_real_investimento": "Gasto real — Inversión (Kz)",
+        "r50_real_entesouramento": "Ahorro real (Kz)",
+        "r50_comparar_btn": "Comparar",
+        "r50_resultado": "#### Resultado de la comparación",
+        "r50_aviso": "Tu ahorro real está por debajo del 20% recomendado por el principio del Club.",
+        "r50_sucesso": "Estás cumpliendo, o superando, el objetivo de ahorro del 20%.",
+        "bib_hero_sub": "Principios del Club y artículos sobre el mercado de capitales angoleño",
+        "bib_sem_artigos": "Aún no hay artículos publicados.",
+        "bib_filtrar": "Filtrar por categoría",
+        "bib_todas": "Todas",
+        "bib_publicado": "Publicado el",
+        "ades_hero_sub": "Completa el formulario para solicitar tu adhesión al Club de Inversión APPO",
+        "ades_nome": "Nombre completo *",
+        "ades_email": "Correo electrónico",
+        "ades_telefone": "Teléfono / WhatsApp",
+        "ades_bi": "Número del Documento de Identidad",
+        "ades_contribuicao": "Aportación inicial prevista (Kz)",
+        "ades_aceite": "Declaro que he leído y acepto los Estatutos del Club de Inversión APPO *",
+        "ades_btn": "Enviar solicitud de adhesión",
+        "ades_erro": "Rellena el nombre completo y acepta los Estatutos para enviar la solicitud.",
+        "ades_sucesso": "¡Solicitud de adhesión enviada con éxito! Un administrador del Club se pondrá en contacto contigo.",
+        "sobre_hero_sub": "La misión, los principios y el marco estatutario del Club",
+        "sobre_quem_somos": "Quiénes somos",
+        "sobre_quem_texto": "El **Club de Inversión APPO** es una asociación de inversores angoleños que reúne capital colectivamente para invertir en el mercado de capitales nacional a través de la Bolsa de Angola (BODIVA).",
+        "sobre_principios": "Principios y Filosofía de Inversión",
+        "sobre_estatutos": "Estatutos — puntos clave",
+        "sobre_estatutos_texto": """
+- **Naturaleza:** asociación de inversores, conforme a Estatutos formalmente registrados.
+- **Órganos:** Asamblea de Socios, Comisión de Gestión y Consejo de Supervisión.
+- **Admisión:** sujeta a aprobación de la Comisión de Gestión.
+- **Deliberaciones:** las decisiones de inversión relevantes requieren deliberación colectiva.
+- **Distribución de resultados:** proporcional a la cuota de capital de cada socio.
+""",
+        "sobre_nota": "Nota interna: modelo de referencia, a sustituir por los Estatutos formalmente aprobados y registrados del Club.",
+        "partilha_wa": "💬 WhatsApp", "partilha_tw": "𝕏 X / Twitter", "partilha_fb": "📘 Facebook",
+        "conv_partilha": "{v} {de} = {r} {para} — Club de Inversión APPO",
+        "pdf_titulo": "Club de Inversión APPO",
+        "pdf_gerado": "Informe generado el",
+        "pdf_resumo": "Resumen del Balance",
+        "pdf_subscrito": "Capital Suscrito:",
+        "pdf_realizado": "Capital Desembolsado:",
+        "pdf_investimentos": "Inversiones:",
+        "pdf_reservas": "Reservas:",
+        "pdf_total": "Total:",
+        "pdf_activos": "Activos en Cartera",
+        "pdf_movimentos": "Transacciones Recientes",
+        "pdf_sem_mov": "Sin transacciones registradas.",
+        "pdf_nome_ficheiro": "informe_appo_{data}.pdf",
+        "bodiva_badge": "🇦🇴 Mercado angolano · Kwanzas (Kz)",
+    },
+
+    # ─────────────────────────────────────────────────────
+    "中文 (Mandarim)": {
+        "tagline": "APPO — 金融教育与私人投资专区",
+        "login_titulo": "仅限会员访问",
+        "email": "电子邮件", "password": "密码", "entrar": "登录",
+        "erro_login": "邮箱或密码错误。请联系俱乐部管理员。",
+        "sessao": "会话", "terminar_sessao": "退出登录",
+        "nav_map": {
+            "🏠 Início & Análises":         "🏠 首页与分析",
+            "📈 Cotações & Activos":         "📈 行情与资产",
+            "💰 Contabilidade & Finanças":  "💰 会计与财务",
+            "📊 Histórico & Relatórios":    "📊 历史与报告",
+            "📐 Avaliação de Activos":       "📐 资产估值",
+            "💱 Conversor de Moeda":         "💱 货币换算器",
+            "🧪 Simulador de Investimento": "🧪 投资模拟器",
+            "🧮 Princípio 50/30/20":            "🧮 50/30/20法则",
+            "📚 Biblioteca Educativa":       "📚 教育图书馆",
+            "🧾 Adesão de Sócios":          "🧾 意向登记",
+            "ℹ️ Sobre Nós & Estatutos":     "ℹ️ 关于我们与章程",
+            "🔐 Painel do Administrador":   "🔐 管理员面板",
+        },
+        "inicio_hero_sub": "APPO — 金融教育与私人投资专区",
+        "inicio_capital_subscrito": "认缴资本",
+        "inicio_capital_realizado": "实缴资本",
+        "inicio_pct_subscrito": "% 已认缴",
+        "inicio_investimentos": "投资",
+        "inicio_reservas": "储备",
+        "inicio_patrimonio_total": "总净资产",
+        "inicio_indice_label": "📊 APPO指数（上市股票均值）",
+        "inicio_indice_caption": "若将资金平均投资于俱乐部跟踪的所有上市股票，组合的平均表现。",
+        "inicio_distribuicao": "资产分布",
+        "inicio_distribuicao_cats": ["实缴资本", "投资", "储备"],
+        "inicio_cotacoes_destaque": "📌 重点行情",
+        "inicio_capa_texto": "纪律、透明与长期视野",
+        "cot_hero_sub": "俱乐部跟踪的BODIVA上市金融工具",
+        "cot_indice_titulo": "📊 APPO指数 — 市场平均行情",
+        "cot_indice_metric": "今日平均涨跌幅",
+        "cot_indice_caption": "若等权重投资俱乐部跟踪的所有上市股票，组合平均涨跌幅即此值。",
+        "cot_indice_hist_label": "APPO指数 — 日变动（%）",
+        "cot_indice_hist_info": "管理员每次更新行情，日APPO指数历史数据便自动增加一个新点。",
+        "cot_tendencia_semanal": "##### APPO指数周趋势",
+        "cot_tendencia_sem_caption1": "历史数据不足两周，暂无法显示周趋势。",
+        "cot_tendencia_sem_caption2": "历史数据不足，暂无法显示周视图。",
+        "cot_tab_favoritos": "⭐ 自选",
+        "cot_tab_todos": "📋 全部资产",
+        "cot_fav_escolher": "选择您的自选资产",
+        "cot_fav_info": "您尚未将任何资产设为自选。请使用上方列表。",
+        "cot_filtrar_tipo": "按资产类型筛选",
+        "cot_filtrar_todos": "全部",
+        "cot_ultima_actualizacao": "最后更新：",
+        "cot_descarregar_csv": "⬇️ 下载CSV表格",
+        "cot_comparacao": "价格比较",
+        "cot_preco_kz": "价格（Kz）",
+        "cot_tabela_cols": {"ticker": "代码", "nome": "资产", "tipo": "类型", "preco": "价格", "variacao": "涨跌幅", "mercado": "市场"},
+        "cont_hero_sub": "俱乐部会计与资产负债概览",
+        "cont_df_cols": ["类别", "说明", "金额", "货币"],
+        "cont_df_rows": [
+            ("认缴资本", "成员承诺的总资本",           "AOA"),
+            ("实缴资本", "已实际缴纳的认缴资本部分",   "AOA"),
+            ("投资",     "BODIVA上市的股票与金融工具组合","AOA"),
+            ("储备",     "稳定基金及新机会流动性基金", "AOA"),
+        ],
+        "cont_patrimonio_metric": "俱乐部总净资产",
+        "cont_ultima_actualizacao": "最后更新：",
+        "hist_hero_sub": "俱乐部资产随时间的变化及报告导出",
+        "hist_poucos_pontos": "数据点尚少，图表将随时间逐步完善。",
+        "hist_caption": "每个点代表一次资产负债更新。纵轴单位为宽扎（Kz）。",
+        "hist_patrimonio_label": "总净资产（Kz）",
+        "hist_movimentos": "已记录交易",
+        "hist_sem_movimentos": "暂无交易记录。",
+        "hist_cols": {"tipo": "类型", "descricao": "说明", "montante_fmt": "金额", "data_movimento": "日期", "criado_em": "记录时间"},
+        "hist_descarregar_mov": "⬇️ 下载交易CSV",
+        "hist_exportar": "导出报告",
+        "hist_gerar_pdf": "生成PDF报告",
+        "hist_descarregar_pdf": "下载PDF报告",
+        "aval_hero_sub": "上市公司的市盈率倍数与公允价值（DDM），含俱乐部真实数据",
+        "aval_empresa": "公司",
+        "aval_sector": "行业",
+        "aval_cap_mercado": "市值：",
+        "aval_preco": "当前价格",
+        "aval_pe": "市盈率", "aval_pbv": "市净率", "aval_dy": "股息收益率",
+        "aval_nota1": "<b>市盈率</b> = 您为价格支付的盈利年数。<b>市净率</b> = 价格与账面价值之比。<b>股息收益率</b> = 年度股息回报。",
+        "aval_vj": "公允价值（DDM）", "aval_upside": "上行/下行空间", "aval_ke": "权益成本（Ke）",
+        "aval_nota2": "<b>公允价值（DDM）</b>为估算值。<b>上行/下行空间</b>与市场比较。<b>Ke</b> = 该行业风险所要求的最低回报。",
+        "aval_subvalorizado": "DDM模型显示该股票可能被低估。",
+        "aval_sobrevalorizado": "DDM模型显示该股票可能被高估。",
+        "aval_justo": "DDM模型显示市场价格接近估算价值。",
+        "aval_ddm_caption": "DDM/戈登增长模型：公允价值 = D1 ÷ (Ke − g)。仅作交叉验证，切勿单独使用。",
+        "aval_premium_titulo": "⭐ 深度分析（高级会员）",
+        "aval_premium_lock": "<div class='appo-premium-lock'><strong>本部分仅限高级会员使用。</strong><br/>行业比较、敏感性分析、ROE及实际股息收益率。<br/><br/>请联系管理员开通高级权限。</div>",
+        "aval_roe": "净资产收益率", "aval_payout": "分红比率", "aval_dy_real": "实际股息收益率",
+        "aval_nota3": "<b>净资产收益率</b> = 净利润/净资产。<b>分红比率</b> = 已分配利润比例。<b>实际股息收益率</b> = 扣除通胀后的收益率。",
+        "aval_sensibilidade": "##### 敏感性分析表 — 公允价值（每股 Kz）",
+        "aval_comparacao": "##### 行业对比（所有公司）",
+        "aval_comp_cols": {"Empresa": "公司", "Sector": "行业", "P/E": "市盈率", "P/BV": "市净率", "ROE": "净资产收益率", "DY Nominal": "名义股息率", "Upside DDM": "DDM上行空间"},
+        "aval_descarregar_comp": "⬇️ 下载行业对比CSV",
+        "aval_sem_dados": "暂无估值记录。",
+        "conv_hero_sub": "自动汇率，每日更新，含宽扎",
+        "conv_de": "从", "conv_para": "至", "conv_valor": "金额",
+        "conv_equivale": "等于",
+        "conv_taxa": "汇率：",
+        "conv_actualizado": "更新时间：",
+        "conv_erro": "该货币暂时无法从数据源获取。",
+        "conv_aviso": "暂时无法获取汇率，请稍后再试。",
+        "conv_tabela_titulo": "快速换算表（以1宽扎为基准）",
+        "conv_tabela_col": "1 Kz等于",
+        "conv_tabela_indisponivel": "表格暂时不可用。",
+        "conv_historico_titulo": "📈 宽扎走势（自有历史，自动积累）",
+        "conv_historico_select": "显示走势货币",
+        "conv_historico_label": "1 AOA兑",
+        "conv_historico_info": "历史数据天数尚少，请在不同日期访问以观察走势自然形成。",
+        "conv_historico_caption": "此历史数据由应用自动积累——无需任何人工录入——每当有人在新的一天打开本页时自动更新。",
+        "sim_hero_sub": "利用复利预测您的投资随时间的增长",
+        "sim_valor_inicial": "初始金额（Kz）",
+        "sim_contrib_mensal": "每月供款（Kz）",
+        "sim_taxa": "预期年化收益率（%）",
+        "sim_anos": "投资期限（年）",
+        "sim_inflacao": "假设年通胀率（%）",
+        "sim_saldo_nominal": "最终余额（名义）",
+        "sim_total_investido": "总投入",
+        "sim_juros": "所得复利",
+        "sim_chart_cols": {"Saldo Nominal": "名义余额", "Total Investido": "总投入"},
+        "sim_caption1": "以今日购买力计算的最终余额（扣除假设通胀率",
+        "sim_caption2": "%/年）：",
+        "sim_disclaimer": "以固定月复利计算的教育性模拟——实际市场收益会变动且无法保证。本内容不构成投资建议。",
+        "sim_partilha": "我模拟了 {vi} + {cm}/月，{a}年，年化{t}% = {sf} — APPO投资俱乐部",
+        "r50_hero_sub": "第8条原则：50%消费 · 30%投资 · 20%储蓄",
+        "r50_rendimento": "月总收入（Kz）",
+        "r50_alocacao": "推荐分配",
+        "r50_consumo": "消费（50%）", "r50_investimento": "投资（30%）", "r50_entesouramento": "储蓄（20%）",
+        "r50_comparar_titulo": "与您的实际支出对比（可选）",
+        "r50_real_consumo": "实际支出 — 消费（Kz）",
+        "r50_real_investimento": "实际支出 — 投资（Kz）",
+        "r50_real_entesouramento": "实际储蓄（Kz）",
+        "r50_comparar_btn": "对比",
+        "r50_resultado": "#### 对比结果",
+        "r50_aviso": "您的实际储蓄低于俱乐部原则建议的20%。",
+        "r50_sucesso": "您已达到或超过20%储蓄目标。",
+        "bib_hero_sub": "俱乐部原则及安哥拉资本市场文章",
+        "bib_sem_artigos": "暂无已发布文章。",
+        "bib_filtrar": "按类别筛选",
+        "bib_todas": "全部",
+        "bib_publicado": "发布于",
+        "ades_hero_sub": "填写表格申请加入APPO投资俱乐部",
+        "ades_nome": "全名 *",
+        "ades_email": "电子邮件",
+        "ades_telefone": "电话 / WhatsApp",
+        "ades_bi": "身份证号码",
+        "ades_contribuicao": "拟初始供款（Kz）",
+        "ades_aceite": "我声明已阅读并接受APPO投资俱乐部章程 *",
+        "ades_btn": "提交入会申请",
+        "ades_erro": "请填写全名并接受章程后再提交申请。",
+        "ades_sucesso": "入会申请提交成功！俱乐部管理员将与您联系。",
+        "sobre_hero_sub": "俱乐部的使命、原则及章程框架",
+        "sobre_quem_somos": "关于我们",
+        "sobre_quem_texto": "**APPO投资俱乐部**是一个安哥拉投资者协会，通过安哥拉债务与证券交易所（BODIVA）集体汇集资本，共同投资于国家资本市场。",
+        "sobre_principios": "投资原则与理念",
+        "sobre_estatutos": "章程 — 要点",
+        "sobre_estatutos_texto": """
+- **性质：** 依据正式注册章程成立的投资者协会。
+- **管理机构：** 会员大会、管理委员会和监事会。
+- **入会：** 须经管理委员会批准。
+- **决议：** 重要投资决定须经集体审议。
+- **收益分配：** 按各会员资本份额比例分配。
+""",
+        "sobre_nota": "内部说明：参考模板，待俱乐部正式批准注册章程后替换。",
+        "partilha_wa": "💬 WhatsApp", "partilha_tw": "𝕏 X / Twitter", "partilha_fb": "📘 Facebook",
+        "conv_partilha": "{v} {de} = {r} {para} — APPO投资俱乐部",
+        "pdf_titulo": "APPO投资俱乐部",
+        "pdf_gerado": "报告生成于",
+        "pdf_resumo": "资产负债概览",
+        "pdf_subscrito": "认缴资本：",
+        "pdf_realizado": "实缴资本：",
+        "pdf_investimentos": "投资：",
+        "pdf_reservas": "储备：",
+        "pdf_total": "合计：",
+        "pdf_activos": "投资组合资产",
+        "pdf_movimentos": "近期交易",
+        "pdf_sem_mov": "暂无交易记录。",
+        "pdf_nome_ficheiro": "appo_报告_{data}.pdf",
+        "bodiva_badge": "🇦🇴 安哥拉市场 · 宽扎（Kz）",
+    },
+}
+
+LISTA_IDIOMAS = list(TRADUCOES.keys())
+if "idioma" not in st.session_state:
+    st.session_state["idioma"] = "Português"
+
+
+def t() -> dict:
+    return TRADUCOES[st.session_state["idioma"]]
+
+
+# =========================================================
+# IDENTIDADE VISUAL
+# =========================================================
+COR_MARCA = "#7C1F3E"
+
+CSS_APPO_BASE = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --appo-vinho: #7C1F3E;
+  --appo-vinho-esc: #5E1830;
+  --appo-navy: #1E293B;
+  --appo-cinza: #F8FAFC;
+  --appo-borda: #E2E8F0;
+  --appo-suave: #64748B;
+}
+
+/* Tipografia corporativa (sem tocar nos ícones do Streamlit) */
+.stApp, .stApp p, .stApp li, .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
+.stApp button, .stApp input, .stApp textarea, .stApp [data-baseweb="tab"], .stApp [data-testid="stMetricValue"],
+.stApp [data-testid="stMetricLabel"], .stApp [data-testid="stCaptionContainer"] {
+  font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+.stApp h1, .stApp h2, .stApp h3, .stApp h4 { color: var(--appo-navy); letter-spacing: -0.01em; font-weight: 700; }
+
+[data-testid="stAppViewContainer"] { background: var(--appo-cinza); }
+[data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid var(--appo-borda); }
+[data-testid="stHeader"] { background: transparent; }
+
+/* Botões e separadores */
+button[kind="primary"], button[data-testid="stBaseButton-primary"] { background: var(--appo-vinho); border-color: var(--appo-vinho); color: #FFFFFF; font-weight: 600; }
+button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover { background: var(--appo-vinho-esc); border-color: var(--appo-vinho-esc); color: #FFFFFF; }
+button[data-baseweb="tab"][aria-selected="true"] { color: var(--appo-vinho); }
+div[data-baseweb="tab-highlight"] { background-color: var(--appo-vinho); }
+
+/* Indicadores: cartões limpos, sem gradientes nem sombras */
+div[data-testid="stMetric"] { background: #FFFFFF; border: 1px solid var(--appo-borda); border-radius: 10px; padding: 14px 16px; }
+div[data-testid="stMetricLabel"] { color: var(--appo-suave); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+div[data-testid="stMetricValue"] { color: var(--appo-navy); font-weight: 700; font-variant-numeric: tabular-nums; }
+div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
+
+/* Cabeçalho de página */
+.appo-hero { background: var(--appo-navy); color: #FFFFFF; border-left: 5px solid var(--appo-vinho); border-radius: 12px; padding: 22px 28px; margin-bottom: 18px; display: flex; align-items: center; gap: 18px; }
+.appo-hero h1 { margin: 0; font-size: 1.55rem; line-height: 1.25; color: #FFFFFF; font-weight: 700; }
+.appo-hero p { margin: 4px 0 0 0; color: #CBD5E1; font-size: 0.92rem; }
+.appo-badge { display: inline-block; border: 1px solid #475569; color: #E2E8F0; padding: 2px 10px; border-radius: 999px; font-size: 0.72rem; margin-top: 10px; letter-spacing: 0.02em; }
+
+/* Marca */
+.appo-sidebar-header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.appo-sidebar-sub { font-size: 0.66rem; color: var(--appo-suave); letter-spacing: 0.12em; text-transform: uppercase; margin: 0; }
+.appo-sidebar-word { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 1.4rem; letter-spacing: 0.18em; color: var(--appo-vinho); line-height: 1.1; margin-top: 2px; }
+.appo-wordmark { font-family: 'Inter', sans-serif; font-weight: 800; letter-spacing: 0.22em; font-size: 2.6rem; color: var(--appo-vinho); text-align: center; margin-top: 4px; line-height: 1.1; }
+
+/* Blocos de apoio */
+.appo-premium-lock { background: #FFFFFF; border: 1px dashed var(--appo-vinho); border-radius: 10px; padding: 18px 20px; text-align: center; }
+.appo-indicador-nota { background: #F1F5F9; border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; color: #334155; margin: 6px 0 4px 0; }
+.appo-categoria-banner { border-radius: 10px 10px 0 0; padding: 10px 18px; display: flex; align-items: center; gap: 12px; margin: -1rem -1rem 12px -1rem; }
+.appo-categoria-banner span { color: #FFFFFF; font-weight: 700; letter-spacing: 0.06em; font-size: 0.74rem; text-transform: uppercase; }
+.appo-capa { background: var(--appo-navy); border-left: 5px solid var(--appo-vinho); border-radius: 12px; margin-bottom: 18px; display: flex; align-items: center; }
+.appo-capa span { color: #FFFFFF; font-weight: 600; padding: 16px 24px; font-size: 1.05rem; }
+.appo-card { background: #FFFFFF; border: 1px solid var(--appo-borda); border-radius: 12px; padding: 16px 18px; }
+.appo-kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--appo-suave); font-weight: 600; }
+
+/* Cotações em fita */
+/* cabeçalho fixo: marca + esteira de cotações ficam no topo ao rolar a página */
+.st-key-appo_topo, div[data-testid="stVerticalBlock"]:has(> :is(.element-container, [data-testid="stElementContainer"]):has(.appo-sticky-anchor)) {
+  position: sticky; top: 2.875rem; z-index: 990; background: #FFFFFF; gap: 0 !important; box-shadow: 0 1px 0 var(--appo-borda), 0 6px 14px -12px rgba(15, 23, 42, 0.25);
+}
+.appo-topbar { display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px; }
+.appo-topbar .appo-marca { height: 24px; width: 24px; border-radius: 50%; background: linear-gradient(135deg, #8E7CC3, #C98BA0 60%, #EFB988); color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; letter-spacing: .3px; }
+.appo-topbar .appo-nome { font-size: 14px; font-weight: 600; color: #334155; }
+.appo-topbar .appo-pagina { font-size: 13px; font-weight: 600; color: #64748B; margin-left: 4px; }
+:is(div, section):has(> .st-key-appo_topo), [data-testid="stElementContainer"]:has(> .st-key-appo_topo), [data-testid="stLayoutWrapper"]:has(> .st-key-appo_topo) { position: sticky !important; top: 2.875rem; z-index: 990; }
+.appo-topbar + div .appo-ticker-wrap, .appo-ticker-wrap { margin-bottom: 0; }
+/* partilha discreta */
+.appo-share-disc { display: flex; align-items: center; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
+.appo-share-disc span { font-size: 12px; color: #94A3B8; margin-right: 2px; }
+.appo-share-disc a { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid #E2E8F0; border-radius: 50%; color: #64748B !important; background: transparent; text-decoration: none !important; transition: color .15s, border-color .15s, background .15s; }
+.appo-share-disc a:hover { background: #F8FAFC; }
+.appo-share-disc a.wa:hover { color: #16A34A !important; border-color: #86EFAC; }
+.appo-share-disc a.tw:hover { color: #0F172A !important; border-color: #94A3B8; }
+.appo-share-disc a.fb:hover { color: #1877F2 !important; border-color: #93C5FD; }
+/* perguntas frequentes em destaque */
+.appo-faq-cab { background: linear-gradient(120deg, #6D5BA8, #B05A7A 60%, #E39A63); color: #fff; border-radius: 16px; padding: 18px 22px; margin: 10px 0 14px; }
+.appo-faq-cab .t { font-size: 1.25rem; font-weight: 700; }
+.appo-faq-cab .s { font-size: .9rem; opacity: .92; margin-top: 2px; }
+.st-key-appo_faq [data-testid="stExpander"] { border: 1px solid #E7DEF5; border-left: 5px solid #8E7CC3; border-radius: 12px; background: linear-gradient(90deg, #FAF7FF, #FFFFFF); margin-bottom: 8px; transition: box-shadow .15s, transform .15s; }
+.st-key-appo_faq [data-testid="stExpander"]:hover { box-shadow: 0 6px 18px -10px rgba(76, 29, 149, .45); transform: translateY(-1px); }
+.st-key-appo_faq [data-testid="stExpander"] summary { font-weight: 600; color: #3B2F63; }
+.st-key-appo_faq [data-testid="stExpander"]:nth-of-type(3n+2) { border-left-color: #C98BA0; background: linear-gradient(90deg, #FFF6F8, #FFFFFF); }
+.st-key-appo_faq [data-testid="stExpander"]:nth-of-type(3n) { border-left-color: #E8A06A; background: linear-gradient(90deg, #FFF8F1, #FFFFFF); }
+.appo-ticker-wrap { overflow: hidden; white-space: nowrap; background: #FFFFFF; border-top: 1px solid var(--appo-borda); border-bottom: 1px solid var(--appo-borda); padding: 8px 0; margin-bottom: 16px; }
+.appo-ticker-move { display: inline-block; padding-left: 100%; animation: appo-scroll 135s linear infinite; font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; font-size: 0.85rem; font-weight: 600; }
+@keyframes appo-scroll { 0% { transform: translate(0,0); } 100% { transform: translate(-100%,0); } }
+
+.appo-share a { text-decoration: none; color: #FFFFFF; padding: 6px 14px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; }
+"""
+
+
+# ---------------------------------------------------------
+# Camada visual executiva (fundos claros; gradientes roxo -> vermelho -> laranja; sombras suaves).
+# É sempre aplicada DEPOIS do CSS base (e do appo.css, se existir), por isso prevalece.
+# ---------------------------------------------------------
+CSS_APPO_FINCITE = """
+:root {
+  --fx-roxo: #6D28D9; --fx-vermelho: #E11D48; --fx-laranja: #F97316; --fx-tinta: #1B1033;
+  --fx-grad: linear-gradient(100deg, #6D28D9 0%, #7C1F3E 30%, #E11D48 62%, #F97316 100%);
+  --fx-sombra: 0 10px 30px rgba(76, 29, 149, 0.10);
+  --fx-sombra-suave: 0 4px 14px rgba(27, 16, 51, 0.07);
+}
+[data-testid="stAppViewContainer"] {
+  background:
+    radial-gradient(900px 380px at 100% -8%, rgba(249, 115, 22, 0.10), transparent 62%),
+    radial-gradient(800px 360px at -8% 0%, rgba(109, 40, 217, 0.08), transparent 62%),
+    #FBFAFE;
+}
+.stApp h1, .stApp h2, .stApp h3 { color: var(--fx-tinta); font-weight: 800; letter-spacing: -0.02em; }
+
+/* Cabeçalho de página: claro, com barra e brilho em gradiente */
+.appo-hero { position: relative; overflow: hidden; background: linear-gradient(120deg, #FFFFFF 0%, #F6F1FF 48%, #FFF1EA 100%);
+  color: var(--fx-tinta); border: 1px solid #EEE7FA; border-left: 0; border-radius: 18px; padding: 24px 30px 24px 34px; box-shadow: var(--fx-sombra); }
+.appo-hero::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; background: linear-gradient(180deg, #6D28D9, #E11D48 55%, #F97316); }
+.appo-hero::after { content: ""; position: absolute; right: -60px; top: -80px; width: 260px; height: 260px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.22), rgba(225, 29, 72, 0.12) 45%, transparent 70%); pointer-events: none; }
+.appo-hero h1 { background: var(--fx-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  font-weight: 800; font-size: 1.75rem; letter-spacing: -0.02em; }
+.appo-hero p { color: #475569; font-size: 0.95rem; }
+.appo-badge { border: 1px solid #E4D4FB; color: #6D28D9; background: #FAF5FF; font-weight: 600; }
+.appo-capa { background: linear-gradient(120deg, #FFFFFF, #F6F1FF 55%, #FFF1EA); border: 1px solid #EEE7FA; border-left: 6px solid var(--fx-vermelho); box-shadow: var(--fx-sombra-suave); }
+.appo-capa span { color: var(--fx-tinta); }
+
+/* Cartões e indicadores */
+.appo-card, .fx-card { background: #FFFFFF; border: 1px solid #EFE9FA; border-radius: 18px; box-shadow: var(--fx-sombra-suave); padding: 18px 20px; }
+div[data-testid="stMetric"] { border: 1px solid #EFE9FA; border-radius: 16px; box-shadow: var(--fx-sombra-suave); }
+div[data-testid="stMetricValue"] { font-weight: 800; }
+button[kind="primary"], button[data-testid="stBaseButton-primary"] { background: var(--fx-grad); border: 0; border-radius: 12px; }
+button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover { filter: brightness(1.06); background: var(--fx-grad); border: 0; }
+button[data-baseweb="tab"][aria-selected="true"] { color: var(--fx-roxo); }
+div[data-baseweb="tab-highlight"] { background: var(--fx-grad); height: 3px; }
+
+/* Faixas de estado e etiquetas */
+.fx-estado { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; font-size: 0.82rem; font-weight: 600; border: 1px solid #E5E7EB; background: #FFFFFF; }
+.fx-estado.ok { color: #166534; border-color: #BBF7D0; background: #F0FDF4; }
+.fx-estado.aviso { color: #9A3412; border-color: #FED7AA; background: #FFF7ED; }
+.fx-estado.erro { color: #9F1239; border-color: #FECDD3; background: #FFF1F2; }
+.fx-kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; color: var(--fx-roxo); }
+.fx-titulo-secao { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; background: var(--fx-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin: 4px 0 2px 0; }
+.fx-aviso-membros { background: #FFFFFF; border: 1px solid #EFE9FA; border-left: 5px solid var(--fx-laranja); border-radius: 12px; padding: 10px 14px; font-size: 0.85rem; color: #334155; margin: 8px 0 12px 0; }
+
+/* Biblioteca: dois níveis bem visíveis */
+.fx-nivel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 6px 0 18px 0; }
+.fx-nivel-card { border-radius: 20px; padding: 22px 24px; box-shadow: var(--fx-sombra); position: relative; overflow: hidden; }
+.fx-nivel-card .fx-nivel-kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700; opacity: 0.85; }
+.fx-nivel-card .fx-nivel-titulo { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 6px 0; line-height: 1.15; }
+.fx-nivel-card p { margin: 0 0 10px 0; font-size: 0.92rem; line-height: 1.45; }
+.fx-nivel-card .fx-nivel-n { display: inline-block; font-size: 0.78rem; font-weight: 700; padding: 4px 12px; border-radius: 999px; }
+.fx-nivel-ini { background: linear-gradient(135deg, #FFFFFF 0%, #F3F8FF 100%); border: 1px solid #DCE8FB; color: #1B1033; }
+.fx-nivel-ini .fx-nivel-n { background: #E8F0FE; color: #1D4ED8; }
+.fx-nivel-inv { background: var(--fx-grad); color: #FFFFFF; }
+.fx-nivel-inv .fx-nivel-n { background: rgba(255, 255, 255, 0.22); color: #FFFFFF; }
+.fx-cta { background: linear-gradient(120deg, #FFF7ED, #FDF2F8 55%, #F5F3FF); border: 1px solid #F9D8C2; border-radius: 18px; padding: 18px 22px; margin: 10px 0; box-shadow: var(--fx-sombra-suave); }
+.fx-cta b { font-size: 1.15rem; letter-spacing: -0.01em; }
+@media (max-width: 760px) { .fx-nivel { grid-template-columns: 1fr; } .fx-nivel-card .fx-nivel-titulo { font-size: 1.35rem; } }
+"""
+
+
+# ---------------------------------------------------------
+# Fase 1 — sistema visual: tipografia, cartões KPI, expansores, botões, serviços, páginas institucionais
+# ---------------------------------------------------------
+CSS_APPO_FASE1 = """
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .appo-hero h1, .fx-kpi-v, .fx-titulo-secao, .fx-nivel-titulo, .fx-servico-nome, .fx-bloco-titulo {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, 'Segoe UI', sans-serif; }
+
+/* Cartões de indicadores (compactos) */
+.fx-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 12px; margin: 4px 0 14px 0; }
+.fx-kpi { background: #FFFFFF; border: 1px solid #EFE9FA; border-radius: 14px; padding: 11px 14px 12px 14px; box-shadow: var(--fx-sombra-suave); }
+.fx-kpi.destaque { background: linear-gradient(135deg, #FFFFFF, #F6F1FF 60%, #FFF1EA); border-color: #E4D4FB; }
+.fx-kpi-topo { display: flex; align-items: center; gap: 8px; }
+.fx-kpi-ico { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; font-size: 0.9rem;
+  background: linear-gradient(135deg, #F3E8FF, #FFE4E6 60%, #FFEDD5); }
+.fx-kpi-t { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: #64748B; font-weight: 700; line-height: 1.2; }
+.fx-kpi-v { font-size: 1.28rem; font-weight: 800; color: var(--fx-tinta); margin-top: 6px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.fx-kpi-s { font-size: 0.72rem; color: #64748B; margin-top: 1px; }
+.fx-kpi-s.up { color: #0D9488; font-weight: 700; } .fx-kpi-s.down { color: #E11D48; font-weight: 700; }
+.fx-bar { height: 6px; border-radius: 99px; background: #EEE9F8; margin-top: 8px; overflow: hidden; }
+.fx-bar > i { display: block; height: 100%; border-radius: 99px; background: var(--fx-grad); }
+
+/* Títulos clicáveis (expansores): vivos, com barra em gradiente */
+div[data-testid="stExpander"] { position: relative; overflow: hidden; border: 1px solid #EFE9FA; border-radius: 16px; background: #FFFFFF;
+  box-shadow: var(--fx-sombra-suave); margin-bottom: 10px; }
+div[data-testid="stExpander"]::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--fx-grad); }
+div[data-testid="stExpander"] summary { padding: 0.7rem 1rem 0.7rem 1.35rem; }
+div[data-testid="stExpander"] summary p { font-weight: 700; font-size: 1.02rem; color: var(--fx-tinta); }
+div[data-testid="stExpander"] summary:hover, div[data-testid="stExpander"] details[open] > summary { background: linear-gradient(90deg, #F6F1FF, #FFF4ED); }
+
+/* Botões secundários e de descarga com a mesma linguagem do botão primário */
+button[kind="secondary"], button[data-testid="stBaseButton-secondary"], div[data-testid="stDownloadButton"] button {
+  border: 1.5px solid #D9C9F7; color: #5B21B6; background: #FFFFFF; font-weight: 700; border-radius: 12px; box-shadow: 0 3px 10px rgba(109, 40, 217, 0.08); }
+button[kind="secondary"]:hover, button[data-testid="stBaseButton-secondary"]:hover, div[data-testid="stDownloadButton"] button:hover {
+  border-color: transparent; color: #FFFFFF; background: var(--fx-grad); }
+button[kind="secondary"]:hover p, button[data-testid="stBaseButton-secondary"]:hover p, div[data-testid="stDownloadButton"] button:hover p { color: #FFFFFF; }
+div[data-testid="stProgress"] div[role="progressbar"] > div { background: var(--fx-grad) !important; }
+
+/* Biblioteca: cartões de nível mais pequenos */
+.fx-nivel { gap: 12px; margin: 2px 0 12px 0; }
+.fx-nivel-card { padding: 12px 18px; border-radius: 16px; }
+.fx-nivel-card .fx-nivel-kicker { font-size: 0.62rem; }
+.fx-nivel-card .fx-nivel-titulo { font-size: 1.12rem; margin: 3px 0 3px 0; }
+.fx-nivel-card p { font-size: 0.78rem; margin: 0 0 6px 0; line-height: 1.35; }
+.fx-nivel-card .fx-nivel-n { font-size: 0.7rem; padding: 2px 10px; }
+
+/* Serviços de educação */
+.fx-servico { background: #FFFFFF; border: 1px solid #EFE9FA; border-radius: 18px; box-shadow: var(--fx-sombra-suave); overflow: hidden; margin: 14px 0 4px 0; }
+.fx-servico-topo { height: 8px; }
+.fx-servico.fx-g0 .fx-servico-topo { background: linear-gradient(90deg, #6D28D9, #E11D48); }
+.fx-servico.fx-g1 .fx-servico-topo { background: linear-gradient(90deg, #E11D48, #F97316); }
+.fx-servico.fx-g2 .fx-servico-topo { background: linear-gradient(90deg, #6D28D9, #7C1F3E); }
+.fx-servico.fx-g3 .fx-servico-topo { background: linear-gradient(90deg, #F97316, #FBBF24); }
+.fx-servico-corpo { padding: 14px 20px 16px 20px; }
+.fx-servico-nome { font-size: 1.2rem; font-weight: 800; color: var(--fx-tinta); letter-spacing: -0.01em; }
+.fx-servico-desc { color: #475569; font-size: 0.92rem; line-height: 1.5; margin: 6px 0 10px 0; }
+.fx-chip { display: inline-block; background: var(--fx-grad); color: #FFFFFF; font-weight: 700; font-size: 0.82rem; padding: 4px 14px; border-radius: 999px; }
+.fx-chip-nota { color: #64748B; font-size: 0.8rem; margin-left: 10px; font-style: italic; }
+
+/* Páginas institucionais */
+.fx-bloco-grelha { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 8px 0 16px 0; }
+.fx-bloco { background: #FFFFFF; border: 1px solid #EFE9FA; border-radius: 18px; padding: 18px 20px; box-shadow: var(--fx-sombra-suave); position: relative; overflow: hidden; }
+.fx-bloco::after { content: ""; position: absolute; right: -30px; top: -30px; width: 110px; height: 110px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.16), rgba(109, 40, 217, 0.08) 60%, transparent 72%); }
+.fx-bloco-titulo { font-size: 1.15rem; font-weight: 800; color: var(--fx-tinta); margin: 2px 0 6px 0; }
+.fx-bloco-texto { color: #475569; font-size: 0.92rem; line-height: 1.55; }
+.fx-quem { background: linear-gradient(120deg, #FFFFFF, #F6F1FF 55%, #FFF1EA); border: 1px solid #EEE7FA; border-radius: 20px; padding: 22px 26px; box-shadow: var(--fx-sombra); margin: 6px 0 16px 0; }
+.fx-quem .fx-quem-texto { font-size: 1.08rem; line-height: 1.6; color: #1B1033; font-weight: 500; }
+.fx-aviso-risco { background: #FFF7ED; border: 1px solid #FED7AA; border-left: 5px solid #F97316; border-radius: 14px; padding: 14px 18px; color: #7C2D12; font-size: 0.9rem; line-height: 1.5; margin: 12px 0; }
+"""
+
+
+_FONTE_TITULOS = "@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');\n"
+
+
+CSS_APPO_FASE3 = """
+/* Cabeçalho de página com imagem (corte diagonal, estilo institucional) */
+.appo-hero.fx-hero { display: flex; align-items: stretch; padding: 0; min-height: 128px; }
+.appo-hero.fx-hero::before, .appo-hero.fx-hero::after { display: none; }
+.fx-hero-txt { display: flex; align-items: center; gap: 16px; padding: 22px 24px 22px 30px; flex: 1 1 62%; position: relative; z-index: 2; }
+.fx-hero-arte { position: relative; flex: 0 0 34%; min-width: 170px; overflow: hidden; clip-path: polygon(24% 0, 100% 0, 100% 100%, 0 100%);
+  background: linear-gradient(115deg, #6D28D9 0%, #7C1F3E 38%, #E11D48 72%, #F97316 100%); }
+.fx-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 32%; mix-blend-mode: multiply; opacity: 0.8; }
+.fx-hero-arte::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, rgba(109, 40, 217, 0.30), rgba(249, 115, 22, 0.10)); }
+@media (max-width: 720px) { .fx-hero-arte { display: none; } .fx-hero-txt { padding: 18px 18px 18px 20px; } }
+
+/* Avaliação de activos */
+.fx-emp { display: flex; align-items: center; gap: 14px; background: linear-gradient(120deg, #FFFFFF, #F6F1FF 55%, #FFF1EA); border: 1px solid #EEE7FA; border-radius: 18px; padding: 14px 20px; box-shadow: var(--fx-sombra-suave); margin: 6px 0 12px 0; }
+.fx-emp img { width: 46px; height: 46px; border-radius: 10px; object-fit: contain; background: #FFFFFF; border: 1px solid #EFE9FA; }
+.fx-emp-nome { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; font-size: 1.25rem; font-weight: 800; color: #1B1033; letter-spacing: -0.01em; }
+.fx-emp-sub { font-size: 0.82rem; color: #64748B; }
+.fx-veredicto { border-radius: 14px; padding: 11px 16px; font-weight: 600; font-size: 0.92rem; margin: 8px 0 12px 0; border: 1px solid; }
+.fx-veredicto.up { background: #FAF5FF; color: #5B21B6; border-color: #E4D4FB; }
+.fx-veredicto.mid { background: #FFF7ED; color: #9A3412; border-color: #FED7AA; }
+.fx-veredicto.down { background: #FFF1F2; color: #9F1239; border-color: #FECDD3; }
+.fx-medidor { background: #FFFFFF; border: 1px solid #EFE9FA; border-radius: 14px; padding: 12px 16px 10px 16px; margin: 4px 0 12px 0; }
+.fx-med-trilho { position: relative; height: 10px; border-radius: 99px; background: linear-gradient(90deg, #EDE9FE, #FCE7F3 55%, #FFEDD5); margin: 10px 4px 14px 4px; }
+.fx-med-pp, .fx-med-pj { position: absolute; top: -5px; width: 20px; height: 20px; margin-left: -10px; }
+.fx-med-pp { border-radius: 50%; background: #6D28D9; border: 3px solid #FFFFFF; box-shadow: 0 2px 8px rgba(109, 40, 217, 0.45); }
+.fx-med-pj { background: #F97316; border: 3px solid #FFFFFF; transform: rotate(45deg) scale(0.8); box-shadow: 0 2px 8px rgba(249, 115, 22, 0.45); }
+.fx-med-leg { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; font-size: 0.8rem; color: #475569; }
+.fx-med-leg b { color: #6D28D9; } .fx-med-leg span:nth-child(2) b { color: #F97316; }
+"""
+
+
+def _carregar_css() -> str:
+    """Usa appo.css (ao lado do app.py) se existir; caso contrário, o CSS incluído acima."""
+    try:
+        f = Path(__file__).with_name("appo.css")
+        if f.exists():
+            return _FONTE_TITULOS + f.read_text(encoding="utf-8") + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3
+    except Exception:
+        pass
+    return _FONTE_TITULOS + CSS_APPO_BASE + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3
+
+
+st.markdown(f"<style>{_carregar_css()}</style>", unsafe_allow_html=True)
+
+
+def logo_svg(tamanho: int = 46, cor: str = COR_MARCA) -> str:
+    return (
+        f'<svg width="{tamanho}" height="{tamanho}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g>'
+        f'<circle cx="50" cy="40" r="31" fill="none" stroke="{cor}" stroke-width="7.5"/>'
+        f'<line x1="50" y1="40" x2="50" y2="19" stroke="{cor}" stroke-width="6.5" stroke-linecap="round"/>'
+        f'<line x1="50" y1="40" x2="65" y2="51" stroke="{cor}" stroke-width="6.5" stroke-linecap="round"/>'
+        f'<circle cx="50" cy="40" r="5" fill="{cor}"/>'
+        f'<line x1="14" y1="40" x2="21" y2="40" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>'
+        f'<line x1="79" y1="40" x2="86" y2="40" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>'
+        f'<line x1="50" y1="1" x2="50" y2="8" stroke="{cor}" stroke-width="5" stroke-linecap="round"/>'
+        f'<path d="M 22 68 A 33 33 0 0 0 70 70" fill="none" stroke="{cor}" stroke-width="7.5" stroke-linecap="round"/>'
+        f'<polygon points="70,70 60,65 66,78" fill="{cor}"/></g></svg>'
+    )
+
+
+def logo_com_texto(tamanho: int = 130, cor: str = COR_MARCA):
+    render_html(f'<div style="text-align:center; margin-top:10px;">{logo_svg(tamanho, cor)}<div class="appo-wordmark">APPO</div></div>')
+
+
+def _esc(v) -> str:
+    """Escapa texto antes de o inserir em HTML."""
+    return _html_pub.escape(str(v if v is not None else ""))
+
+
+# ---------------------------------------------------------
+# Cabeçalho de página com imagem + logótipos das empresas
+# ---------------------------------------------------------
+_HERO_ARTE = (("início", "piramide"), ("perfil", "piramide"), ("capacidade", "piramide"), ("biblioteca", "piramide"), ("educação", "piramide"), ("sobre", "piramide"),
+              ("cotações", "telemovel"), ("simulador", "telemovel"), ("home broker", "telemovel"), ("avaliação", "telemovel"), ("terminal", "telemovel"),
+              ("contabilidade", "saco"), ("princípio", "saco"), ("conversor", "saco"), ("adesão", "saco"), ("histórico", "saco"), ("administrador", "saco"))
+_NOME_PARA_TICKER = (("standard", "SBAOAAAA"), ("sba", "SBAOAAAA"), ("unitel", "UNTLAAAA"), ("ensa", "ENSAAAAA"), ("bodiva", "BDVAAAAA"), ("fomento", "BFAAAAAA"),
+                     ("bfa", "BFAAAAAA"), ("caixa", "BCGAAAAA"), ("bcga", "BCGAAAAA"), ("bai", "BAIAAAAA"), ("angolano de invest", "BAIAAAAA"))
+
+
+def hero(titulo: str, subtitulo: str, badge: str = None, arte: str = None):
+    if badge is None:
+        badge = t().get("bodiva_badge", "🇦🇴 Kwanzas (Kz)")
+    chave = arte or next((k for p, k in _HERO_ARTE if p in titulo.lower()), "piramide")
+    img = _IMG_HERO.get(chave, "")
+    imagem = f'<img class="fx-hero-img" alt="" src="data:image/jpeg;base64,{img}">' if img else ""
+    render_html(f'<div class="appo-hero fx-hero"><div class="fx-hero-txt">{logo_svg(48, COR_MARCA)}<div><h1>{_esc(titulo)}</h1><p>{_esc(subtitulo)}</p>'
+                f'<span class="appo-badge">{_esc(badge)}</span></div></div><div class="fx-hero-arte">{imagem}</div></div>')
+
+
+def ticker_por_nome(nome: str) -> str:
+    import re
+    n = str(nome or "").lower()
+    for chave, tk in _NOME_PARA_TICKER:
+        if re.search(r"\b" + re.escape(chave) + r"\b", n) or (len(chave) > 4 and chave in n):
+            return tk
+    return ""
+
+
+
+def banner_capa(imagem_url: str, texto: str, altura: int = 170, escurecimento: float = 0.5):
+    """Faixa institucional sem imagem de fundo (os parâmetros de imagem mantêm-se por compatibilidade)."""
+    render_html(f'<div class="appo-capa" style="min-height:{max(56, int(altura * 0.45))}px;"><span>{_esc(texto)}</span></div>')
+
+
+CORES_CATEGORIA = {"Institucional": COR_MARCA, "Educação": "#1F6F5C", "Análise de Mercado": "#1E293B", "Referência": "#8A6A26"}
+ICONES_CATEGORIA = {"Institucional": "🏛️", "Educação": "📖", "Análise de Mercado": "📊", "Referência": "📎"}
+
+
+IMAGENS_CATEGORIA = {"Institucional": IMG_REUNIAO, "Educação": IMG_LIVROS, "Análise de Mercado": IMG_GRAFICO, "Referência": IMG_SKYLINE}
+
+
+def banner_categoria(categoria: str):
+    icone = ICONES_CATEGORIA.get(categoria, "📄")
+    cor = CORES_CATEGORIA.get(categoria, COR_MARCA)
+    url = IMAGENS_CATEGORIA.get(categoria)
+    if url:
+        render_html(f'<div style="position:relative;height:150px;border-radius:12px;overflow:hidden;margin-bottom:10px;background:{cor} url(\'{url}\') center/cover no-repeat;">'
+                    f'<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,5,12,0.02) 35%,rgba(20,5,12,0.62) 100%);"></div>'
+                    f'<span style="position:absolute;left:18px;bottom:12px;color:#fff;font-weight:700;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;">{icone} {_esc(categoria)}</span></div>')
+        return
+    render_html(f'<div class="appo-categoria-banner" style="background:{cor};"><span style="font-size:1.1rem;">{icone}</span><span>{_esc(categoria)}</span></div>')
+
+
+def nota_indicador(texto: str):
+    render_html(f'<div class="appo-indicador-nota">💡 {texto}</div>')
+
+
+# Logótipos das empresas cotadas: coloque os ficheiros em «logos/» ao lado do app.py, com o nome do ticker sem os 'A' finais
+# (ex.: logos/SBAO.png, logos/UNTL.png, logos/BFA.png). Sem ficheiro, mostra-se um selo com as iniciais (nunca falha).
+# Logótipos (48 px) e imagens de cabeçalho embebidos: a app funciona sem pastas extra (ficheiros em logos/ têm prioridade)
+_LOGOS_EMBUTIDOS = {"BAI": "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", "BCG": "iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAIAAABMXPacAAAiT0lEQVR42u19eZgU5bX3Oeetqp5epnumZ4bZUUBEFBAV16hoXAKiARVNbmLyJY/XaG7uc425GlFxQ9GrJiaf2ZdrriYx3sjmrnFBiYgLGpeIKCDLrMw+0z3d01X1nvP9UYBMs00VM8Mkn/XUn9BTVWf/nd85L8JVb8Nn14G76LNP8JkAPhPAZ9eBu4yR9TgyjH8LPxPAzl8DgRQi4rAJmrUIy2cCACJkAclpndWQ4+F6b4SwggKlDNRa/v8VACnkXhf6OF5szZhSdHR5AQvwULoHATAJm9LOE+vSmxuyDrMqMrUMr/cbIQJQCnWnfVCxdcc3D5ozNRExhzUjuItlY2vu+4vrH3ujnZIW44GRAR6oQkwp1O32sYfEHvnOIQclLE85tcjwfAVCQNpmZtc+1nj30nojabpwAGRwYCyACHTKHVdR8MR3J4yKKJfFIAQEhcOamrAAiNz1xarWTvt3LzSrirB2ebg/xQFJeIBB5finXzt4VEQ5Wgw6MCkhISAiC9x7ce0hNVHd45DCf34BkELucs45pnjGxLhmMdSBTMgRgUWKwurHl4w2+zTxcJcHNPwvLLaYBt110WgAGL7Mfy/RiNDRcvZh8elHFbsdOTLwn1kASiF32Jd/ftTE8hAz0AgoRxFAEZqEd15QgwrZ4X9aARAhZ7imJHTtrMoRUIT2CwbMMq02ctlp5dLhqGE0gmEVACJwj/O9L1bVFJoiQiMKCURgkWvPqSwtDklGD9uzDd83IIW6x5k0Lvrvp5aJgCIcSZ8fCFEExiata2ZVcI8zbM6Rhku9gBiMLN95Ya2pkEVg5F1EKALf/Xz52Noo97g0LDIYJgGQgW6nfdq04rMPj7ssNMLUf4eWsIil8I4LayDLCMMBWdPwvBk7QoT3XFhjERLCSPz82x0RC1x8dPEZUxLc6RgKhxqcGA4BGAZKm33550dNrY5oFsIR+/0BEUAAARZcWCMs7MpQK8uQC0ARcK8uKbGunlHJIiP44++IBMACJx0cvWT6KG63hzolpWFQKu52rplVOTZpsQCNfAl4/TKBBbOrygoNyPCQPvPQCoAU6JR76NjoVWeUc9DUUwu4Wpj93ZrFZQmWbSkEERlTbF0+s0r3uKj+MS0AEVAQs/quC2otQhEJ8PlZQCEYCon83YrQIESEYA1HLyW95qxRVZUhnXZxyNK2IewHKIVumzN9cuK8I4s4UOrJAoSwqdt5ZGVrXYdtGDTAnEQzFFgwbXzhOZOKogZ6v+M3JdUicUstPL/6mz/boKKG+w8mAAR2RCHcdfFoBcD+UU8WIcRXNqS/8vP1dc19YBEM3KEIgAgQHVMbvuHi0edPTmgRv90eQnS1XDSt5DeTW1etS6kiayja90PVkjQMdJtzV8yo+MVXDgqggCyAAFszzknXv78x7VplIe0fvUMGt9uBPl52zYTZU4qYwS/C44ntr5+kT73tA0xaQ1G/D0kMIELJcEmh8Z8zKzhgl1cQ4fLfb9nY7ZhlITvH2hW/t8tiJk2MG1//xfr3m7ICon1+QoXIIqeMjc05rlTabWXQP4YAkEB3u1fMrDqkOMQiflteWoAQl73f9diqNioNOXbwNpXjCMVUT1bPW1yvAqWTIiACC86vLiwwIMeDnpHSUKi/7tFjDwrPO7tcBPz2e1kAQbpz+uYl9VRA+1+IakeoJPTUW53PfNhDiL6NgJBBJlcUXHZWhe60B71pPMgCQO/OugsvqI5ZFAD1FBBCfGBV+3vr0xQ3eTDiHhKgifMW1aUdBkG/0YQAReTmWRXlZSHu1UgjWACkkLvsU44smj2l2NW+U08RIICurL7j0UZMWHqQop7WQkXmux+nH3i1TRH4Lc8QgQHiBeqm86ulxxlc7swgC4A1CMPtc6rDBqJ//8EgiDj/0Yat7TkVIRm87iwzYJFxw+KG+h7Ho6L4tGxklq8dXzJ1fEx3DyZ7ZTAFoAyUNvtrp5adMjbG7Dvv1iwE8H5z34PLW1TS1IPaNRYWCqvubuf7D28hBM3+mNGEAICFJt1x8UHiyLY0eVA+Gpx4+eBIEgFsKTLxwW+NK44YgOC/9kJC/M4fN7+zMUOJwfH+ef7NiBrvrU0ZUeP08YWIwLJNErw929nLDYiaZcKo0NuNmY/Wp1WhMSgGOkgWIIAKucO+4qyKQ8tCIr5Bf81CCH/5KLX4tXYqsYaEIijgiqgS68Y/br5yUV13jgnBUGgoNAjVPm8EUyEA/HDu6NKowTYPSuN+cKAIUqDTbnV1eN7MChEIEHtBoNfhGxbXoYGkgPXQACQCGoFKrPuebPzdK22XnpA8eVwhRVRp1AgPjJvtaglbdMyUxLNvdaqEyfvdMBsMASAgIKT1bV8fEw8p7d/7s4hS+NCqttUfplRFyB3SiQkBRlCloVRW//jZ5h87zWAChlSBNdDuo6WwDxGixqA85yAIQBFyl3PcYfF/OTYZrOVCiB0ZfdOjDRhXw0HYEtBaMEQUCREAaHFZsgP+u1kBABks3sogCIAZxOYrv1BeoFD79/4Oi0l4zwtbm5v6VFWBdoeJsSIC2hW9I/r7k+CgTRLsrwCQQLK6ujZy8VHFHnrlF3gwCRvTzv+uaMW4eaDoQgeQpkT7acukCNLu3IlxgzBAA5BZAGDVut6NjVkVVaxHImFrSK/9swAEFACRioTh+SIVqH3a3eug2mtl4w1wjah+/ghxQdsRONxfD7Dn90EBtb9/YQguBDGIWfbTao391AJBAMDWbgcAAhQm3rMnC829TedpcTMuDD1HyvflCEQUxAylgg8b768LYi0QUY+tS90tQUbsDEIBOGF8bExVeFOvq8JqZwhIEeq0e+ZRxVd/flQmxwd2mCnvxbWWxqbsH/7WuWptSisMjJ0MQk8YEaTDWXrVhDlTEppB+bQDLw29cnHdfcsajcqQu1MaSoRgc7XC1QsmjSo0R2AI1QCvrk9d9fCWtzb0UmmItW8EZRDAOKUQbG7osi85qdSrTnxZAiGCwNTayH+/1pG1Ne7UdxUBZVFXS25jl3PxtGTOFQDQDCwj4gYBhXhQSeirJ5a+vinzyaYgCN0gCEAAVIHatDEzYXT4yOow+6zFPFJ4vECFQ/jMqg5VaOyczTIDxYw163pPmZQYXxoCQUMNADgblpsIAUGzhAyafXTRn1a1dfVqsshXNk7BfE5+KAaBCM1fUp/T4o2a+IUiNMulnyubfGghdzt5vh4VooE3PLwl5/WLR1ipoAhdlkRI3fu1gyWjQfzB8IEsgCWPqicCFFadDX3RqDplfKFfQAIRRKDAoNoS66EVrRA2dv7IwmBG1JZNvWOqwkfXRlhGHMHdU6AjKsPvNeY+3JBWMR+OiALEnZChZFeqCAslzHueblrfniMEDkA+EDh3UuKso4u5M58UrkUgbtzyaEOfK4Q4AstlT+3vuqjWskhsHyx8HwJQCimjD0+Yr/3noRVhA7K8Mz+AGTBKHZ3OD55pDuCFAEBERGDhBTVRhej0ewdmUDGjriF71zPNiNsAjBFmBMAM48us/zirnNttNeCM2YcABIDT7rfPHDW1MnzdzApI5fMDtCuYtH69vOWt+oyn0b6NAOTY2sj5J5W6nbm8ro5ooWLr/z7TtK4th/4tbHguFrhqRmV1icW9eoBdqYEKgAzkbveIQwsvP7nMZbn05LIjxxbqbrdfwBQgC0XLdUsaHJYA7HyPR3HnBTXxqMV9/WhoLIAFqrPHWfhEk5e5jjgjIBCRqpjxvdnV3OMMkD5EA3NwABrA4R/MrTUJmSFq0k1za6RP52kiu2ImreVvdzy9pssg9OsrEEGz1CTMq2dVSlc+DU27jKXWAy+3vLmll2gkzroqQhG46rRRR44r1F3OQNZODEgApJA7nDnHJ2ccHmcWb9D3gsmJc45Pcv/BfgHQBG6Ibljc4Ogg6QoiapYrTis7ZHSUe9w8Z0oGAsK1i+r7tLCMQDMAbw7uri/VmjkmvW/4at9pKCKIKxbA0n8/tCSiBJAQGBABJlSGH1rZ7iCgItm5fA2rrVuy8WLrc2OjfsciEUEEYxYVJ8ylr7RhtF9dBgwqYmzakJk6LjqpMswjb+bSU6CDS0Mr6zLrN/XuMyXdtwUohdJhf/uM8vGlFrN4oUUhuCLTaiOXnF7GHU7eFJUIUML40WMN9SkXEdlvdU7AApdMS06fkuCufjQ0ARAEjtD8xfXuiJx4RQBCsAjvmVtDCPscdN2HBRChZHRloXX/ZeMKLYKd2Fbeqp+jaiO/fq3ddjgfwwlRd4uNBDMmJUQE/fMkCHFMWcEfX2kTqx/HURgorFobsuFC85RxMa1H3Ny9ZwRVCas1o994r1vF92YEtE+HwD3OledW1hYaeftNCECzVCfMG2dVSoeb1wvTWrDE+unzW9e35ihQSuqyTB8fm3tCCXf0j2YIwEAJ654l9R+35ZRCZ+Q1Mr1E+eoZlaOSlvTubfcK7V39dY972JjYd08btdv9JojILN86ddRhB0e4R+8cMEVAWWjbMG9pg1dkBajvAWDhhdVWAe2SkgoUUKctl96/UQOYCh0Wr6UzuPf+gBMscHCx+Z+zKrl7b7tX9uiCEEABUsr572+Nm1hesFsExkvHwyaVFluLXmnNC5giQGH6aH36xAmFh5QVBIjGLJCMGD19+tV3uo24sXMsEQEVU5s39b6zJXvihHhJWCFun04YvBsAXC3BFqshIggcd3D0ob91dXQ5FNo9SrpHASgDdYd99tHJG8+p9NQf9/BnWGByVfjlT3o3bsnkBX1UyDb/vTl36cmlhB6Dzh/QLQBTx8QWvdHRldHY/x2EQcWMtRt7l7zR0ZDR40qsApNsLS6LMxg3A3jzxp4qoP9BVxYxFVYkzEV/baNCQ3b/z/bQEUMB6XbfuHXSsbX7gPg1iyJ8bUvmzAVr+goV9x8nJQO5Kffzy8d+++SybftBfUF/LIrwJyta/+O3n6jy0K6tV2WgTmvIuJaBRsQEE2CQeL1FUWNczDh7YuLbMytKLAow6+l5RUY44+61Kz5KqRJzV9rZ7i1AGcjt9r+eMeqKU8r2OWPtgbGji6w17bl316ZUrJ8jIkAkeG9T9ssnlMT651EDdKYicMzoyFMf9jRs7aOIyssohIEsoqjhWuSwOFocGZw71etuac0tf7friXc7jx0fqymyxKcdeC5aIRxeG7n/pRYI0a7LAnYjACKAPikqMP5w2biiEAnum+7pDQNMHR359SutDsDOqiICVKC6GvvCUeOMw+IB0HwWMQhHlxc88nIrhhTvVtFkm8cbzNtSFDHMIrN5a99zqzsvPKEkXqAEfMuABWqLzLpu5+0PenbtWdJu/xN3OdfOqhyTtHhgXAdEEJGxJaHzphZB2s1D81kLlpr3Pt24od0OgJISoctyxvjYqUcXOV32XrgR+xyy8HezsMO2zWZ5weYu57IHNiFCgOTI271y7blVxVEDsvm7V2g3sE+Pe/ghse+dXcEiAx+G0gwCcN7UInCEZJfC2KRMRs9fVi8e7u+7tkST8JZzqwHBHc5mAAIAODlW5aFnV3f8+Z0uQvTLfFAILDI+aV02o0J32XmoAeW7EgHI6tvnVJsI4osKhYAAE6uj0bjhOvkDzazFKLGWrWxbubFX+UdJCUFAPjc2Om1cDNIuqQMAR1NM3bp4S4+tAXyfvOHRn26cUVlTGdZpvXNDl/JgH93lnD4lMfvIIr/O2vvH8RDFCkhY8hJOARAD+whvWFS34x/7iwQMAnDO4QnIMeE+eKLe7JHpjR8N7DYVmmqPCYJ2heLmmo2ZB1a2K8IAOCyzxCy6/cIaSLk7L32hnVVYHCGWhXNraXsl4StUAkBzym1PaVK06+yOdoWKzRV/73rgjQ4P9/fbbEKAyWNjoBD3jD0QoUnIjrhdrtNuux25Ad5OR87pdMTZg9UjaC1QbC1YWt+Zdck/o93bvTL36OTnjohz16cwu9FP/dtyl51dfuLB0QC5ivevV69LuVnXTBi8uzkLBMCIefvShi8emUiYQTJrQ3ksmD33LVIu9+riEmvahMLChMEDWzMhAIRAClesT7f0umjupqctAkaY2ppz8x9t+tmXa7WIAn+FPSJETbz9wprTb1+zIxcyPnUgWS6LG/NmVbFAAB4sEboi961ogZjh7kE9tBZVqNbXZX75Yut1Myu0+KCce6a6ZlMatHho+K6wuW7tO2Zs/OpzK46ojkwuLwjg6Edf995evIvWopLW75e3XD69dHJFgVck+kIYWeS08YUXnFS6ZFWbGhXSrtB2zAB0l3PFzKqxRZYE2G/CgAC/W9W+eXMGo4bovblyTJq3P91Y1+UoPxPr3qs+tzYFBvIu2aBnvl86ofSl6w778tHJyeUFLGBrGeCdc1mLfOOBTXUNWVWwR2qbCICFqZw7f0kdYhCEyFsktWBOdSJseMGMAAAJdcqtrSq45sxyAd9DpiwAIN05/aOnmyiyj5U6wkIFlOlybn28AQD0wJo1LAAIHzb3rfgoBXEjr8tBCnW7feph8QcuGxczydGiBRDBUjiQWyFYit6qyz7ySqtKWnvP0LQrVBJ6/I3OZ9emyH8k8xYQHVFe8K0zy3WnQwYSABAIpNxb59QUWsTse7WegCjCB1e1f7ipl+LGPpnyrIGS1kMvt75VlzGI9gnme6UDA8x/rJEdMPqLmAggo5Nx41eXjg0p1CymQuUH9fNU+bpFdRkWsPbNaCICtOimpXW9Lu8owv2CK9fPqiwvCblpTYZC3eWeeGTRxdOSAZp8ItuGTBc+3ghxcyD7TUQELMyyzF/WgAj7TOmZRRG+sjH91GttqngXASNyj7Nwbu1hpSHXp1P2fpwQlrzX9eJ7XVRsDWRG09VCReYba1KLV3ca/heRIwKDFBWoG+ZUQ6dNWgsI3HF+TdREL1L7BWoQ4LYnG7e25VRUDZATya5Q0nxmdefS97r3WVt6OnH94vo+RFH9eInecTSTxhdeelKZBxn5d56QcvjGRXUY8jFfwgJQqK5dXN/Zp4MwPwA1w9dOSE4eGyPpds6cEj/tkJj4H3Hx0oCP23L3v9SCCVP8tAYRkQro5sV13TmNe64tNQsi/H51x8r3u6m43xQKIiAD2HzXBTUmQTAyJBE+8Erbmo2ZgTjPnSOZihnNzdm7/7IV/aMjhAAgRSH1f84qJ7D5myeUiAQnXD76ZkdPj6sKyNcPaC0UN97fkL7/1TbaQ23JAojYmdMLFtVTxMhTD1KoO52ZxyTPmZQIsJeUARRhU49z06MNmDD8vr1ooIT54AvNn3TZBqH23/QWgH87qZRiceOQ2igi+C2KxDt/SOQ3r3dglPwP54ArgknrtqWNLWmXYHe1DwAh/OT5revrM1iodH/1Z5sNExfOrfFftm/z/gBw61ONnR05iijxXZmLCqvGNvulD3o+dWc+S9ewSVRqUWlEQdAhXFtDQ8qWYPscGaiAOrvtW59o8EJTnvorhC1d9n891YRJK28EzmMr/dsZo46qCgc4jcmD2d9pyP5xeQslLQm0nIURMERvb0wDBNwcIQDkCuzPbir0GLVBaZqsRRWbv1/e+m5TlgB3fhJPQ295rDHb61D/4ogQJcOVxaFrZlTtz17SBY82pG3BQMsFPy1rFG77uUASoJasbup2xT9zxPuDlsLDy0J5dH5fWSxYlLL5xqUNO+dgWkARrt6SeXhFKxVbeeuDUIHutL81o6ImbrCI8r0PFwhx6fvdS1d5y6GC6h8DMnxhShF4IyQB1BeB7IxevT4VzP9oFgPh8pPLpFcHZqdpVyhpPf5m+4sfp7z2sofMIsKNy+qzAmjSzsqBhDqtx9RGvn9G4L2k0Ovw7UvrMRJ8A6JSyD3utPGF0w+Ns3+ygVfBfdhqE8SMX/61Ndjoj8f7nDm1aMzoCKe1CjpIjQRo4HWL6zMOC4CrgRCXvNv9zOouKu7HJEAAAlC9+p4v10aC7SUVIYSH3ux4e31axVXgCXcRkJy+fnZVzMQAayw8EvW9f2kiihnrNmV+/FJrgNEfQmCQyphx7bmVnHICRxKthYqsN9b0/OH1dm/pf1efvnFxHYXzqxwyUHfapxyVOHdyUYDTmLy0KuvKrY82QCz4cihlIHfYp09OzJlSFOBgCi1CCBs6cstWthIIqELjJ082bOlxEH3nswahCFx6UtnUiQnej4WaXm1549KGll5XEdz/avuajeldiyN2AAQXzqkOqSCnMTFv20va0NynYgYHYhAhAjoSRbz9olqRIKxLEEDEu59qbku5xCwYVY1tuXueaqIBIDO7tSYD4c7zq8EW4KDRmEXFjJaW3D3PbQWA25fWYyIfWVIGSkfukpNLTzo4FmAywNO7ta253z63lXzW7XlW6HbY53+u9KSDoiz+0ScRRfhmXebXL7ZgqUVeGMRS61cvbl3XmiMMQhvRDDMmxmcfl+SO4EYgDJgwHnm97bxfru/s01LQb3MuIUgfFxWa88+r4m1bWnwjMIh466ONPVmNPuv2nX+FsxyPGXdeWA3+m9seRSWnZd7iekAhkwi200YcW+YtroPthDpf+aj3GHdfVGsaJHbAHe/MIiHanNVPvNuFcTOPYYgKudP+ztkVE8pC4v84DE/9X9qQfnhlK+6OIjjAyzRQOpx551XVJCzt39y9fOn5tT0r3u40ii3e1hHDbfDkktc7n1nToyhQNGY5tCz07TPL98cIvAWwFDXyHKt3Bn1NVfj6mZXB9pKKQMaV65fUocLAj6cU6h49prrgX08dpVkw0H5Ih+Wa/61zw4oRZAcrQgBAIZhw/ZIGVyTQGCiywLxzK2vLLEnrwFMru4UFCRF63QVzaiImsv/TmDykevFbHave61FFZvDUE4BTzvw51WURBeD7ZCXPYn68vOXDjWmVMDxwhXZGBShu/m1t129Wtu0oiPxEAhCRyqhx7exqTrmDOLxlKNSd7vETE185PsheUgEgxLTN1y9tgEIVeCUvGchdzrFHJL55YqmI77VIzICI9Sn3vscbVNzcEd4oH9iJW3c91tiUdtE/wOdNyV5+ctmRh8Z0tzNYh7Mzgzi84IKakLfD3L/bRYR7l2+tb8hSzBAOiBmAK+DIgjnVCMHm9IUQ7nm6sb7dwajaYeWUbyMxtbmp7xfLt6pgayhFDMJ7Lqo1czKQKdkBlTyd9uwTkmdPKBT/PCLNgIibu+1fPdmkEgYE1X9vUvpLJ5TMmBjXARqfAkS4rjX3y+e3Ukk/H0i7wpOYNO99euuGtlxgJvP0QwtPP6bY7bD30wiIEHMcNvCW2TXeknn/miuEcOuyxsZuByKKg0JmYrNp0R0X1YL/1oNsp9F9/5E62xHsv9GJdo2BFKLejHP90sagTGawCO++sAYJxdm+Wcj/bBwqVARuc9/1c2unVhUEOI3JCxgrP+n9n+UtVLKvY9j28CRIYBjEzblrzqkcW/LppLQvH6gI/rKmZ9nrHbRrY2M3EzIMRlitW58+eXLRmKTFvofrULNUJkwVUi+uaDEKTWUSKfR1KwKdE27MfuMLFffOrWX/Vi/blffS/9n0SVuO9kwYINrDYxhkKGAHdEN2xokl9331IPKM0vewGLoCF/16/da0i+H8xzB2n2wp7EO4+k+bV99weJBt6IQiMH9GRUfK/tHjTdtKu4H/jCCglMWMKy45eMG5VSIQ4CxNT2aL3ul8/p0uVbobuhUiEKF2hDMu2Ho3Ds4FDRwNqyvOr77nS6MDI/aK8LcrW95b20NVEd7lYIo9DumRQt6a+9OVh375mOJgR3F6E1Uvb+z9YH26K+0OZH0Lbl/nXVJsnTixcGJpKNjCYgEAEUdg0i0frGvpo0Kjn+ELoEKxGXrcUAgPqY2eUFVgqP4HwwhUxcyaUaGp4wuPqQrveB2/PlBE2jL6hFs/2NLrYnQ36Lexl28BYbVgWf2syYmoEYTJ7I1HTR8TnT4mGiwIu1qCLWv11P9nL7Ws29hLFaE8t0sGctpNAHxjVuXVZ5aXF1km7luLA1Q2IqIIf/Ziy6amPlUd0rsD7I29YfRx48PNmV+81PL9syt0gElZAPI4MxLgPCsgwoBfXwQRNnXa//VYAxWZef1qUsgpZ1xUPXTlYceNjuww1t1jUwCIAc+h9voE69tzdz/ViCUm7wF9or37EEqYCx5vrOtyAqSkOxoGhkLl8/b4nYHBDEK86+mmlnabwtQP9EcQmws0/OnKCceNjjjutiTPa0fn3Upt21EaDLTwEsjrFtXn+liF9si4pr1j9Bim3pS94DGPyfwPsNzf07t3G7O/erEVSyy3v94ZhNJh33HJQceOjjpaTAOHaN+N5wNXbEg/8Vqbkdxb338fkZG1UHHo939tXbWp1yAc4TIQABZxWK5b0iDMqr9rNwzUnfb0KUVXTR+l/bfR/fpeAJj357o+g9jYG7JJ+85kTMxpuO0xjzaCI1r9WQzCFevTL7zVbhTnqz9rQA13XjwatlPSh+jSIoj44Bsdr63ppqI9ev8BCQC2D9c9/Vbn0ve7CUHzyBWAB+Jet6jeNon7v5kykdvsr5866sSDIjxoRyDt3geiYGefXrikDmP73vg+sK2JBBhSNy+q67E1ooxMP+Sh7T9/pfXNtT2qqB+P2puAKwrT9V+sZBna7dPeWqv7Xtj6cX1W5dUfgQWgtaiE8f4n6QdXtRPiCNxW6KHtzWn3h8saaZd9DB6T7tIZFeNLQgGYdH5TgLou++6nGzE5oM4PDdyvQcK8bVljKqcJRuC+SCGEH/6leXNLjnZC2wEACTmtqyrCN82sFIAhjb3b+awNmZRLBWogSOZABSAMKqJa2nLzH21EHFlLUz20fVOn/ZPnt2KJqXV+QiI97i2zq+MhNaRLpzWDInxtY/qPL7dTSWiAJ5r42R2thZLW/ctb/r41SyOpLPCUYd6S+lzGpVA/IqlSyJ3OcRPj/3J80tVDu+YSURBh/rKGnDAaA11fTr4UDUOY7tPzFtfjkOZxvuFGeOHj1CMr23ZF24VBHLljbk3MpAATcL4egxD//E7nC293UdIH7cVfPPKYzE++2fncRz0BpmSHRO8ANMC8JfWsEFQ/vfP2fs2YVnzGhMIAFDZfqgkAKZtveaSeosqXavpOCJCADLr24bpeVwQO8Bp5WwsR3v9q6+q/d1PRLiN8NheatPDCGhni1NODS3/03NYPt6R9DfsFEYDWAkXG3zak5z1SZxCCbJP/MMtBBGwtlsK/NWbn/aleJa1+31iAFLodzldPLzu6Ksww+Oov25u9tsumwuc/St28qA7LCvweMhzkIDfWQmXWT59tKo0bN8+q2uEKRGSo7WHb6kvctongrabsBT/6qCPn5g3JogKd1vGYueCL1cwCAjyo5558isogWAY9/3Hq6z/7GMMKCP2SeYyg8kdMWrc8Uv/XDek759RMqg4XqOELzA5Ab9a978WWHz7Z2MOgEvkljwLQtv7BZePKYsYQPQMDaJGGDvvOZ5v/8FJrxkCMqgCM6/04SQ+BALjbUYIV5aGJZaHyiFFgDO2n1yw9tnzc6WxoymZ7XYibaJHofh0fRBCGkMglRyVN4T6X1eDqBULWluaMbki5Gxszdp+GZAgV5j3G0Atge6KttUAfg63BFRgGH0QAFkFIkUV7PCYFARigywY9NEeAEoIiMBDCShnIHNz37q/GeraPEYUxNUwOSGTbTsm92LsAIKiy0NBl/iICDMKiD+Rxtp/WOyI8jCeDD+yr6iG1yEGSrDECn+mf/JH2sw747Brc6/8BwZHlPvtq//AAAAAASUVORK5CYII=", "BF": "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", "BDV": "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", "SBAO": "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", "ENS": "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", "UNTL": "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"}
+_IMG_HERO = {"saco": "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", "piramide": "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", "telemovel": "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"}
+
+_PASTA_LOGOS = Path(__file__).resolve().parent / "logos"
+_CACHE_LOGOS = {}
+
+
+def logo_data_uri(ticker) -> str:
+    """Data-URI do logótipo (para st.column_config.ImageColumn); vazio se não houver ficheiro."""
+    base = str(ticker or "").strip().upper().rstrip("A")
+    try:
+        import base64 as _b64
+        for ext, mime in ((".png", "image/png"), (".jpg", "image/jpeg"), (".webp", "image/webp")):
+            f = _PASTA_LOGOS / f"{base}{ext}"
+            if base and f.is_file() and f.stat().st_size < 400_000:
+                return f"data:{mime};base64," + _b64.b64encode(f.read_bytes()).decode()
+    except Exception:
+        pass
+    if base in _LOGOS_EMBUTIDOS:
+        return "data:image/png;base64," + _LOGOS_EMBUTIDOS[base]
+    return ""
+
+
+def cfg_logo() -> dict:
+    try:
+        return {"Logo": st.column_config.ImageColumn(" ", width="small")}
+    except Exception:
+        return {}
+
+
+def logo_activo_html(ticker, nome="", px: int = 18) -> str:
+    base = str(ticker or "").strip().upper().rstrip("A")
+    chave = (base, px)
+    if chave in _CACHE_LOGOS:
+        return _CACHE_LOGOS[chave]
+    html_logo = ""
+    try:
+        import base64 as _b64
+        for ext, mime in ((".png", "image/png"), (".jpg", "image/jpeg"), (".jpeg", "image/jpeg"), (".webp", "image/webp"), (".svg", "image/svg+xml")):
+            f = _PASTA_LOGOS / f"{base}{ext}"
+            if base and f.is_file() and f.stat().st_size < 400_000:
+                dados = _b64.b64encode(f.read_bytes()).decode()
+                html_logo = (f'<img src="data:{mime};base64,{dados}" alt="" style="height:{px}px;width:{px}px;object-fit:contain;'
+                             f'border-radius:4px;vertical-align:middle;margin-right:6px;">')
+                break
+    except Exception:
+        html_logo = ""
+    if not html_logo and base in _LOGOS_EMBUTIDOS:
+        html_logo = (f'<img src="data:image/png;base64,{_LOGOS_EMBUTIDOS[base]}" alt="" style="height:{px}px;width:{px}px;object-fit:contain;'
+                     f'border-radius:4px;vertical-align:middle;margin-right:6px;">')
+    if not html_logo:
+        ini = _html_pub.escape((base[:2] or str(nome or "?")[:2]).upper())
+        html_logo = (f'<span style="display:inline-block;height:{px}px;width:{px}px;line-height:{px}px;text-align:center;border-radius:50%;'
+                     f'font-size:{max(px // 2 - 1, 7)}px;font-weight:700;color:#FFFFFF;vertical-align:middle;margin-right:6px;'
+                     f'background:linear-gradient(135deg,#6D28D9,#E11D48 60%,#F97316);">{ini}</span>')
+    _CACHE_LOGOS[chave] = html_logo
+    return html_logo
+
+
+def ticker_tape(df_activos: pd.DataFrame):
+    if df_activos.empty:
+        return
+    itens = []
+    for _, a in df_activos.iterrows():
+        v = float(a["variacao"])
+        cor = "#15803D" if v > 0 else ("#DC2626" if v < 0 else "#475569")
+        itens.append(f'<span style="color:{cor}; margin-right:36px;">{logo_activo_html(a["ticker"], a["nome"], 24)}<b>{_esc(a["ticker"] or a["nome"])}</b> &nbsp;{kz(a["preco"])} &nbsp;({pct_bruto(v)})</span>')
+    conteudo = "".join(itens) * 3
+    render_html(f'<div class="appo-ticker-wrap"><div class="appo-ticker-move"><span>{conteudo}</span></div></div>')
+
+
+def botoes_partilha(texto: str, topo: int = 14):
+    cod = urllib.parse.quote(texto)
+    wa  = f"https://wa.me/?text={cod}"
+    tw  = f"https://twitter.com/intent/tweet?text={cod}"
+    fb  = f"https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fclube-investimento-appo.onrender.com&quote={cod}"
+    tx  = t()
+    render_html(
+        f"""
+        <div class="appo-share-disc" style="margin-top:{topo}px;{'padding-top:14px;border-top:1px solid #EEF2F7;' if topo >= 40 else ''}">
+            <span>Partilhar</span>
+            <a class="wa" href="{wa}" target="_blank" rel="noopener" title="WhatsApp" aria-label="Partilhar no WhatsApp"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></a>
+            <a class="tw" href="{tw}" target="_blank" rel="noopener" title="X" aria-label="Partilhar no X"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></a>
+            <a class="fb" href="{fb}" target="_blank" rel="noopener" title="Facebook" aria-label="Partilhar no Facebook"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073Z"/></svg></a>
+        </div>
+        """
+    )
+
+
+# =========================================================
+# CONSTANTES E SEGREDOS
+# =========================================================
+DATABASE_URL = os.environ.get("DATABASE_URL")
+ADMIN_EMAIL_INICIAL    = os.environ.get("ADMIN_EMAIL", "admin@appo.co.ao")
+ADMIN_PASSWORD_INICIAL = os.environ.get("ADMIN_PASSWORD_INICIAL", "MudarAgora123!")
+TEMPO_LIMITE_SESSAO_SEGUNDOS = 60 * 60
+
+if not DATABASE_URL:
+    st.error("A variável de ambiente DATABASE_URL não está definida. Configura-a nas definições do serviço na Render.")
+    st.stop()
+
+
+def agora() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+def kz(valor) -> str:
+    try:
+        inteiro = int(round(float(valor)))
+    except (TypeError, ValueError):
+        return "0 Kz"
+    sinal   = "-" if inteiro < 0 else ""
+    inteiro = abs(inteiro)
+    return f"{sinal}{f'{inteiro:,}'.replace(',', ' ')} Kz"
+
+
+def pct(valor) -> str:
+    try:
+        return f"{float(valor)*100:+.2f}%"
+    except (TypeError, ValueError):
+        return "0.00%"
+
+
+def pct_bruto(valor) -> str:
+    try:
+        v = float(valor)
+        if v == 0:
+            return "0.00%"
+        return f"{v:+.2f}%"
+    except (TypeError, ValueError):
+        return "0.00%"
+
+
+def kz2(valor) -> str:
+    """Formato de corretora: 94 600,00"""
+    try:
+        return f"{float(valor):,.2f}".replace(",", " ").replace(".", ",")
+    except (TypeError, ValueError):
+        return "0,00"
+
+
+def _fmt_dt(v) -> str:
+    try:
+        return v.strftime("%d/%m/%Y | %H:%M:%S")
+    except Exception:
+        return "—"
+
+
+def multiplo(v) -> str:
+    if v is None:
+        return "n/d"
+    try:
+        return f"{float(v):.2f}x"
+    except (TypeError, ValueError):
+        return "n/d"
+
+
+def cor_variacao(v) -> str:
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return ""
+    if v > 0:
+        return "color:#0D9488; font-weight:600;"
+    if v < 0:
+        return "color:#DC2626; font-weight:600;"
+    return "color:#6B7280;"
+
+
+def tabela_cotacoes_estilizada(df_activos: pd.DataFrame):
+    tx = t()
+    cols = tx["cot_tabela_cols"]
+    df_disp = df_activos[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
+    df_disp.insert(0, "Logo", df_disp["ticker"].map(logo_data_uri))
+    df_disp["mercado"] = "🇦🇴 BODIVA"
+    df_disp = df_disp.rename(columns={"ticker": cols["ticker"], "nome": cols["nome"], "tipo": cols["tipo"],
+                                       "preco": cols["preco"], "variacao": cols["variacao"], "mercado": cols["mercado"]})
+    df_disp = df_disp[["Logo", cols["ticker"], cols["nome"], cols["tipo"], cols["mercado"], cols["preco"], cols["variacao"]]]
+    return (
+        df_disp.style
+        .format({cols["preco"]: kz, cols["variacao"]: pct_bruto})
+        .map(cor_variacao, subset=[cols["variacao"]])
+        .set_properties(subset=[cols["ticker"]], **{"font-family": "monospace", "letter-spacing": "0.4px"})
+        .set_properties(subset=[cols["preco"]], **{"font-weight": "600"})
+    )
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verificar_password(password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except Exception:
+        return False
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def obter_taxas_cambio(base: str) -> dict:
+    resposta = requests.get(f"https://open.er-api.com/v6/latest/{base}", timeout=8)
+    dados    = resposta.json()
+    if dados.get("result") != "success":
+        raise ValueError("Falha ao obter taxas de câmbio.")
+    return {"rates": dados["rates"], "actualizado": dados.get("time_last_update_utc", "")}
+
+
+# ---------------- Painéis de gráficos (estilo home broker) ----------------
+PERIODOS_GRAFICO = ["1d", "7d", "1m", "3m", "6m", "1a", "5a"]
+_PERIODO_DIAS = {"1d": 1, "7d": 7, "1m": 30, "3m": 91, "6m": 182, "1a": 365, "5a": 1826}
+_PERIODO_PASSO = {"1d": 1, "7d": 1, "1m": 1, "3m": 3, "6m": 7, "1a": 7, "5a": 30}
+_PERIODO_NOME = {"1d": "último dia face ao anterior", "7d": "últimos 7 dias", "1m": "último mês", "3m": "últimos 3 meses",
+                 "6m": "último semestre", "1a": "último ano", "5a": "últimos 5 anos"}
+CAMBIO_DADOS_DESDE = "2024-03-02"  # primeiro dia disponível na fonte aberta de câmbio
+
+
+def _numero_flex(valor):
+    """'94 600,00' | '94600.0000' | 94600 -> float; None se não for número."""
+    if valor is None or isinstance(valor, (dict, list, bool)):
+        return None
+    if isinstance(valor, (int, float)):
+        return None if valor != valor else float(valor)
+    t_ = str(valor).replace("\u00a0", "").replace(" ", "").replace("Kz", "").strip()
+    if not t_:
+        return None
+    if "," in t_ and "." in t_:
+        dec = "," if t_.rfind(",") > t_.rfind(".") else "."
+        mil = "." if dec == "," else ","
+        t_ = t_.replace(mil, "").replace(dec, ".")
+    elif "," in t_ or "." in t_:
+        sep = "," if "," in t_ else "."
+        partes = t_.split(sep)
+        milhares = len(partes) > 2 or (len(partes[1]) == 3 and 1 <= len(partes[0]) <= 3)
+        t_ = "".join(partes) if milhares else partes[0] + "." + partes[1]
+    try:
+        return float(t_)
+    except ValueError:
+        return None
+
+
+def registar_cotacoes_hoje(df_activos_: pd.DataFrame, sobrepor: bool = False):
+    """Guarda a cotação de hoje de cada activo no histórico. Só substitui um valor já existente (por exemplo, o fecho
+    importado da BODIVA) quando `sobrepor` é verdadeiro, ou seja, quando o administrador grava cotações.
+    Nunca interrompe quem chama."""
+    try:
+        hoje = datetime.now().date()
+        for _, r in df_activos_.iterrows():
+            tk = str(r.get("ticker") or "").strip().upper()
+            pr = _num_seguro(r.get("preco"), default=0.0)
+            if tk and pr > 0:
+                executar("INSERT INTO historico_cotacoes (dia, ticker, preco) VALUES (%s, %s, %s) "
+                         "ON CONFLICT (ticker, dia) DO " + ("UPDATE SET preco = EXCLUDED.preco" if sobrepor else "NOTHING"),
+                         (hoje, tk, pr))
+    except Exception:
+        pass
+
+
+def obter_opv(ticker: str):
+    """(preço, data|None) da OPV do título, ou None. Compara o ticker sem os 'A' finais."""
+    linha = consultar_um("SELECT preco, data FROM opv_activos WHERE RTRIM(ticker, 'A') = RTRIM(%s, 'A') LIMIT 1", (ticker,))
+    return (float(linha[0]), linha[1]) if linha else None
+
+
+def guardar_opv(ticker: str, preco: float, data=None):
+    exigir_admin()
+    executar("INSERT INTO opv_activos (ticker, preco, data) VALUES (%s, %s, %s) "
+             "ON CONFLICT (ticker) DO UPDATE SET preco = EXCLUDED.preco, data = EXCLUDED.data", (ticker.strip().upper(), preco, data))
+
+
+def eliminar_opv(ticker: str):
+    exigir_admin()
+    executar("DELETE FROM opv_activos WHERE ticker = %s", (ticker,))
+
+
+def obter_serie_cotacao(ticker: str, periodo: str) -> pd.DataFrame:
+    """Série (Data, Valor) do título. Compara o ticker sem os 'A' finais, para que 'BFAAAAA' e 'BFAAAAAA' sejam o mesmo
+    título; se houver os dois no mesmo dia, prevalece o ticker mais comprido (o da BODIVA)."""
+    from datetime import timedelta
+    base = ("SELECT DISTINCT ON (dia) dia AS \"Data\", preco AS \"Valor\" FROM historico_cotacoes "
+            "WHERE RTRIM(ticker, 'A') = RTRIM(%s, 'A') {filtro} ORDER BY dia, LENGTH(ticker) DESC")
+    if periodo == "1d":
+        df = consultar_df("SELECT * FROM (" + base.format(filtro="") + ") t ORDER BY \"Data\" DESC LIMIT 2", (ticker,))
+        df = df.sort_values("Data").reset_index(drop=True)
+    else:
+        inicio = datetime.now().date() - timedelta(days=_PERIODO_DIAS[periodo])
+        df = consultar_df(base.format(filtro="AND dia >= %s"), (ticker, inicio))
+    if not df.empty:
+        df["Valor"] = df["Valor"].astype(float)
+    return df
+
+
+def importar_historico_cotacoes(df_ficheiro: pd.DataFrame, ticker_forcado: str = "") -> tuple:
+    """Importa linhas (data, ticker, preço) de um CSV/Excel. Devolve (linhas_importadas, linhas_ignoradas)."""
+    exigir_admin()
+    import unicodedata
+
+    def norm(c):
+        return "".join(ch for ch in unicodedata.normalize("NFKD", str(c).strip().lower()) if not unicodedata.combining(ch))
+
+    cols = {norm(c): c for c in df_ficheiro.columns}
+
+    def achar(opcoes):
+        for o in opcoes:
+            for k, original in cols.items():
+                if k == o or o in k:
+                    return original
+        return None
+
+    c_data = achar(["data", "date", "dia", "category"])
+    c_tk = achar(["ticker", "codigo", "simbolo", "symbol", "cevama"])
+    c_pr = achar(["preco", "cotacao", "fecho", "close", "price", "ultimo"])
+    if not (c_data and c_pr and (c_tk or ticker_forcado)):
+        raise ValueError("Não encontrei as colunas de data e preço (e de ticker, se não escolher o título). "
+                         "Use cabeçalhos como: data, ticker, preco.")
+    import re as _re
+    ok = bad = 0
+    registos = {}
+    for _, r in df_ficheiro.iterrows():
+        bruto = str(r[c_data]).strip()
+        if _re.match(r"^\d{4}-\d{1,2}-\d{1,2}", bruto):
+            d = pd.to_datetime(bruto[:10], format="%Y-%m-%d", errors="coerce")   # ISO: nunca troca dia e mês
+        else:
+            d = pd.to_datetime(bruto, dayfirst=True, errors="coerce")
+        tk = (str(ticker_forcado).strip().upper() if ticker_forcado else str(r[c_tk] or "").strip().upper())
+        pr = _numero_flex(r[c_pr])
+        if pd.isna(d) or not tk or not pr or pr <= 0:
+            bad += 1
+            continue
+        registos[(tk, d.date())] = pr          # a última linha de cada (ticker, dia) prevalece
+    itens = list(registos.items())
+    for i in range(0, len(itens), 200):         # inserção em blocos: muito mais rápido do que linha a linha
+        bloco = itens[i:i + 200]
+        sql = "INSERT INTO historico_cotacoes (dia, ticker, preco) VALUES " + ",".join(["(%s, %s, %s)"] * len(bloco)) + \
+              " ON CONFLICT (ticker, dia) DO UPDATE SET preco = EXCLUDED.preco"
+        params = []
+        for (tk, dia), pr in bloco:
+            params += [dia, tk, pr]
+        executar(sql, tuple(params))
+        ok += len(bloco)
+    return ok, bad
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def obter_serie_cambio_aoa(moeda: str, periodo: str = "1m") -> pd.DataFrame:
+    """Kz por 1 unidade de `moeda` ao longo do período, a partir de uma fonte aberta (fawazahmed0/exchange-api,
+    sem chave; um ficheiro por dia, disponível desde 02/03/2024). Períodos longos usam amostragem (3, 7 ou 30 dias)."""
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import date, timedelta
+    base = moeda.lower()
+    hoje = date.today()
+    minimo = date.fromisoformat(CAMBIO_DADOS_DESDE)
+    datas = [hoje - timedelta(days=i) for i in range(0, _PERIODO_DIAS[periodo] + 1, _PERIODO_PASSO[periodo])]
+    datas = [d for d in datas if d >= minimo]
+
+    def um_dia(d):
+        versao = "latest" if d == hoje else d.isoformat()
+        for url in (f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{versao}/v1/currencies/{base}.json",
+                    f"https://{versao}.currency-api.pages.dev/v1/currencies/{base}.json"):
+            try:
+                r = requests.get(url, timeout=8)
+                if r.status_code == 200:
+                    j = r.json()
+                    return str(j.get("date") or d.isoformat()), float(j[base]["aoa"])
+            except Exception:
+                continue
+        return None
+
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        resultados = [x for x in ex.map(um_dia, datas) if x]
+    unico = {}
+    for dt, v in resultados:
+        unico[dt] = v
+    df = pd.DataFrame({"Data": list(unico.keys()), "Valor": list(unico.values())})
+    if df.empty:
+        return pd.DataFrame(columns=["Data", "Valor"])
+    return df.sort_values("Data").reset_index(drop=True)
+
+
+def _camadas_serie(alt, df, eixo_x, eixo_y, base, unidade):
+    """Área com gradiente roxo → vinho → vermelho → laranja, linha em gradiente e, ao passar o rato, guia, ponto e etiqueta."""
+    cor = "#7C1F3E"
+    try:
+        grad = alt.Gradient(gradient="linear", x1=1, x2=1, y1=1, y2=0,
+                            stops=[alt.GradientStop(color="rgba(253,186,116,0.00)", offset=0), alt.GradientStop(color="rgba(244,114,128,0.14)", offset=0.4),
+                                   alt.GradientStop(color="rgba(167,139,250,0.26)", offset=0.75), alt.GradientStop(color="rgba(109,40,217,0.40)", offset=1)])
+        area = alt.Chart(df).mark_area(color=grad, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
+    except Exception:
+        area = alt.Chart(df).mark_area(opacity=0.12, color=cor, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q")
+    try:
+        traco = alt.Gradient(gradient="linear", x1=0, x2=1, y1=0, y2=0,
+                             stops=[alt.GradientStop(color="#6D28D9", offset=0), alt.GradientStop(color="#7C1F3E", offset=0.35),
+                                    alt.GradientStop(color="#E11D48", offset=0.68), alt.GradientStop(color="#F97316", offset=1)])
+        linha = base.mark_line(color=traco, strokeWidth=2.2, interpolate="monotone")
+    except Exception:
+        linha = base.mark_line(color=cor, strokeWidth=1.8, interpolate="monotone")
+    camadas = area + linha
+    try:
+        try:
+            sel = alt.selection_point(fields=["Data"], nearest=True, on="mouseover", empty=False)
+            juntar = lambda ch: ch.add_params(sel)
+        except AttributeError:
+            sel = alt.selection(type="single", fields=["Data"], nearest=True, on="mouseover", empty="none")
+            juntar = lambda ch: ch.add_selection(sel)
+        pontos = juntar(base.mark_point(opacity=0, size=140))
+        destaque = base.mark_circle(color=cor, size=60).encode(opacity=alt.condition(sel, alt.value(1), alt.value(0)))
+        guia = alt.Chart(df).mark_rule(color="#CBD5E1", strokeDash=[4, 4], strokeWidth=1).encode(x=eixo_x, opacity=alt.condition(sel, alt.value(0.9), alt.value(0)))
+        camadas = camadas + guia + pontos + destaque
+    except Exception:
+        traceback.print_exc()
+    try:
+        camadas.to_dict()   # valida a especificação na versão de Altair instalada; se falhar, usa o estilo simples
+    except Exception:
+        traceback.print_exc()
+        camadas = alt.Chart(df).mark_area(opacity=0.12, color=cor, interpolate="monotone").encode(x=eixo_x, y=eixo_y, y2="_base:Q") + base.mark_line(color=cor, strokeWidth=1.5, interpolate="monotone")
+    return camadas
+
+
+def grafico_area_simples(df: pd.DataFrame, rotulo: str, altura: int = 260):
+    """Série temporal simples (índice = data, uma coluna de valores) no mesmo estilo dos painéis de cotação."""
+    import altair as alt
+    d = df.reset_index().iloc[:, :2].copy()
+    d.columns = ["Data", "Valor"]
+    d["Data"] = pd.to_datetime(d["Data"])
+    d = d.dropna().sort_values("Data")
+    if len(d) < 2:
+        st.info("Ainda não há pontos suficientes para desenhar o gráfico.")
+        return
+    vmin, vmax = float(d["Valor"].min()), float(d["Valor"].max())
+    pad = (vmax - vmin) * 0.15 or abs(vmax) * 0.05 or 1.0
+    d["_base"] = vmin - pad
+    eixo_x = alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y", labelColor="#6B6B6B", grid=False))
+    eixo_y = alt.Y("Valor:Q", title=None, scale=alt.Scale(domain=[vmin - pad, vmax + pad], zero=False),
+                   axis=alt.Axis(orient="right", labelColor="#6B6B6B", gridColor="#EADFE4", format=",.2f"))
+    base = alt.Chart(d).encode(x=eixo_x, y=eixo_y, tooltip=[alt.Tooltip("Data:T", format="%d/%m/%Y", title="Data"),
+                                                           alt.Tooltip("Valor:Q", format=",.2f", title=str(rotulo))])
+    st.altair_chart(_camadas_serie(alt, d, eixo_x, eixo_y, base, str(rotulo)).properties(height=altura), use_container_width=True)
+
+
+def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: str, periodo: str, nota: str = "", referencia=None):
+    """Painel no estilo do home broker: cabeçalho, indicadores do período e gráfico de área na cor do Clube."""
+    import html as _h
+    import altair as alt
+    render_html(f"""<div style="border-bottom:3px solid #E11D48;padding-bottom:6px;margin:6px 0 12px 0;">
+    <span style="font-size:1.2rem;font-weight:800;color:#1A1A2E;">{_h.escape(titulo)}</span>
+    <span style="color:#8A7B80;font-size:0.8rem;margin-left:10px;">{_h.escape(subtitulo)}</span></div>""")
+    if serie is None or serie.empty:
+        st.info("Ainda não há dados para este período.")
+        return
+    df = serie.copy()
+    df["Data"] = pd.to_datetime(df["Data"])
+    ultimo, primeiro = float(df["Valor"].iloc[-1]), float(df["Valor"].iloc[0])
+    var = (ultimo / primeiro - 1) * 100 if primeiro else 0.0
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Último valor", f"{ultimo:,.2f} {unidade}")
+    from datetime import timedelta
+    inicio_janela = datetime.now().date() - timedelta(days=_PERIODO_DIAS[periodo])
+    d0 = df["Data"].iloc[0].date()
+    rotulo_var = (f"Variação (desde {d0:%d/%m/%y})" if periodo != "1d" and d0 > inicio_janela + timedelta(days=10)
+                  else f"Variação ({_PERIODO_NOME[periodo]})")
+    m2.metric(rotulo_var, pct_bruto(var), delta=pct_bruto(var) if len(df) > 1 else None)
+    m3.metric("Máximo do período", f"{df['Valor'].max():,.2f}")
+    m4.metric("Mínimo do período", f"{df['Valor'].min():,.2f}")
+    if len(df) < 2:
+        st.info("Só existe um registo neste período, por isso ainda não há linha para desenhar. "
+                "A série cresce a cada nova actualização.")
+    else:
+        vmin, vmax = float(df["Valor"].min()), float(df["Valor"].max())
+        if referencia:
+            vmin, vmax = min(vmin, referencia[1]), max(vmax, referencia[1])
+        pad = (vmax - vmin) * 0.15 or vmax * 0.01
+        df["_base"] = vmin - pad
+        span_dias = (df["Data"].max() - df["Data"].min()).days
+        if span_dias <= 14:
+            eixo_datas = alt.Axis(format="%d/%m", labelColor="#6B6B6B", grid=False, tickCount={"interval": "day", "step": 1})
+        elif span_dias <= 100:
+            eixo_datas = alt.Axis(format="%d/%m/%y", labelColor="#6B6B6B", grid=False, tickCount={"interval": "week", "step": 1})
+        else:
+            eixo_datas = alt.Axis(format="%d/%m/%y", labelColor="#6B6B6B", grid=False)
+        eixo_x = alt.X("Data:T", title=None, axis=eixo_datas)
+        eixo_y = alt.Y("Valor:Q", title=None, scale=alt.Scale(domain=[vmin - pad, vmax + pad], zero=False),
+                       axis=alt.Axis(orient="right", labelColor="#6B6B6B", gridColor="#EADFE4", format=",.2f"))
+        base = alt.Chart(df).encode(
+            x=eixo_x, y=eixo_y,
+            tooltip=[alt.Tooltip("Data:T", format="%d/%m/%Y", title="Data"),
+                     alt.Tooltip("Valor:Q", format=",.2f", title=unidade)])
+        # a área fecha na base visível do gráfico (y2), e não no zero, que está fora do eixo
+        camadas = _camadas_serie(alt, df, eixo_x, eixo_y, base, unidade)
+        if referencia:
+            ref_df = pd.DataFrame({"y": [float(referencia[1])], "txt": [referencia[0]]})
+            esc_y = alt.Scale(domain=[vmin - pad, vmax + pad], zero=False)
+            eixo_ref = alt.Axis(orient="right", labelColor="#6B6B6B", gridColor="#EADFE4", format=",.2f")
+            camadas = camadas + alt.Chart(ref_df).mark_rule(color="#6B6B6B", strokeDash=[6, 4], strokeWidth=1.4).encode(
+                y=alt.Y("y:Q", title=None, scale=esc_y, axis=eixo_ref)) + alt.Chart(ref_df).mark_text(
+                align="left", dx=6, dy=-7, color="#6B6B6B", fontSize=11).encode(
+                y=alt.Y("y:Q", title=None, scale=esc_y, axis=eixo_ref), text="txt:N", x=alt.value(2))
+        st.altair_chart(camadas.properties(height=340), use_container_width=True)
+    if referencia:
+        var_ref = (ultimo / referencia[1] - 1) * 100 if referencia[1] else 0.0
+        st.markdown(f"🏷️ **{referencia[0]}** · variação desde a OPV: **{pct_bruto(var_ref)}**")
+    if nota:
+        st.caption(nota)
+
+
+# ---------------- Cotações directas da BODIVA ----------------
+# Mesmo endpoint e mesma lógica de pesquisa do script Apps Script do Google Sheets
+# (que já foi testado e encontra os 7 títulos). Só LÊ dados; nada é gravado
+# sem o admin confirmar na pré-visualização.
+URL_BODIVA_RESUMO = "https://www.bodiva.ao/website/api/GetAllMarketSummary_no.php"
+
+
+def _num_bodiva(valor):
+    """Converte um valor vindo da BODIVA em preço (>100 e diferente de 2026), ou None."""
+    if valor is None or isinstance(valor, (dict, list, bool)):
+        return None
+    if isinstance(valor, (int, float)):
+        num = float(valor)
+    else:
+        t_ = str(valor).replace("\u00a0", "").replace(" ", "").strip()
+        if not t_:
+            return None
+        if "," in t_ and "." in t_:
+            dec = "," if t_.rfind(",") > t_.rfind(".") else "."
+            mil = "." if dec == "," else ","
+            t_ = t_.replace(mil, "").replace(dec, ".")
+        elif "," in t_ or "." in t_:
+            sep = "," if "," in t_ else "."
+            partes = t_.split(sep)
+            # um só separador: é de milhares apenas se vier exactamente 3 dígitos
+            # depois dele e no máximo 3 antes (ex.: 94.600); em qualquer outro
+            # caso é decimal (ex.: 94600.0000, 94600,00, 30600.5)
+            milhares = len(partes) > 2 or (len(partes[1]) == 3 and 1 <= len(partes[0]) <= 3)
+            if milhares:
+                t_ = "".join(partes)
+            else:
+                t_ = partes[0] + "." + partes[1]
+        try:
+            num = float(t_)
+        except ValueError:
+            return None
+    return num if (num > 100 and num != 2026) else None
+
+
+_CHAVES_PRECO_BODIVA = [
+    "ultimo_preco", "ultimopreco", "last_price", "lastprice",
+    "preco_fecho", "precofecho", "close_price", "closeprice",
+    "cotacao", "preco", "price", "ultimo", "last", "fecho", "close", "valor",
+]
+
+
+def _preco_do_objecto_bodiva(obj):
+    if not isinstance(obj, dict):
+        return None
+    for chave in _CHAVES_PRECO_BODIVA:
+        for prop, val in obj.items():
+            if str(prop).lower() == chave or chave in str(prop).lower():
+                v = _num_bodiva(val)
+                if v is not None:
+                    return v
+    return None
+
+
+def _procurar_em_json_bodiva(dados, ticker):
+    import json as _json
+    lista = dados if isinstance(dados, list) else [dados]
+    base = ticker.rstrip("A")
+    for item in lista:
+        txt = _json.dumps(item, ensure_ascii=False).upper()
+        if ticker in txt or (len(base) >= 4 and base in txt):
+            v = _preco_do_objecto_bodiva(item)
+            if v is not None:
+                return v
+    filhos = dados.values() if isinstance(dados, dict) else (dados if isinstance(dados, list) else [])
+    for filho in filhos:
+        if isinstance(filho, (dict, list)):
+            v = _procurar_em_json_bodiva(filho, ticker)
+            if v is not None:
+                return v
+    return None
+
+
+def _procurar_em_texto_bodiva(conteudo, ticker):
+    import re as _re
+    texto = conteudo.upper()
+    base = ticker.rstrip("A")
+    pos = texto.find(ticker)
+    if pos == -1 and len(base) >= 4:
+        pos = texto.find(base)
+    if pos == -1:
+        return None
+    trecho = conteudo[pos:pos + 300]
+    padrao = r':\s*"?(\d{1,3}(?:[ .]\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)"?'
+    for m in _re.finditer(padrao, trecho):
+        v = _num_bodiva(_re.sub(r'^:\s*"?', "", m.group(0)).rstrip('"'))
+        if v is not None:
+            return v
+    return None
+
+
+def buscar_cotacoes_bodiva(tickers) -> dict:
+    """Devolve {ticker: preço ou None}. Levanta excepção se a BODIVA não responder."""
+    cabecalhos = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.bodiva.ao/",
+    }
+    try:
+        resp = requests.get(URL_BODIVA_RESUMO, headers=cabecalhos, timeout=20)
+    except requests.exceptions.SSLError:
+        # O servidor da BODIVA não envia a cadeia completa de certificados (os
+        # navegadores e o Google conseguem completá-la, o Python não). Como são
+        # dados públicos, só de leitura, e o admin confere os preços na
+        # pré-visualização antes de gravar, repete-se o pedido sem verificar o certificado.
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        resp = requests.get(URL_BODIVA_RESUMO, headers=cabecalhos, timeout=20, verify=False)
+    if resp.status_code != 200:
+        raise ValueError(f"A BODIVA respondeu com o código HTTP {resp.status_code}.")
+    conteudo = resp.text
+    try:
+        dados = resp.json()
+    except ValueError:
+        dados = None
+    resultado = {}
+    for tk in tickers:
+        tk = str(tk or "").strip().upper()
+        if not tk:
+            continue
+        preco = _procurar_em_json_bodiva(dados, tk) if dados is not None else None
+        if preco is None:
+            preco = _procurar_em_texto_bodiva(conteudo, tk)
+        resultado[tk] = preco
+    return resultado
+
+
+
+# =========================================================
+# CONTEÚDO EDUCATIVO (fica em PT — conforme acordado)
+# =========================================================
+TEXTO_PRINCIPIOS = """
+### Missão
+O Clube de Investimento APPO existe para promover a literacia financeira e o acesso
+disciplinado ao mercado de capitais angolano, permitindo que os seus sócios construam
+património de forma colectiva, informada e sustentável através da Bolsa de Dívida e
+Valores de Angola (BODIVA).
+
+### Princípios Fundamentais
+1. **Disciplina antes de intuição**
+2. **Horizonte de longo prazo**
+3. **Diversificação prudente**
+4. **Transparência e prestação de contas**
+5. **Literacia financeira como pilar**
+6. **Decisões colectivas**
+7. **Gestão de risco activa**
+8. **Princípio 50/30/20** — 50% consumo, 30% investimento, 20% entesouramento.
+9. **Nenhuma posição sem tese registada**
+"""
+
+TEXTO_EX_DIVIDENDO        = "A **data ex-dividendo** é o dia a partir do qual quem compra uma acção já não tem direito ao próximo dividendo anunciado."
+TEXTO_RATEIO              = "O **rateio** distribui proporcionalmente as acções de uma OPV quando a procura excede a oferta."
+TEXTO_OPV_UNITEL          = "Em Julho de 2026, o Estado colocou à venda 15% do capital da Unitel via OPV — a maior de sempre em Angola."
+TEXTO_OPV_SBA             = "Em Setembro de 2026, o Estado lançou a OPV de 34% do Standard Bank Angola."
+TEXTO_INVESTIDOR_VS_TRADER= "Segundo Benjamin Graham, um investidor sente-se dono do negócio, exige margem de segurança, e pensa diferente da maioria."
+TEXTO_DIVIDENDOS_GUIA     = "Três datas decidem se recebes um dividendo: Assembleia Geral, data de registo (a que importa), e data de pagamento."
+TEXTO_DANGOTE             = "A Dangote Refinery abriu capital na NGX em 2026 — mercado fora do âmbito da BODIVA, referência educativa."
+TEXTO_REGRAS_BODIVA       = "Regra BODIVA 2/18: dispersão mínima 5%, lote mínimo 1 acção, variação máxima 25% estática, liquidação D+1."
+
+ACTIVOS_INICIAIS = [
+    ("UNTLAAAA", "Unitel",                     "Ação",  38000.0, 0.0),
+    ("SBAOAAAA", "Standard Bank Angola",        "Ação",  45000.0, 0.0),
+    ("BFAAAAAA", "Banco de Fomento Angola (BFA)","Ação", 12500.0, 0.0),
+    ("BDVAAAAA", "BODIVA",                      "Ação",  82400.0, 0.0),
+]
+
+ARTIGOS_INICIAIS = [
+    ("Princípios e Filosofia de Investimento do Clube", "Institucional",      TEXTO_PRINCIPIOS),
+    ("O que é a Data Ex-Dividendo?",                    "Educação",           TEXTO_EX_DIVIDENDO),
+    ("O que é o Rateio?",                               "Educação",           TEXTO_RATEIO),
+    ("Análise da OPV da Unitel (2026)",                 "Análise de Mercado", TEXTO_OPV_UNITEL),
+    ("Análise da OPV do Standard Bank Angola (2026)",   "Análise de Mercado", TEXTO_OPV_SBA),
+    ("Investidor vs. Trader — os três princípios de Benjamin Graham", "Educação", TEXTO_INVESTIDOR_VS_TRADER),
+    ("Dividendos na BODIVA: as três datas que decidem se recebes",    "Educação", TEXTO_DIVIDENDOS_GUIA),
+    ("A OPV da Dangote Petroleum Refinery — análise comparativa",     "Análise de Mercado", TEXTO_DANGOTE),
+    ("Regras de Negociação da BODIVA (Regra Nº 2/18)",                "Referência", TEXTO_REGRAS_BODIVA),
+]
+
+AVALIACOES_INICIAIS = [
+    ("BFA",            "Banca",                      100500.0, 15000000,  233140000000, 0, 365250000000, 139885149600, 0.08),
+    ("BAI",            "Banca",                       93900.0, 19450000,  295918000000, 0, 838000000000, 147841239768, 0.08),
+    ("BCGA",           "Banca",                       19800.0, 20000000,   44143653000, 0, 256000000000,  21630389955, 0.06),
+    ("ENSA",           "Seguros",                     26500.0,  2400000,    6360917000, 0,           0,   3880154744, 0.05),
+    ("BDV (BODIVA)",   "Infra-estrutura de Mercado",  81000.0,   600000,    2609155000, 0,  9120000000,  1565495329, 0.10),
+    ("UNITEL",         "Telecomunicações",            34000.0, 50000000,  158368000000, 220800000000, 925000000000, 40000000000, 0.04),
+    ("SBA (Standard Bank)", "Banca",                 41220.0, 14000000,  150000000000, 0, 340900000000,           0, 0.08),
+]
+
+# =========================================================
+# BASE DE DADOS
+# =========================================================
+@st.cache_resource
+def obter_ligacao():
+    # connect_timeout + keepalives: evitam que a app fique pendurada para sempre
+    # numa ligação morta (ex.: a Neon suspende a base de dados por inactividade).
+    conn = psycopg2.connect(DATABASE_URL, connect_timeout=15,
+                            keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3)
+    conn.autocommit = True
+    # Se outra sessão tiver a tabela bloqueada, falha ao fim de 20 s em vez de esperar eternamente.
+    try:
+        with conn.cursor() as _cur:
+            _cur.execute("SET lock_timeout = '20s'")
+    except Exception:
+        pass
+    return conn
+
+
+def _com_reconexao(func):
+    try:
+        return func(obter_ligacao())
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        obter_ligacao.clear()
+        return func(obter_ligacao())
+
+
+def executar(sql, parametros=None):
+    def _run(conn):
+        with conn.cursor() as cur:
+            cur.execute(sql, parametros or ())
+    _com_reconexao(_run)
+
+
+def consultar_um(sql, parametros=None):
+    def _run(conn):
+        with conn.cursor() as cur:
+            cur.execute(sql, parametros or ())
+            return cur.fetchone()
+    return _com_reconexao(_run)
+
+
+def consultar_df(sql, parametros=None) -> pd.DataFrame:
+    def _run(conn):
+        return pd.read_sql_query(sql, conn, params=parametros or ())
+    return _com_reconexao(_run)
+
+
+def inicializar_bd():
+    executar("""CREATE TABLE IF NOT EXISTS contas (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, is_admin BOOLEAN NOT NULL DEFAULT FALSE, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE")
+    executar("""CREATE TABLE IF NOT EXISTS log_acessos (id SERIAL PRIMARY KEY, email TEXT, sucesso BOOLEAN NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS resumo_patrimonial (id INTEGER PRIMARY KEY CHECK (id = 1), capital_social NUMERIC NOT NULL, investimentos NUMERIC NOT NULL, reservas NUMERIC NOT NULL, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("ALTER TABLE resumo_patrimonial ADD COLUMN IF NOT EXISTS capital_subscrito NUMERIC")
+    executar("ALTER TABLE resumo_patrimonial ADD COLUMN IF NOT EXISTS capital_realizado NUMERIC")
+    executar("""CREATE TABLE IF NOT EXISTS historico_patrimonio (id SERIAL PRIMARY KEY, capital_social NUMERIC NOT NULL, investimentos NUMERIC NOT NULL, reservas NUMERIC NOT NULL, total NUMERIC NOT NULL, registado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS movimentos (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, descricao TEXT, montante NUMERIC NOT NULL, data_movimento DATE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    # Simulador de Investimento — persistido por sócio (antes só vivia em
+    # st.session_state, por isso desaparecia ao sair/voltar a entrar).
+    executar("""CREATE TABLE IF NOT EXISTS sim_estado (
+                    conta_email TEXT PRIMARY KEY,
+                    saldo_caixa NUMERIC NOT NULL DEFAULT 3000000
+                )""")
+    executar("""CREATE TABLE IF NOT EXISTS sim_posicoes (
+                    conta_email TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    nome TEXT NOT NULL,
+                    qtd NUMERIC NOT NULL,
+                    preco_medio NUMERIC NOT NULL,
+                    PRIMARY KEY (conta_email, ticker)
+                )""")
+    executar("""CREATE TABLE IF NOT EXISTS sim_historico (
+                    id SERIAL PRIMARY KEY,
+                    conta_email TEXT NOT NULL,
+                    operacao TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    qtd NUMERIC NOT NULL,
+                    preco_unit NUMERIC NOT NULL,
+                    total NUMERIC NOT NULL,
+                    criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+                )""")
+    # Orçamento pessoal/familiar de cada sócio (Princípio 50/30/20) — guardado como JSON
+    executar("""CREATE TABLE IF NOT EXISTS orcamento_pessoal (
+                    conta_email TEXT PRIMARY KEY,
+                    dados TEXT NOT NULL,
+                    actualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+                )""")
+    # Carteira REAL do Clube (dinheiro verdadeiro, investido de facto na BFA) —
+    # distinta do Simulador (dinheiro fictício, para treino). Editável pelo
+    # admin no painel; é esta tabela que alimenta o relatório PDF, substituindo
+    # o antigo dicionário fixo CARTEIRA_REAL escrito no código.
+    executar("""CREATE TABLE IF NOT EXISTS carteira_real (
+                    id SERIAL PRIMARY KEY,
+                    ticker TEXT NOT NULL,
+                    nome TEXT NOT NULL,
+                    qtd NUMERIC NOT NULL DEFAULT 0,
+                    valor_aquisicao NUMERIC NOT NULL DEFAULT 0,
+                    actualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+                )""")
+    executar("""CREATE TABLE IF NOT EXISTS activos (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, tipo TEXT NOT NULL, preco NUMERIC NOT NULL, variacao NUMERIC NOT NULL DEFAULT 0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS ticker TEXT NOT NULL DEFAULT ''")
+    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_anterior NUMERIC NOT NULL DEFAULT 0")  # legado, já não é usado para calcular variação
+    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS preco_abertura_dia NUMERIC")
+    executar("ALTER TABLE activos ADD COLUMN IF NOT EXISTS data_abertura_dia DATE")
+    executar("""CREATE TABLE IF NOT EXISTS artigos (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, conteudo TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("ALTER TABLE artigos ADD COLUMN IF NOT EXISTS nivel TEXT")   # NULL = automático, pela categoria
+    executar("""CREATE TABLE IF NOT EXISTS unidades_movimentos (id SERIAL PRIMARY KEY, data DATE NOT NULL, socio TEXT NOT NULL, socio_email TEXT, tipo TEXT NOT NULL, montante NUMERIC NOT NULL, vup NUMERIC NOT NULL, unidades NUMERIC NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS cotas_config (id INTEGER PRIMARY KEY CHECK (id = 1), valor_nominal NUMERIC NOT NULL DEFAULT 100000, limite_cotas NUMERIC, entrada_minima NUMERIC NOT NULL DEFAULT 100000)""")
+    executar("INSERT INTO cotas_config (id, limite_cotas) VALUES (1, 100) ON CONFLICT (id) DO NOTHING")
+    executar("""CREATE TABLE IF NOT EXISTS historico_vup (dia DATE PRIMARY KEY, vlg NUMERIC NOT NULL, unidades NUMERIC NOT NULL, vup NUMERIC NOT NULL)""")
+    executar("""CREATE TABLE IF NOT EXISTS opv_activos (ticker TEXT PRIMARY KEY, preco NUMERIC NOT NULL, data DATE)""")
+    executar("INSERT INTO opv_activos (ticker, preco, data) VALUES ('SBAOAAAA', 50000, '2026-09-28') ON CONFLICT (ticker) DO NOTHING")
+    executar("INSERT INTO opv_activos (ticker, preco, data) VALUES ('UNTLAAAA', 40040, NULL) ON CONFLICT (ticker) DO NOTHING")
+    # ---- Actualização "Educação e Serviços / Área privada": migrações apenas aditivas (nada é apagado) ----
+    executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS is_participante BOOLEAN NOT NULL DEFAULT FALSE")
+    executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS nivel TEXT NOT NULL DEFAULT 'iniciante'")
+    executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS trocar_password BOOLEAN NOT NULL DEFAULT FALSE")
+    executar("""CREATE TABLE IF NOT EXISTS perfil_investidor (id SERIAL PRIMARY KEY, conta_id INTEGER NOT NULL, versao INTEGER NOT NULL DEFAULT 1, respostas TEXT NOT NULL, pontuacoes TEXT NOT NULL, perfil TEXT NOT NULL, portal TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("CREATE INDEX IF NOT EXISTS idx_perfil_conta ON perfil_investidor (conta_id, criado_em)")
+    executar("""CREATE TABLE IF NOT EXISTS pedidos_recuperacao (id SERIAL PRIMARY KEY, email TEXT NOT NULL, contacto TEXT, estado TEXT NOT NULL DEFAULT 'pendente', criado_em TIMESTAMP NOT NULL DEFAULT NOW(), resolvido_em TIMESTAMP, resolvido_por TEXT)""")
+    executar("""CREATE TABLE IF NOT EXISTS base_indice_appo (ticker TEXT PRIMARY KEY, preco_base NUMERIC NOT NULL, fonte TEXT, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    # único preço de 19/08/2026 confirmado por documento: o da compra de UNITEL (nota de execução), às 14:49
+    executar("INSERT INTO base_indice_appo (ticker, preco_base, fonte) VALUES ('UNTLAAAA', 36000, 'Nota de Execução de 19/08/2026 (negócio das 14:49, BFA CM)') ON CONFLICT (ticker) DO NOTHING")
+    # restantes preços-base, segundo as cotações da BODIVA indicadas pelo administrador; só entram se o título ainda não tiver base
+    for _tk, _pb, _fonte in [("BAIAAAAA", 97200, "BODIVA, cotações de 19/08/2026"), ("BCGAAAAA", 20000, "BODIVA, cotações de 19/08/2026"),
+                             ("BDVAAAAA", 84000, "BODIVA, cotações de 19/08/2026"), ("BFAAAAAA", 100000, "BODIVA, cotações de 19/08/2026"),
+                             ("ENSAAAAA", 29000, "BODIVA, cotações de 19/08/2026"),
+                             ("SBAOAAAA", 62500, "BODIVA, primeiro preço em bolsa (30/09/2026): não estava cotada a 19/08/2026")]:
+        executar("INSERT INTO base_indice_appo (ticker, preco_base, fonte) SELECT %s, %s, %s WHERE NOT EXISTS "
+                 "(SELECT 1 FROM base_indice_appo WHERE RTRIM(ticker, 'A') = RTRIM(%s, 'A'))", (_tk, _pb, _fonte, _tk))
+    executar("""CREATE TABLE IF NOT EXISTS auditoria (id SERIAL PRIMARY KEY, quando TIMESTAMP NOT NULL DEFAULT NOW(), utilizador TEXT, accao TEXT NOT NULL, entidade TEXT, entidade_id TEXT, antes TEXT, depois TEXT, motivo TEXT)""")
+    executar("""CREATE TABLE IF NOT EXISTS balanco_privado (id SERIAL PRIMARY KEY, data_ref DATE NOT NULL, dinheiro_disponivel NUMERIC NOT NULL DEFAULT 0, outros_activos NUMERIC NOT NULL DEFAULT 0, passivos NUMERIC NOT NULL DEFAULT 0, fonte TEXT, titularidade TEXT, estado TEXT NOT NULL DEFAULT 'Provisório', origem TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), validado_por TEXT, validado_em TIMESTAMP)""")
+    for _col, _tipo in [("classe", "TEXT"), ("estado", "TEXT"), ("origem", "TEXT"), ("referencia", "TEXT"), ("fundamento", "TEXT"),
+                        ("motivo_anulacao", "TEXT"), ("anulado_por", "TEXT"), ("anulado_em", "TIMESTAMP"), ("criado_por", "TEXT"),
+                        ("efeito_caixa", "NUMERIC"), ("antes", "TEXT"), ("depois", "TEXT")]:
+        executar(f"ALTER TABLE unidades_movimentos ADD COLUMN IF NOT EXISTS {_col} {_tipo}")
+    executar("UPDATE unidades_movimentos SET classe = CASE WHEN tipo = 'Subscrição inicial' THEN 'Fundadora' ELSE 'Ordinária' END WHERE classe IS NULL")
+    executar("UPDATE unidades_movimentos SET estado = 'Por rever', origem = 'Legado (lançado antes da revisão)' WHERE estado IS NULL")
+    executar("CREATE UNIQUE INDEX IF NOT EXISTS ux_unidades_referencia ON unidades_movimentos (referencia) WHERE referencia IS NOT NULL")
+    executar("ALTER TABLE cotas_config ADD COLUMN IF NOT EXISTS peso_voto_fundadora NUMERIC NOT NULL DEFAULT 1")
+    executar("ALTER TABLE cotas_config ADD COLUMN IF NOT EXISTS unidades_base_validada BOOLEAN NOT NULL DEFAULT FALSE")
+    executar("ALTER TABLE cotas_config ADD COLUMN IF NOT EXISTS admissao_activa BOOLEAN NOT NULL DEFAULT FALSE")
+    executar("ALTER TABLE cotas_config ADD COLUMN IF NOT EXISTS data_base DATE")
+    executar("ALTER TABLE cotas_config ADD COLUMN IF NOT EXISTS fundamento_base TEXT")
+    executar("ALTER TABLE historico_vup ADD COLUMN IF NOT EXISTS estado TEXT")
+    executar("""CREATE TABLE IF NOT EXISTS servicos_catalogo (id SERIAL PRIMARY KEY, codigo TEXT UNIQUE NOT NULL, nome TEXT NOT NULL, descricao TEXT, preco NUMERIC, nota_preco TEXT, tipo TEXT NOT NULL DEFAULT 'educativo', activo BOOLEAN NOT NULL DEFAULT TRUE, visivel_publico BOOLEAN NOT NULL DEFAULT TRUE, contratavel BOOLEAN NOT NULL DEFAULT FALSE, ordem INTEGER NOT NULL DEFAULT 0)""")
+    executar("""CREATE TABLE IF NOT EXISTS pedidos_servicos (id SERIAL PRIMARY KEY, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), servico_id INTEGER, servico_nome TEXT, nome TEXT NOT NULL, email TEXT, telefone TEXT, participantes INTEGER NOT NULL DEFAULT 1, mensagem TEXT, estado_servico TEXT NOT NULL DEFAULT 'Recebido', estado_pagamento TEXT NOT NULL DEFAULT 'Por confirmar', pagamento_confirmado_por TEXT, pagamento_confirmado_em TIMESTAMP, pagamento_nota TEXT)""")
+    executar("""CREATE TABLE IF NOT EXISTS manifestacoes_interesse (id SERIAL PRIMARY KEY, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), nome TEXT NOT NULL, email TEXT, telefone TEXT, mensagem TEXT, consentimento BOOLEAN NOT NULL DEFAULT FALSE, estado TEXT NOT NULL DEFAULT 'Recebida')""")
+    executar("ALTER TABLE manifestacoes_interesse ADD COLUMN IF NOT EXISTS profissao TEXT")
+    executar("""CREATE TABLE IF NOT EXISTS historico_privado (id SERIAL PRIMARY KEY, descricao TEXT NOT NULL, valor_estimado NUMERIC, estado TEXT NOT NULL DEFAULT 'Estimativa não reconciliada', nota TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS identidades_socios (nome_interno TEXT PRIMARY KEY, rotulo_publico TEXT NOT NULL)""")
+    executar("""CREATE TABLE IF NOT EXISTS carteira_referencia (ticker TEXT PRIMARY KEY, qtd NUMERIC NOT NULL, fonte TEXT)""")
+    executar("""CREATE TABLE IF NOT EXISTS config_app (chave TEXT PRIMARY KEY, valor TEXT)""")
+    executar("""CREATE TABLE IF NOT EXISTS teses_activos (ticker TEXT PRIMARY KEY, tese TEXT, fair_value NUMERIC, decisao TEXT, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW(), actualizado_por TEXT)""")
+    executar("""CREATE TABLE IF NOT EXISTS admissoes_formais (id SERIAL PRIMARY KEY, manifestacao_id INTEGER UNIQUE, nome TEXT NOT NULL, bi TEXT, nif TEXT, data_nascimento DATE, morada TEXT, origem_fundos TEXT, consentimento_formal BOOLEAN NOT NULL DEFAULT FALSE, consentimento_em TIMESTAMP, estado TEXT NOT NULL DEFAULT 'Em preparação', nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS transaccoes (id SERIAL PRIMARY KEY, data DATE NOT NULL, ticker TEXT NOT NULL, nome TEXT NOT NULL, tipo TEXT NOT NULL, qtd NUMERIC NOT NULL, preco_unit NUMERIC NOT NULL, comissao NUMERIC NOT NULL DEFAULT 0, nota TEXT, anulada BOOLEAN NOT NULL DEFAULT FALSE, motivo_anulacao TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS subscritores (id SERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("ALTER TABLE subscritores ADD COLUMN IF NOT EXISTS consentimento BOOLEAN NOT NULL DEFAULT TRUE")
+    executar("ALTER TABLE subscritores ADD COLUMN IF NOT EXISTS consentimento_em TIMESTAMP")
+    executar("ALTER TABLE subscritores ADD COLUMN IF NOT EXISTS activo BOOLEAN NOT NULL DEFAULT TRUE")
+    executar("""CREATE TABLE IF NOT EXISTS lancamentos_contab (id SERIAL PRIMARY KEY, data DATE NOT NULL, rubrica TEXT NOT NULL, descricao TEXT, valor NUMERIC NOT NULL, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS despesas_admin (id SERIAL PRIMARY KEY, data DATE NOT NULL, descricao TEXT NOT NULL, categoria TEXT, valor NUMERIC NOT NULL, fornecedor TEXT, estado TEXT NOT NULL DEFAULT 'Proposta', aprovada_por TEXT, aprovada_em TIMESTAMP, nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    _seed_servicos = [
+        ("primeiros_passos_bodiva", "Primeiros passos na BODIVA", "Workshop em grupo, guia próprio e sessão de perguntas sobre o funcionamento da bolsa, acções, dividendos, riscos e comissões.", 5000, "Preço experimental de teste (editável); não é preço de mercado comprovado.", "educativo", True, True, True, 1),
+        ("demonstracoes_financeiras", "Leitura de demonstrações financeiras", "Como ler o balanço, a demonstração de resultados e os principais indicadores, com exercícios.", None, "Sob consulta", "educativo", True, True, False, 2),
+        ("valuation_educativo", "Métodos de valuation (educativo)", "Os métodos explicados com exercícios e pressupostos. Não inclui recomendações de compra ou venda.", None, "Sob consulta", "educativo", True, True, False, 3),
+        ("sessoes_instituicoes", "Sessões para empresas, escolas e associações", "Sessões educativas à medida do público, incluindo planeamento financeiro e a regra 50/30/20.", None, "Sob consulta", "educativo", True, True, False, 4),
+        ("programa_capacidade_financeira", "Programa de Capacidade Financeira", "Percurso com diagnóstico, treino prático e acompanhamento da evolução, baseado no modelo de Kempson et al. (conhecimento, atitude e comportamento em cinco domínios).", None, "Sob consulta", "educativo", True, True, False, 5),
+        ("priv_analise_accao", "Análise de uma acção (proposta privada)", "Proposta interna; não activa até validar o enquadramento profissional e regulatório.", 60000, "Proposta privada", "consultoria", False, False, False, 10),
+        ("priv_relatorio_completo", "Relatório de valuation completo (proposta privada)", "Proposta interna; não activa até validar o enquadramento profissional e regulatório.", 180000, "Proposta privada", "consultoria", False, False, False, 11),
+        ("priv_consultoria_mensal", "Consultoria contínua mensal (proposta privada)", "Proposta interna; não activa até validar o enquadramento profissional e regulatório.", 120000, "Proposta privada (por mês)", "consultoria", False, False, False, 12),
+    ]
+    for _s in _seed_servicos:
+        executar("INSERT INTO servicos_catalogo (codigo, nome, descricao, preco, nota_preco, tipo, activo, visivel_publico, contratavel, ordem) "
+                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (codigo) DO NOTHING", _s)
+    executar("INSERT INTO config_app (chave, valor) VALUES ('contacto_publico_email', 'clube.investimento.appo@gmail.com') ON CONFLICT (chave) DO NOTHING")
+    if not consultar_um("SELECT 1 FROM historico_privado LIMIT 1"):
+        executar("INSERT INTO historico_privado (descricao, valor_estimado, estado, nota) VALUES (%s, %s, %s, %s)",
+                 ("Fase experimental anterior (2024 até hoje), descontinuada: perdas e dispêndios históricos estimados", 3000000,
+                  "Estimativa não reconciliada",
+                  "Documentação incompleta. Não é activo do Clube, não é automaticamente dívida aos fundadores e não entra no património, no VUP nem no preço de entrada."))
+    if not consultar_um("SELECT 1 FROM carteira_referencia LIMIT 1"):
+        for _tk, _q in (("BFAAAAAA", 2), ("BAIAAAAA", 4), ("UNTLAAAA", 38)):
+            executar("INSERT INTO carteira_referencia (ticker, qtd, fonte) VALUES (%s, %s, %s) ON CONFLICT (ticker) DO NOTHING",
+                     (_tk, _q, "Referência informada pelo administrador (06/10/2026); a validar com o extracto do homebroker"))
+    executar("""CREATE TABLE IF NOT EXISTS historico_cotacoes (dia DATE NOT NULL, ticker TEXT NOT NULL, preco NUMERIC NOT NULL, PRIMARY KEY (ticker, dia))""")
+    executar("""CREATE TABLE IF NOT EXISTS documentos_pdf (id SERIAL PRIMARY KEY, titulo TEXT NOT NULL, categoria TEXT NOT NULL, descricao TEXT, nome_ficheiro TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'biblioteca', tamanho INTEGER NOT NULL, conteudo BYTEA NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    for _col in ("versao", "estado_aprovacao", "nota"):
+        executar(f"ALTER TABLE documentos_pdf ADD COLUMN IF NOT EXISTS {_col} TEXT")
+    executar("""CREATE TABLE IF NOT EXISTS socios (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, email TEXT, telefone TEXT, bi TEXT, contribuicao_inicial NUMERIC, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS premissas_macro (id INTEGER PRIMARY KEY CHECK (id = 1), inflacao NUMERIC NOT NULL DEFAULT 0.135, taxa_livre_risco NUMERIC NOT NULL DEFAULT 0.18, premio_risco NUMERIC NOT NULL DEFAULT 0.055, beta_banca NUMERIC NOT NULL DEFAULT 1.0, beta_telecom NUMERIC NOT NULL DEFAULT 0.9, beta_outros NUMERIC NOT NULL DEFAULT 1.0, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS avaliacoes (id SERIAL PRIMARY KEY, empresa TEXT UNIQUE NOT NULL, sector TEXT NOT NULL, preco NUMERIC NOT NULL DEFAULT 0, acoes_circulacao NUMERIC NOT NULL DEFAULT 0, lucro_liquido NUMERIC NOT NULL DEFAULT 0, ganho_pontual NUMERIC NOT NULL DEFAULT 0, capital_proprio NUMERIC NOT NULL DEFAULT 0, dividendo_total NUMERIC NOT NULL DEFAULT 0, crescimento_g NUMERIC NOT NULL DEFAULT 0.08, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS favoritos (conta_id INTEGER NOT NULL, activo_id INTEGER NOT NULL, PRIMARY KEY (conta_id, activo_id))""")
+    executar("""CREATE TABLE IF NOT EXISTS historico_cambio_aoa (registado_em DATE PRIMARY KEY, usd NUMERIC, eur NUMERIC, gbp NUMERIC, zar NUMERIC, cny NUMERIC, brl NUMERIC)""")
+    executar("""CREATE TABLE IF NOT EXISTS historico_indice_mercado (registado_em DATE PRIMARY KEY, indice_variacao NUMERIC NOT NULL)""")
+
+    executar("""CREATE TABLE IF NOT EXISTS capacidade_diagnosticos (id SERIAL PRIMARY KEY, conta_email TEXT NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), versao TEXT, respostas TEXT, resultados TEXT)""")
+    executar("CREATE INDEX IF NOT EXISTS ix_cap_diag_conta ON capacidade_diagnosticos (conta_email, criado_em)")
+    if consultar_um("SELECT COUNT(*) FROM contas")[0] == 0:
+        executar("INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)",
+                 ("Administrador", ADMIN_EMAIL_INICIAL, hash_password(ADMIN_PASSWORD_INICIAL), True))
+
+    if consultar_um("SELECT COUNT(*) FROM resumo_patrimonial")[0] == 0:
+        executar("INSERT INTO resumo_patrimonial (id, capital_social, capital_subscrito, capital_realizado, investimentos, reservas) VALUES (1, %s, %s, %s, %s, %s)",
+                 (10000000.0, 10000000.0, 5000000.0, 1866677.0, 2832885.0))
+        executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)",
+                 (5000000.0, 1866677.0, 2832885.0, 5000000.0 + 1866677.0 + 2832885.0))
+    else:
+        linha = consultar_um("SELECT capital_subscrito, capital_realizado, capital_social FROM resumo_patrimonial WHERE id = 1")
+        if linha and linha[0] is None:
+            valor_antigo = float(linha[2])
+            executar("UPDATE resumo_patrimonial SET capital_subscrito = %s, capital_realizado = %s WHERE id = 1",
+                     (valor_antigo, valor_antigo * 0.5))
+
+    if consultar_um("SELECT COUNT(*) FROM activos")[0] == 0:
+        for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
+            executar("INSERT INTO activos (nome, tipo, preco, variacao, ticker) VALUES (%s, %s, %s, %s, %s)", (nome, tipo, preco, var, ticker))
+    else:
+        for ticker, nome, tipo, preco, var in ACTIVOS_INICIAIS:
+            executar("UPDATE activos SET ticker = %s WHERE nome = %s AND (ticker IS NULL OR ticker = '')", (ticker, nome))
+    # ticker correcto do Standard Bank Angola na BODIVA: SBAOAAAA (versões antigas gravavam SBAAAAAA)
+    executar("UPDATE activos SET ticker = 'SBAOAAAA' WHERE ticker = 'SBAAAAAA'")
+
+    for titulo, categoria, conteudo in ARTIGOS_INICIAIS:
+        if not consultar_um("SELECT 1 FROM artigos WHERE titulo = %s", (titulo,)):
+            executar("INSERT INTO artigos (titulo, categoria, conteudo) VALUES (%s, %s, %s)", (titulo, categoria, conteudo))
+    # o artigo antigo mantém o nome «Regra 50/30/20» na base de dados: actualiza-o para «Princípio» (idempotente)
+    executar("UPDATE artigos SET conteudo = REPLACE(REPLACE(conteudo, 'Regra 50/30/20', 'Princípio 50/30/20'), 'regra 50/30/20', 'princípio 50/30/20') "
+             "WHERE POSITION('egra 50/30/20' IN conteudo) > 0")
+
+    if consultar_um("SELECT COUNT(*) FROM premissas_macro")[0] == 0:
+        executar("INSERT INTO premissas_macro (id, inflacao, taxa_livre_risco, premio_risco, beta_banca, beta_telecom, beta_outros) VALUES (1, 0.135, 0.18, 0.055, 1.0, 0.9, 1.0)")
+
+    for empresa, sector, preco, acoes, lucro, ganho, cap_proprio, div_total, g in AVALIACOES_INICIAIS:
+        if not consultar_um("SELECT 1 FROM avaliacoes WHERE empresa = %s", (empresa,)):
+            executar("INSERT INTO avaliacoes (empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, crescimento_g) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                     (empresa, sector, preco, acoes, lucro, ganho, cap_proprio, div_total, g))
+
+
+# ---------------- Papéis, permissões, auditoria e cálculo decimal ----------------
+from contextlib import contextmanager
+from decimal import Decimal, ROUND_HALF_EVEN
+
+
+def eh_admin() -> bool:
+    return bool(st.session_state.get("autenticado")) and bool(st.session_state.get("is_admin"))
+
+
+def eh_participante() -> bool:
+    """Participante dos investimentos existentes (ou administrador). Comprar formação ou ter conta NÃO dá este papel."""
+    return bool(st.session_state.get("autenticado")) and (bool(st.session_state.get("is_admin")) or bool(st.session_state.get("is_participante")))
+
+
+def exigir_admin():
+    if not eh_admin():
+        raise PermissionError("Acesso reservado ao administrador.")
+
+
+def exigir_participante():
+    if not eh_participante():
+        raise PermissionError("Acesso reservado aos participantes dos investimentos.")
+
+
+# ---- Portais de Educação: Iniciante e Investidor (resultam do Perfil de Investidor; o nível NÃO é o Premium) ----
+NIVEIS = {"iniciante": "Iniciante", "investidor": "Investidor"}
+
+
+def aviso_discreto(texto: str):
+    """Aviso informativo ou legal em letra pequena e cinzento claro (não compete com o conteúdo)."""
+    render_html(f'<p class="appo-aviso" style="font-size:0.58rem;line-height:1.3;color:#A3AEBD;margin:0.35rem 0 0 0;">{_esc(texto)}</p>')
+
+
+def nota_interna(texto: str):
+    """Nota para a equipa: só o administrador a vê."""
+    if eh_admin():
+        st.caption("🔒 " + texto)
+
+
+def nivel_actual() -> str:
+    n = str(st.session_state.get("nivel") or "iniciante")
+    return n if n in NIVEIS else "iniciante"
+
+
+def eh_investidor() -> bool:
+    """Portal Investidor: administrador, participantes dos investimentos ou conta cujo perfil indicou o nível Investidor."""
+    return bool(st.session_state.get("autenticado")) and (eh_admin() or eh_participante() or nivel_actual() == "investidor")
+
+
+def utilizador_actual() -> str:
+    return str(st.session_state.get("conta_email") or "sistema")
+
+
+def registar_auditoria(accao, entidade="", entidade_id="", antes=None, depois=None, motivo="", cur=None):
+    """Rasto de auditoria: quem fez o quê, quando, com o retrato anterior e posterior. Pode correr dentro de uma transacção (cur)."""
+    import json as _json
+    params = (utilizador_actual(), accao, entidade, str(entidade_id),
+              _json.dumps(antes, ensure_ascii=False, default=str) if antes is not None else None,
+              _json.dumps(depois, ensure_ascii=False, default=str) if depois is not None else None, motivo or "")
+    sql = "INSERT INTO auditoria (utilizador, accao, entidade, entidade_id, antes, depois, motivo) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+    if cur is not None:
+        cur.execute(sql, params)
+    else:
+        executar(sql, params)
+
+
+D = Decimal
+
+
+def dec(v) -> Decimal:
+    """Converte para Decimal sem passar por erros de vírgula flutuante."""
+    if v is None:
+        return D("0")
+    if isinstance(v, Decimal):
+        return v
+    return D(str(v))
+
+
+def q2(x) -> Decimal:
+    """Montantes em Kz: 2 casas, arredondamento half-even."""
+    return dec(x).quantize(D("0.01"), rounding=ROUND_HALF_EVEN)
+
+
+def q4(x) -> Decimal:
+    """Valor da unidade (VUP): 4 casas, arredondamento half-even."""
+    return dec(x).quantize(D("0.0001"), rounding=ROUND_HALF_EVEN)
+
+
+def q6(x) -> Decimal:
+    """Unidades: 6 casas, arredondamento half-even. O total de unidades é a soma dos registos já arredondados."""
+    return dec(x).quantize(D("0.000001"), rounding=ROUND_HALF_EVEN)
+
+
+@contextmanager
+def transaccao():
+    """Ligação própria e transacção única (tudo ou nada) para operações financeiras. Devolve um cursor."""
+    conn = psycopg2.connect(DATABASE_URL, connect_timeout=15)
+    try:
+        with conn.cursor() as cur:
+            yield cur
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+# ---------------- Contas ----------------
+def obter_conta_por_email(email: str):
+    return consultar_um("SELECT id, nome, email, password_hash, is_admin, is_premium, is_participante, nivel, trocar_password, estado FROM contas WHERE email = %s", (email,))
+
+def inserir_conta(nome, email, password, is_admin):
+    exigir_admin()
+    executar("INSERT INTO contas (nome, email, password_hash, is_admin) VALUES (%s, %s, %s, %s)", (nome, email, hash_password(password), is_admin))
+
+def listar_contas() -> pd.DataFrame:
+    exigir_admin()
+    return consultar_df("SELECT id, nome, email, is_admin, is_premium, is_participante, criado_em FROM contas WHERE COALESCE(estado, 'activa') <> 'pendente' ORDER BY criado_em DESC")
+
+def contar_admins() -> int:
+    return consultar_um("SELECT COUNT(*) FROM contas WHERE is_admin = TRUE")[0]
+
+def alternar_premium(conta_id: int, valor: bool):
+    exigir_admin()
+    executar("UPDATE contas SET is_premium = %s WHERE id = %s", (valor, conta_id))
+    registar_auditoria("Premium " + ("activado" if valor else "removido"), "conta", conta_id)
+
+
+def definir_participante(conta_id: int, valor: bool):
+    """Marca/desmarca uma conta como participante dos investimentos existentes (decisão do administrador, auditada)."""
+    exigir_admin()
+    antes = consultar_um("SELECT is_participante FROM contas WHERE id = %s", (conta_id,))
+    executar("UPDATE contas SET is_participante = %s WHERE id = %s", (valor, conta_id))
+    registar_auditoria("Participante " + ("atribuído" if valor else "removido"), "conta", conta_id,
+                       antes={"is_participante": bool(antes[0]) if antes else None}, depois={"is_participante": valor})
+
+def repor_password(conta_id: int) -> str:
+    exigir_admin()
+    nova_password = secrets.token_urlsafe(9)
+    executar("UPDATE contas SET password_hash = %s, trocar_password = TRUE WHERE id = %s", (hash_password(nova_password), conta_id))
+    return nova_password
+
+def registar_pedido_recuperacao(email: str, contacto: str):
+    """Pedido público (sem sessão), tratado pelo administrador. Não revela se a conta existe; ignora repetições nas últimas 24 h."""
+    email = (email or "").strip().lower()
+    ja = consultar_um("SELECT 1 FROM pedidos_recuperacao WHERE email = %s AND estado = 'pendente' AND criado_em > NOW() - INTERVAL '24 hours'", (email,))
+    if not ja:
+        executar("INSERT INTO pedidos_recuperacao (email, contacto) VALUES (%s, %s)", (email, (contacto or "").strip()))
+
+
+def obter_pedidos_recuperacao() -> pd.DataFrame:
+    exigir_admin()
+    return consultar_df("SELECT id, email, contacto, estado, criado_em, resolvido_em, resolvido_por FROM pedidos_recuperacao "
+                        "ORDER BY (estado = 'pendente') DESC, criado_em DESC LIMIT 100")
+
+
+def resolver_pedido_recuperacao(pedido_id: int, repor: bool):
+    """Repõe a palavra-passe (devolve a provisória) ou ignora o pedido. Tudo fica auditado."""
+    exigir_admin()
+    p = consultar_um("SELECT email, estado FROM pedidos_recuperacao WHERE id = %s", (int(pedido_id),))
+    if not p or p[1] != "pendente":
+        raise ValueError("Este pedido já foi tratado ou não existe.")
+    nova = None
+    if repor:
+        c = consultar_um("SELECT id FROM contas WHERE email = %s", (p[0],))
+        if not c:
+            raise ValueError("Não existe nenhuma conta com este e-mail. Confirma o e-mail com a pessoa ou ignora o pedido.")
+        nova = repor_password(int(c[0]))
+    estado = "resolvido" if repor else "ignorado"
+    executar("UPDATE pedidos_recuperacao SET estado = %s, resolvido_em = NOW(), resolvido_por = %s WHERE id = %s", (estado, utilizador_actual(), int(pedido_id)))
+    registar_auditoria("recuperacao_password_" + estado, "pedido_recuperacao", pedido_id, depois={"email": p[0]})
+    return nova
+
+
+def alterar_password_propria(conta_id, actual: str, nova: str, repetida: str):
+    """Devolve uma mensagem de erro, ou None se a palavra-passe foi alterada."""
+    if not conta_id:
+        return "Sessão inválida."
+    if len(nova or "") < 8:
+        return "A nova palavra-passe deve ter pelo menos 8 caracteres."
+    if nova != repetida:
+        return "A repetição não coincide com a nova palavra-passe."
+    r = consultar_um("SELECT password_hash FROM contas WHERE id = %s", (int(conta_id),))
+    if not r or not verificar_password(actual or "", r[0]):
+        return "A palavra-passe actual não está correcta."
+    if nova == actual:
+        return "A nova palavra-passe tem de ser diferente da actual."
+    executar("UPDATE contas SET password_hash = %s, trocar_password = FALSE WHERE id = %s", (hash_password(nova), int(conta_id)))
+    registar_auditoria("password_alterada", "conta", conta_id)
+    return None
+
+
+# ---- Envio de e-mail (smtplib). A palavra-passe de aplicação do Gmail NUNCA vai no código: define SMTP_PASSWORD na Render ----
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "465") or 465)
+SMTP_USER = os.environ.get("SMTP_USER", "clube.investimento.appo@gmail.com")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+APP_URL = os.environ.get("APP_URL", "https://clube-investimento-appo.onrender.com")
+# Envio por HTTPS através de um script do Gmail do Clube (Google Apps Script): não usa portas SMTP, por isso funciona no plano gratuito da Render
+EMAIL_RELAY_URL = os.environ.get("EMAIL_RELAY_URL", "")
+EMAIL_RELAY_TOKEN = os.environ.get("EMAIL_RELAY_TOKEN", "")
+
+
+def smtp_configurado() -> bool:
+    return bool(SMTP_USER and SMTP_PASSWORD)
+
+
+def email_configurado() -> bool:
+    return bool(EMAIL_RELAY_URL and EMAIL_RELAY_TOKEN) or smtp_configurado()
+
+
+def estado_email() -> str:
+    if EMAIL_RELAY_URL and EMAIL_RELAY_TOKEN:
+        return "✅ Envio de e-mail activo (script do Gmail do Clube, por HTTPS)."
+    if smtp_configurado():
+        return "✅ Envio de e-mail por SMTP (não funciona no plano gratuito da Render)."
+    return "⚠️ Envio de e-mail por configurar: até lá, usa o botão de WhatsApp."
+
+
+def _enviar_via_relay(destinatario: str, assunto: str, texto: str):
+    try:
+        r = requests.post(EMAIL_RELAY_URL, json={"token": EMAIL_RELAY_TOKEN, "to": destinatario, "subject": assunto, "body": texto}, timeout=25)
+    except requests.RequestException:
+        return False, "Não foi possível contactar o script de envio de e-mail. Tenta novamente dentro de instantes."
+    try:
+        dados = r.json()
+    except ValueError:
+        return False, "O script de envio respondeu de forma inesperada: confirma que está publicado como «Aplicação Web», com acesso para «Qualquer pessoa»."
+    if not isinstance(dados, dict):
+        return False, "Resposta inválida do script de envio."
+    if dados.get("ok"):
+        return True, None
+    return False, "O script de envio recusou o pedido: " + str(dados.get("erro") or "motivo desconhecido")
+
+
+def enviar_email(destinatario: str, assunto: str, texto: str):
+    """Devolve (True, None) se o e-mail foi entregue ao servidor, ou (False, mensagem de erro em português)."""
+    destinatario = (destinatario or "").strip()
+    if not email_configurado():
+        return False, ("O envio de e-mail ainda não está configurado: define EMAIL_RELAY_URL e EMAIL_RELAY_TOKEN (script do Gmail do Clube) "
+                       "ou, num plano pago da Render, SMTP_PASSWORD, nas variáveis de ambiente.")
+    if not _REGEX_EMAIL.match(destinatario):
+        return False, "O endereço de e-mail é inválido."
+    if EMAIL_RELAY_URL and EMAIL_RELAY_TOKEN:
+        return _enviar_via_relay(destinatario, assunto, texto)
+    msg = EmailMessage()
+    msg["From"] = f"Clube de Investimento APPO <{SMTP_USER}>"
+    msg["To"] = destinatario
+    msg["Subject"] = assunto
+    msg.set_content(texto)
+    try:
+        contexto = ssl.create_default_context()
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=contexto, timeout=12) as srv:
+                srv.login(SMTP_USER, SMTP_PASSWORD)
+                srv.send_message(msg)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as srv:
+                srv.starttls(context=contexto)
+                srv.login(SMTP_USER, SMTP_PASSWORD)
+                srv.send_message(msg)
+        return True, None
+    except smtplib.SMTPAuthenticationError:
+        return False, "O Gmail recusou o início de sessão: SMTP_PASSWORD tem de ser uma palavra-passe de aplicação (com verificação em 2 passos activa), não a palavra-passe normal."
+    except (socket.timeout, TimeoutError, ConnectionError, OSError):
+        return False, ("Não foi possível ligar ao servidor de e-mail. Se a app corre num plano gratuito da Render, as portas SMTP (465 e 587) estão bloqueadas: "
+                       "usa o script do Gmail do Clube (EMAIL_RELAY_URL e EMAIL_RELAY_TOKEN) ou passa a um plano pago.")
+    except Exception as exc:
+        traceback.print_exc()
+        return False, f"Não foi possível enviar o e-mail ({type(exc).__name__})."
+
+
+def texto_email_nova_password(email: str, password: str):
+    assunto = "Clube de Investimento APPO: nova palavra-passe"
+    corpo = (f"Olá,\n\nO administrador do Clube de Investimento APPO repôs o acesso à tua conta ({email}).\n\n"
+             f"Palavra-passe provisória: {password}\n\n"
+             f"Entra em {APP_URL} e escolhe logo uma palavra-passe só tua: a app pede-o no primeiro acesso.\n\n"
+             "Se não fizeste este pedido, avisa o administrador.\n\nClube de Investimento APPO")
+    return assunto, corpo
+
+
+def ligacao_whatsapp(contacto: str, texto: str):
+    """Ligação wa.me com a mensagem já escrita (o administrador só carrega em enviar). Devolve None se o número não for utilizável."""
+    import re as _re_w
+    digitos = _re_w.sub(r"\D", "", contacto or "")
+    if digitos.startswith("00"):
+        digitos = digitos[2:]
+    if len(digitos) == 9 and digitos.startswith("9"):
+        digitos = "244" + digitos
+    if len(digitos) < 11:
+        return None
+    return f"https://wa.me/{digitos}?text={urllib.parse.quote(texto)}"
+
+
+def botao_ligacao(rotulo: str, url: str):
+    if hasattr(st, "link_button"):
+        st.link_button(rotulo, url)
+    else:
+        st.markdown(f"[{rotulo}]({url})")
+
+
+def repor_e_enviar_por_email(email: str, contacto: str, repor_fn):
+    """Repõe a palavra-passe (repor_fn devolve a provisória) e tenta enviá-la por e-mail; se falhar, mostra-a ao administrador com envio alternativo."""
+    nova = repor_fn()
+    assunto, corpo = texto_email_nova_password(email, nova)
+    ok, erro = enviar_email(email, assunto, corpo)
+    if ok:
+        st.success(f"Nova palavra-passe enviada para {email}. Pede à pessoa para confirmar a receção (e para ver o spam).")
+        return
+    st.warning(erro)
+    st.info(f"A palavra-passe de {email} já foi reposta. Provisória (envia por outro canal): **{nova}**")
+    url = ligacao_whatsapp(contacto, f"Olá! A tua palavra-passe provisória do APPO é: {nova}. Entra em {APP_URL} e escolhe logo uma só tua.")
+    if url:
+        botao_ligacao("📲 Enviar por WhatsApp", url)
+
+
+def eliminar_conta(conta_id: int):
+    exigir_admin()
+    executar("DELETE FROM perfil_investidor WHERE conta_id = %s", (conta_id,))
+    executar("DELETE FROM contas WHERE id = %s", (conta_id,))
+
+def registar_acesso(email: str, sucesso: bool):
+    executar("INSERT INTO log_acessos (email, sucesso) VALUES (%s, %s)", (email, sucesso))
+
+def obter_log_acessos() -> pd.DataFrame:
+    exigir_admin()
+    return consultar_df("SELECT email, sucesso, criado_em FROM log_acessos ORDER BY criado_em DESC LIMIT 50")
+
+
+# ---------------- Resumo patrimonial ----------------
+def obter_resumo_patrimonial() -> dict:
+    exigir_participante()
+    linha = consultar_um("SELECT capital_subscrito, capital_realizado, investimentos, reservas, actualizado_em FROM resumo_patrimonial WHERE id = 1")
+    return {"capital_subscrito": float(linha[0] or 0), "capital_realizado": float(linha[1] or 0),
+            "investimentos": float(linha[2]), "reservas": float(linha[3]), "actualizado_em": linha[4]}
+
+def actualizar_resumo_patrimonial(capital_subscrito, capital_realizado, investimentos, reservas):
+    exigir_admin()
+    executar("UPDATE resumo_patrimonial SET capital_social = %s, capital_subscrito = %s, capital_realizado = %s, investimentos = %s, reservas = %s, actualizado_em = NOW() WHERE id = 1",
+             (capital_subscrito, capital_subscrito, capital_realizado, investimentos, reservas))
+    total = capital_realizado  # investimentos e reservas são partes do capital realizado
+    executar("INSERT INTO historico_patrimonio (capital_social, investimentos, reservas, total) VALUES (%s, %s, %s, %s)",
+             (capital_realizado, investimentos, reservas, total))
+
+def obter_historico_patrimonio() -> pd.DataFrame:
+    exigir_participante()
+    # o Património Total do Clube é o Capital Realizado (investimentos e reservas são partes dele);
+    # a coluna 'total' antiga somava as três coisas e contava duas vezes.
+    return consultar_df("SELECT registado_em, capital_social AS total FROM historico_patrimonio ORDER BY registado_em")
+
+
+def obter_historico_patrimonio_admin(limite: int = 40) -> pd.DataFrame:
+    exigir_admin()
+    return consultar_df("SELECT id, registado_em, capital_social, investimentos, reservas FROM historico_patrimonio "
+                        "ORDER BY registado_em DESC LIMIT %s", (int(limite),))
+
+
+def eliminar_registo_historico(registo_id: int):
+    exigir_admin()
+    executar("DELETE FROM historico_patrimonio WHERE id = %s", (int(registo_id),))
+
+
+# ---------------- Valor da Unidade de Participação (VUP) ----------------
+def obter_cotas_config() -> dict:
+    """Regras da estrutura de unidades (cotas): valor nominal, limite, entrada mínima, votos por unidade Fundadora, estado da base."""
+    linha = consultar_um("SELECT valor_nominal, limite_cotas, entrada_minima, peso_voto_fundadora, unidades_base_validada, "
+                         "admissao_activa, data_base, fundamento_base FROM cotas_config WHERE id = 1")
+    if not linha:
+        return {"valor_nominal": 100000.0, "limite_cotas": 0.0, "entrada_minima": 0.0, "peso_voto_fundadora": 1.0,
+                "unidades_base_validada": False, "admissao_activa": False, "data_base": None, "fundamento_base": ""}
+    return {"valor_nominal": float(linha[0]), "limite_cotas": float(linha[1] or 0), "entrada_minima": float(linha[2] or 0),
+            "peso_voto_fundadora": float(linha[3] or 1), "unidades_base_validada": bool(linha[4]), "admissao_activa": bool(linha[5]),
+            "data_base": linha[6], "fundamento_base": linha[7] or ""}
+
+
+def guardar_cotas_config(valor_nominal: float, limite_cotas: float, entrada_minima: float, peso_voto_fundadora: float = 1.0):
+    exigir_admin()
+    antes = obter_cotas_config()
+    executar("INSERT INTO cotas_config (id, valor_nominal, limite_cotas, entrada_minima, peso_voto_fundadora) VALUES (1, %s, %s, %s, %s) "
+             "ON CONFLICT (id) DO UPDATE SET valor_nominal = EXCLUDED.valor_nominal, limite_cotas = EXCLUDED.limite_cotas, "
+             "entrada_minima = EXCLUDED.entrada_minima, peso_voto_fundadora = EXCLUDED.peso_voto_fundadora",
+             (valor_nominal, limite_cotas, entrada_minima, peso_voto_fundadora))
+    registar_auditoria("Regras de unidades alteradas", "cotas_config", 1, antes=antes,
+                       depois={"valor_nominal": valor_nominal, "limite_cotas": limite_cotas, "entrada_minima": entrada_minima,
+                               "peso_voto_fundadora": peso_voto_fundadora})
+
+
+def adicionar_votos(df_mov: pd.DataFrame, peso_fundadora: float) -> pd.DataFrame:
+    """Acrescenta 'votos': cada unidade Fundadora vale `peso_fundadora` votos (proposta pendente de formalização); a Ordinária vale 1."""
+    out = df_mov.copy()
+    if out.empty:
+        out["votos"] = pd.Series(dtype=float)
+        return out
+    if "classe" not in out.columns:
+        out["classe"] = "Ordinária"
+    out["classe"] = out["classe"].fillna("Ordinária")
+    out["votos"] = out.apply(lambda r: float(r["unidades"]) * (float(peso_fundadora) if r["classe"] == "Fundadora" else 1.0), axis=1)
+    return out
+
+
+NOME_ADMIN_PUBLICO = "Aníbal Alexandre Pereira da Costa"
+ROTULO_ADMIN_PUBLICO = NOME_ADMIN_PUBLICO + " — Administrador Executivo"
+_ROMANOS = ["II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
+
+
+def _norm_nome(n) -> str:
+    import unicodedata
+    base = "".join(c for c in unicodedata.normalize("NFKD", str(n or "")) if not unicodedata.combining(c))
+    return " ".join(base.lower().split())
+
+
+def rotulos_publicos(nomes: list) -> dict:
+    """Mapeia nomes internos para o rótulo mostrável: só o administrador é identificado; os restantes são 'Sócio II', 'Sócio III'...
+    A anonimização é apenas de apresentação: os registos internos mantêm as identidades."""
+    guardados = {}
+    try:
+        guardados = {_norm_nome(r["nome_interno"]): r["rotulo_publico"] for _, r in consultar_df("SELECT nome_interno, rotulo_publico FROM identidades_socios").iterrows()}
+    except Exception:
+        pass
+    usados = set(guardados.values())
+    livres = [f"Sócio {r}" for r in _ROMANOS if f"Sócio {r}" not in usados]
+    out = {}
+    for n in nomes:
+        k = _norm_nome(n)
+        if k == _norm_nome(NOME_ADMIN_PUBLICO):
+            out[n] = ROTULO_ADMIN_PUBLICO
+        elif k in guardados:
+            out[n] = guardados[k]
+        else:
+            out[n] = livres.pop(0) if livres else "Sócio"
+    return out
+
+
+def calcular_subscricoes_iniciais(capital, valor_nominal, fundadores: list) -> list:
+    """Hipótese de estrutura inicial: reparte o capital de referência pelas percentagens acordadas (não prova contribuições).
+    Decimal; o resto de arredondamento vai para o maior titular, para o total bater certo. ValueError com mensagem clara."""
+    linhas = []
+    for f in fundadores:
+        nome = str(f.get("Sócio") or "").strip()
+        pct = _numero_flex(f.get("% do capital")) or 0.0
+        if not nome and pct <= 0:
+            continue
+        if not nome or pct <= 0:
+            raise ValueError("Cada linha precisa de um nome e de uma percentagem superior a zero.")
+        linhas.append((nome, str(f.get("E-mail da conta (opcional)") or "").strip().lower() or None, dec(pct)))
+    if not linhas:
+        raise ValueError("Preencha os participantes e as respectivas percentagens.")
+    total = sum(p for _, _, p in linhas)
+    if abs(total - D(100)) > D("0.01"):
+        raise ValueError(f"As percentagens somam {total:.2f}%; têm de somar exactamente 100%.")
+    capital, valor_nominal = dec(capital), dec(valor_nominal)
+    if capital <= 0 or valor_nominal <= 0:
+        raise ValueError("O capital de referência e o valor nominal têm de ser superiores a zero.")
+    montantes = [q2(capital * p / D(100)) for _, _, p in linhas]
+    resto = q2(capital) - sum(montantes)
+    if resto != 0:
+        montantes[max(range(len(linhas)), key=lambda i: linhas[i][2])] += resto
+    return [{"socio": n, "email": e, "pct": p, "montante": m, "cotas": q6(m / valor_nominal)} for (n, e, p), m in zip(linhas, montantes)]
+
+
+def avaliar_carteira_real() -> dict:
+    """Investimentos a preços de avaliação registados na app. Decimal. Devolve valor, custo, data dos preços e linhas sem preço."""
+    exigir_participante()
+    cart = obter_carteira_real()
+    ativos = obter_activos()
+    por_tk = {str(r["ticker"]).strip().upper().rstrip("A"): r for _, r in ativos.iterrows() if str(r["ticker"]).strip()}
+    por_nome = {str(r["nome"]).strip().upper(): r for _, r in ativos.iterrows()}
+    va, vq, datas, sem_preco = D(0), D(0), [], []
+    for _, l in cart.iterrows():
+        chave = str(l["ticker"] or "").strip().upper().rstrip("A")
+        ativo = por_tk.get(chave) if chave else None
+        if ativo is None:
+            ativo = por_nome.get(str(l["nome"] or "").strip().upper())
+        if ativo is None:
+            sem_preco.append(str(l["nome"]))
+        else:
+            va += dec(l["qtd"]) * dec(ativo["preco"])
+            if ativo.get("actualizado_em") is not None:
+                datas.append(ativo["actualizado_em"])
+        vq += dec(l["valor_aquisicao"])
+    return {"valor": q2(va), "custo": q2(vq), "data_precos": max(datas) if datas else None, "sem_preco": sem_preco}
+
+
+def valor_carteira_real_actual() -> tuple:
+    av = avaliar_carteira_real()
+    return float(av["valor"]), float(av["custo"])
+
+
+def obter_ultimo_balanco():
+    exigir_participante()
+    return consultar_um("SELECT id, data_ref, dinheiro_disponivel, outros_activos, passivos, fonte, titularidade, estado, origem "
+                        "FROM balanco_privado ORDER BY data_ref DESC, id DESC LIMIT 1")
+
+
+def obter_vup_info() -> dict:
+    """Valor da unidade = património líquido validado / unidades em circulação.
+    Património líquido = investimentos a preços de avaliação + dinheiro disponível + outros activos comprovados - passivos.
+    O capital realizado NÃO entra (evita dupla contagem). Estado: Não calculado | Provisório | Validado."""
+    exigir_participante()
+    av = avaliar_carteira_real()
+    bal = obter_ultimo_balanco()
+    cfg = obter_cotas_config()
+    un_val = dec(consultar_um("SELECT COALESCE(SUM(unidades), 0) FROM unidades_movimentos WHERE estado = 'Validado'")[0])
+    un_rever = dec(consultar_um("SELECT COALESCE(SUM(unidades), 0) FROM unidades_movimentos WHERE estado = 'Por rever'")[0])
+    base = consultar_um("SELECT vup, data FROM unidades_movimentos WHERE estado = 'Validado' ORDER BY data, id LIMIT 1")
+    motivos = []
+    if bal is None:
+        motivos.append("Falta registar o balanço (dinheiro disponível, outros activos e passivos).")
+    if un_val <= 0:
+        motivos.append("Não há unidades validadas em circulação.")
+    if av["sem_preco"]:
+        motivos.append("Há posições sem preço de avaliação: " + ", ".join(av["sem_preco"]) + ".")
+    dinheiro = dec(bal[2]) if bal else D(0)
+    outros = dec(bal[3]) if bal else D(0)
+    passivos = dec(bal[4]) if bal else D(0)
+    nav = q2(av["valor"] + dinheiro + outros - passivos)
+    if motivos:
+        estado, vup = "Não calculado", D(0)
+    else:
+        vup = q4(nav / un_val)
+        estado = "Validado" if (bal[7] == "Validado" and cfg["unidades_base_validada"]) else "Provisório"
+    return {"valor_carteira": float(av["valor"]), "custo_carteira": float(av["custo"]), "reservas": float(dinheiro), "dinheiro": float(dinheiro),
+            "outros": float(outros), "passivos": float(passivos), "vlg": float(nav), "nav": nav, "unidades": float(un_val),
+            "unidades_por_rever": float(un_rever), "vup": float(vup), "vup_dec": vup,
+            "vup_base": float(base[0]) if base else 0.0, "data_base": base[1] if base else None,
+            "estado": estado, "motivos": motivos, "data_precos": av["data_precos"], "balanco": bal}
+
+
+def registar_vup_hoje():
+    """Grava o VUP de hoje (com o seu estado) no histórico. Não grava se o indicador não for calculável. Nunca interrompe quem chama."""
+    try:
+        i = obter_vup_info()
+        if i["estado"] != "Não calculado" and i["unidades"] > 0 and i["vup"] > 0:
+            executar("INSERT INTO historico_vup (dia, vlg, unidades, vup, estado) VALUES (%s, %s, %s, %s, %s) "
+                     "ON CONFLICT (dia) DO UPDATE SET vlg = EXCLUDED.vlg, unidades = EXCLUDED.unidades, vup = EXCLUDED.vup, estado = EXCLUDED.estado",
+                     (datetime.now().date(), i["vlg"], i["unidades"], i["vup"], i["estado"]))
+    except Exception:
+        pass
+
+
+def obter_serie_vup(periodo: str) -> pd.DataFrame:
+    exigir_participante()
+    from datetime import timedelta
+    if periodo == "1d":
+        df = consultar_df('SELECT dia AS "Data", vup AS "Valor" FROM historico_vup ORDER BY dia DESC LIMIT 2')
+        df = df.sort_values("Data").reset_index(drop=True)
+    else:
+        inicio = datetime.now().date() - timedelta(days=_PERIODO_DIAS[periodo])
+        df = consultar_df('SELECT dia AS "Data", vup AS "Valor" FROM historico_vup WHERE dia >= %s ORDER BY dia', (inicio,))
+    if not df.empty:
+        df["Valor"] = df["Valor"].astype(float)
+    return df
+
+
+def obter_unidades_movimentos(incluir_anulados: bool = True) -> pd.DataFrame:
+    exigir_participante()
+    filtro = "" if incluir_anulados else "WHERE estado <> 'Anulado' "
+    df = consultar_df("SELECT id, data, socio, socio_email, tipo, classe, estado, origem, referencia, montante, vup, unidades, efeito_caixa, "
+                      "fundamento, motivo_anulacao, anulado_por, anulado_em, criado_por, criado_em FROM unidades_movimentos "
+                      + filtro + "ORDER BY data DESC, id DESC")
+    if not df.empty and not eh_admin():
+        # participante não-admin: vê apenas os seus próprios movimentos
+        email = str(st.session_state.get("conta_email") or "").strip().lower()
+        df = df[df["socio_email"].fillna("").str.lower() == email]
+    return df
+
+
+def registar_balanco(data_ref, dinheiro, outros, passivos, fonte, titularidade, estado="Provisório"):
+    """Novo retrato do património (nunca se editam retratos antigos). 'Validado' só por decisão explícita do administrador."""
+    exigir_admin()
+    ant = obter_ultimo_balanco()
+    val = estado == "Validado"
+    with transaccao() as cur:
+        cur.execute("INSERT INTO balanco_privado (data_ref, dinheiro_disponivel, outros_activos, passivos, fonte, titularidade, estado, origem, "
+                    "criado_por, validado_por, validado_em) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                    (data_ref, q2(dinheiro), q2(outros), q2(passivos), fonte, titularidade, estado, "Registo manual", utilizador_actual(),
+                     utilizador_actual() if val else None, datetime.now() if val else None))
+        novo_id = cur.fetchone()[0]
+        registar_auditoria("Balanço registado", "balanco_privado", novo_id,
+                           antes={"id": ant[0], "dinheiro": ant[2], "outros": ant[3], "passivos": ant[4], "estado": ant[7]} if ant else None,
+                           depois={"dinheiro": q2(dinheiro), "outros": q2(outros), "passivos": q2(passivos), "estado": estado}, cur=cur)
+    return novo_id
+
+
+def validar_balanco(balanco_id: int, nota: str = ""):
+    exigir_admin()
+    with transaccao() as cur:
+        cur.execute("UPDATE balanco_privado SET estado = 'Validado', validado_por = %s, validado_em = NOW() WHERE id = %s AND estado <> 'Validado'",
+                    (utilizador_actual(), int(balanco_id)))
+        registar_auditoria("Balanço validado", "balanco_privado", balanco_id, motivo=nota, cur=cur)
+
+
+def registar_operacao_unidades(tipo, socio, socio_email, montante, classe, data_op, referencia, fundamento="", vup_historico=None) -> dict:
+    """Subscrição ou resgate autorizado. Tudo numa transacção: calcula com o balanço validado anterior à operação, regista o
+    movimento, o novo retrato do dinheiro disponível e a auditoria. Bloqueia execuções simultâneas e duplicações (referência única)."""
+    exigir_admin()
+    if tipo not in ("Subscrição", "Resgate"):
+        raise ValueError("Operação inválida.")
+    montante = q2(montante)
+    if montante <= 0 or not str(socio or "").strip():
+        raise ValueError("Indique o participante e um montante superior a zero.")
+    if classe not in ("Fundadora", "Ordinária"):
+        raise ValueError("Classe inválida.")
+    hoje = datetime.now().date()
+    if data_op > hoje:
+        raise ValueError("A data da operação não pode ser futura.")
+    if not str(referencia or "").strip():
+        raise ValueError("Falta a referência da operação.")
+    av = avaliar_carteira_real()
+    with transaccao() as cur:
+        cur.execute("SELECT limite_cotas, entrada_minima, unidades_base_validada FROM cotas_config WHERE id = 1 FOR UPDATE")
+        c = cur.fetchone()
+        limite, entrada_min, base_ok = dec(c[0] or 0), dec(c[1] or 0), bool(c[2])
+        cur.execute("SELECT id, dinheiro_disponivel, outros_activos, passivos, estado, fonte, titularidade, data_ref FROM balanco_privado "
+                    "ORDER BY data_ref DESC, id DESC LIMIT 1")
+        bal = cur.fetchone()
+        if not bal or bal[4] != "Validado":
+            raise ValueError("O balanço mais recente não está validado: valide-o antes de emitir ou resgatar unidades.")
+        if not base_ok:
+            raise ValueError("A base de unidades ainda não está reconciliada e validada.")
+        cur.execute("SELECT COALESCE(SUM(unidades), 0) FROM unidades_movimentos WHERE estado = 'Validado'")
+        un_total = dec(cur.fetchone()[0])
+        if un_total <= 0:
+            raise ValueError("Não há unidades validadas em circulação.")
+        dinheiro, outros, passivos = dec(bal[1]), dec(bal[2]), dec(bal[3])
+        nav = q2(av["valor"] + dinheiro + outros - passivos)
+        vup_hoje = q4(nav / un_total)
+        if data_op < hoje:
+            if not str(fundamento or "").strip() or vup_historico is None or dec(vup_historico) <= 0:
+                raise ValueError("Data anterior a hoje: indique o valor da unidade aplicável nessa data e o fundamento (regularização).")
+            vup_op, origem = q4(vup_historico), "Regularização"
+        else:
+            vup_op, origem = vup_hoje, "Operação autorizada"
+        unidades = q6(montante / vup_op)
+        if tipo == "Subscrição":
+            if montante < entrada_min:
+                raise ValueError(f"A entrada mínima é de {q2(entrada_min)} Kz.")
+            if limite > 0 and un_total + unidades > limite:
+                raise ValueError(f"A emissão levaria as unidades a {un_total + unidades} (limite pendente de formalização: {limite}). "
+                                 "Ultrapassar o limite exige decisão documentada e, provavelmente, alteração do Estatuto.")
+            sinal = 1
+        else:
+            cur.execute("SELECT COALESCE(SUM(unidades), 0) FROM unidades_movimentos WHERE estado = 'Validado' AND classe = %s "
+                        "AND lower(trim(socio)) = lower(trim(%s))", (classe, socio))
+            disponiveis = dec(cur.fetchone()[0])
+            if unidades > disponiveis:
+                raise ValueError(f"O participante tem {disponiveis} unidades {classe}s; o resgate pedido equivale a {unidades}.")
+            if montante > dinheiro:
+                raise ValueError("Liquidez insuficiente: o dinheiro disponível registado não cobre este resgate.")
+            sinal = -1
+        efeito = montante * sinal
+        nav_dep, un_dep = q2(nav + efeito), un_total + sinal * unidades
+        antes = {"nav": nav, "unidades": un_total, "vup": vup_hoje, "dinheiro": dinheiro}
+        depois = {"nav": nav_dep, "unidades": un_dep, "vup": q4(nav_dep / un_dep) if un_dep > 0 else None, "dinheiro": dinheiro + efeito}
+        import json as _json
+        try:
+            cur.execute("INSERT INTO unidades_movimentos (data, socio, socio_email, tipo, classe, estado, origem, referencia, fundamento, montante, vup, "
+                        "unidades, efeito_caixa, criado_por, antes, depois) VALUES (%s, %s, %s, %s, %s, 'Validado', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                        (data_op, socio.strip(), socio_email or None, tipo, classe, origem, referencia.strip(), fundamento or "",
+                         montante * sinal, vup_op, unidades * sinal, efeito, utilizador_actual(),
+                         _json.dumps(antes, default=str), _json.dumps(depois, default=str)))
+        except psycopg2.errors.UniqueViolation:
+            raise ValueError("Operação duplicada: esta referência já foi utilizada.")
+        mov_id = cur.fetchone()[0]
+        cur.execute("INSERT INTO balanco_privado (data_ref, dinheiro_disponivel, outros_activos, passivos, fonte, titularidade, estado, origem, "
+                    "criado_por, validado_por, validado_em) VALUES (%s, %s, %s, %s, %s, %s, 'Validado', %s, %s, %s, NOW())",
+                    (hoje, q2(dinheiro + efeito), q2(outros), q2(passivos), bal[5], bal[6], f"Derivado da operação {referencia.strip()}",
+                     utilizador_actual(), utilizador_actual()))
+        registar_auditoria(f"{tipo} de unidades", "unidades_movimentos", mov_id, antes=antes, depois=depois, motivo=fundamento or "", cur=cur)
+    return {"id": mov_id, "unidades": unidades, "vup": vup_op, "origem": origem, "antes": antes, "depois": depois}
+
+
+def anular_movimento_unidades(mov_id: int, motivo: str):
+    """Anulação (estorno) com motivo, responsável e data. Nunca apaga. Se o movimento teve efeito em caixa, regista o estorno do dinheiro."""
+    exigir_admin()
+    if not str(motivo or "").strip():
+        raise ValueError("Indique o motivo da anulação.")
+    with transaccao() as cur:
+        cur.execute("SELECT 1 FROM cotas_config WHERE id = 1 FOR UPDATE")
+        cur.execute("SELECT id, socio, classe, estado, unidades, efeito_caixa, referencia FROM unidades_movimentos WHERE id = %s", (int(mov_id),))
+        m = cur.fetchone()
+        if not m:
+            raise ValueError("Movimento não encontrado.")
+        if m[3] == "Anulado":
+            raise ValueError("O movimento já está anulado.")
+        cur.execute("UPDATE unidades_movimentos SET estado = 'Anulado', motivo_anulacao = %s, anulado_por = %s, anulado_em = NOW() WHERE id = %s",
+                    (motivo.strip(), utilizador_actual(), int(mov_id)))
+        cur.execute("SELECT COALESCE(SUM(unidades), 0) FROM unidades_movimentos WHERE estado = 'Validado' AND classe = %s "
+                    "AND lower(trim(socio)) = lower(trim(%s))", (m[2], m[1]))
+        if dec(cur.fetchone()[0]) < 0:
+            raise ValueError("A anulação deixaria o participante com unidades negativas; anule primeiro os movimentos posteriores.")
+        efeito = dec(m[5]) if m[5] is not None else D(0)
+        if efeito != 0:
+            cur.execute("SELECT dinheiro_disponivel, outros_activos, passivos, fonte, titularidade FROM balanco_privado ORDER BY data_ref DESC, id DESC LIMIT 1")
+            b = cur.fetchone()
+            cur.execute("INSERT INTO balanco_privado (data_ref, dinheiro_disponivel, outros_activos, passivos, fonte, titularidade, estado, origem, "
+                        "criado_por, validado_por, validado_em) VALUES (%s, %s, %s, %s, %s, %s, 'Validado', %s, %s, %s, NOW())",
+                        (datetime.now().date(), q2(dec(b[0]) - efeito), q2(dec(b[1])), q2(dec(b[2])), b[3], b[4],
+                         f"Estorno do movimento {m[6]}", utilizador_actual(), utilizador_actual()))
+        registar_auditoria("Movimento de unidades anulado", "unidades_movimentos", mov_id, antes={"estado": m[3]}, depois={"estado": "Anulado"},
+                           motivo=motivo.strip(), cur=cur)
+
+
+def validar_movimento_unidades(mov_id: int, fundamento: str):
+    """Aceita um movimento 'Por rever' (acordo/estimativa) como base de unidades. Não cria nem move dinheiro."""
+    exigir_admin()
+    if not str(fundamento or "").strip():
+        raise ValueError("Indique o fundamento da validação (documento, acordo, contribuição comprovada...).")
+    with transaccao() as cur:
+        cur.execute("UPDATE unidades_movimentos SET estado = 'Validado', fundamento = %s WHERE id = %s AND estado = 'Por rever'", (fundamento.strip(), int(mov_id)))
+        if cur.rowcount != 1:
+            raise ValueError("Só movimentos 'Por rever' podem ser validados.")
+        registar_auditoria("Movimento de unidades validado", "unidades_movimentos", mov_id, antes={"estado": "Por rever"},
+                           depois={"estado": "Validado"}, motivo=fundamento.strip(), cur=cur)
+
+
+def corrigir_movimento_unidades(mov_id: int, data, socio: str, montante: float, vup: float, classe: str):
+    """Corrige um movimento ainda 'Por rever' (os validados corrigem-se anulando e registando de novo). Auditado."""
+    exigir_admin()
+    if float(vup) <= 0 or float(montante) <= 0 or not str(socio or "").strip():
+        raise ValueError("Indique participante, montante e valor da unidade superiores a zero.")
+    with transaccao() as cur:
+        cur.execute("SELECT data, socio, montante, vup, unidades, classe, estado FROM unidades_movimentos WHERE id = %s", (int(mov_id),))
+        a = cur.fetchone()
+        if not a or a[6] != "Por rever":
+            raise ValueError("Só movimentos 'Por rever' podem ser corrigidos.")
+        m = q2(montante)
+        un = q6(m / q4(vup))
+        cur.execute("UPDATE unidades_movimentos SET data=%s, socio=%s, montante=%s, vup=%s, unidades=%s, classe=%s WHERE id=%s",
+                    (data, socio.strip(), m, q4(vup), un, classe, int(mov_id)))
+        registar_auditoria("Movimento de unidades corrigido", "unidades_movimentos", mov_id,
+                           antes={"data": a[0], "socio": a[1], "montante": a[2], "vup": a[3], "unidades": a[4], "classe": a[5]},
+                           depois={"data": data, "socio": socio, "montante": m, "vup": q4(vup), "unidades": un, "classe": classe}, cur=cur)
+
+
+def adoptar_estrutura_inicial(linhas: list, valor_nominal: float, data_base, fundamento: str, base_reconciliada: bool):
+    """Adopta a estrutura de unidades como REORGANIZAÇÃO (não é entrada de dinheiro e não cria movimentos financeiros).
+    Só é possível enquanto não houver unidades validadas. Exige fundamento documentado."""
+    exigir_admin()
+    if not str(fundamento or "").strip():
+        raise ValueError("Indique o fundamento da adopção da estrutura (acta, acordo, critério usado).")
+    if not linhas:
+        raise ValueError("Não há linhas para registar.")
+    with transaccao() as cur:
+        cur.execute("SELECT 1 FROM cotas_config WHERE id = 1 FOR UPDATE")
+        cur.execute("SELECT COUNT(*) FROM unidades_movimentos WHERE estado = 'Validado'")
+        if cur.fetchone()[0] > 0:
+            raise ValueError("Já existem unidades validadas: a estrutura inicial só se adopta uma vez.")
+        for i, r in enumerate(linhas, start=1):
+            ref = f"REORG-{data_base:%Y%m%d}-{i}"
+            try:
+                cur.execute("INSERT INTO unidades_movimentos (data, socio, socio_email, tipo, classe, estado, origem, referencia, fundamento, montante, vup, "
+                            "unidades, efeito_caixa, criado_por) VALUES (%s, %s, %s, 'Reorganização inicial', 'Fundadora', 'Validado', 'Reorganização inicial', %s, %s, %s, %s, %s, 0, %s)",
+                            (data_base, r["socio"], r["email"], ref, fundamento.strip(), q2(r["montante"]), q4(valor_nominal), q6(r["cotas"]), utilizador_actual()))
+            except psycopg2.errors.UniqueViolation:
+                raise ValueError("Esta estrutura já foi registada com a mesma data-base.")
+        cur.execute("UPDATE cotas_config SET data_base = %s, fundamento_base = %s, unidades_base_validada = %s, valor_nominal = %s WHERE id = 1",
+                    (data_base, fundamento.strip(), bool(base_reconciliada), q4(valor_nominal)))
+        registar_auditoria("Estrutura inicial de unidades adoptada", "cotas_config", 1,
+                           depois={"data_base": data_base, "linhas": [(r["socio"], r["montante"], r["cotas"]) for r in linhas],
+                                   "base_reconciliada": bool(base_reconciliada)}, motivo=fundamento.strip(), cur=cur)
+
+
+def definir_base_reconciliada(valor: bool, nota: str):
+    exigir_admin()
+    executar("UPDATE cotas_config SET unidades_base_validada = %s WHERE id = 1", (bool(valor),))
+    registar_auditoria("Base de unidades " + ("reconciliada" if valor else "marcada como não reconciliada"), "cotas_config", 1, motivo=nota)
+
+
+def secao_vup_inicio():
+    """Cartões, participação pessoal e evolução do VUP, na página Início. Não aparece enquanto não houver unidades."""
+    try:
+        info = obter_vup_info()
+    except Exception:
+        return
+    if info["unidades"] <= 0 or info["vup"] <= 0:
+        return
+    rent = (info["vup"] / info["vup_base"] - 1) * 100 if info["vup_base"] > 0 else 0.0
+    st.divider()
+    st.subheader("📐 Valor da Cota (VUP)")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("VUP actual", f"{kz2(info['vup'])} Kz")
+    c2.metric("Rentabilidade desde o início", pct_bruto(rent), delta=pct_bruto(rent))
+    c3.metric("Valor líquido global", kz(info["vlg"]))
+    st.caption("O VUP é o preço de uma cota do Clube: o valor líquido (carteira a preços de mercado mais reservas de liquidez) "
+               "dividido pelas cotas em circulação. É a referência para novas entradas e saídas de sócios.")
+    email = str(st.session_state.get("conta_email", "") or "").strip().lower()
+    if email:
+        mov = obter_unidades_movimentos()
+        meu = mov[mov["socio_email"].fillna("").str.lower() == email] if not mov.empty else mov
+        if not meu.empty and float(meu["unidades"].sum()) > 0:
+            un_m, ap_m = float(meu["unidades"].sum()), float(meu["montante"].sum())
+            val_m = un_m * info["vup"]
+            st.markdown("**A minha participação**")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Cotas", f"{un_m:,.2f}".replace(",", " "))
+            m2.metric("Valor actual", kz(val_m))
+            m3.metric("Capital aportado (líquido)", kz(ap_m))
+            m4.metric("Ganho / perda", kz(val_m - ap_m), delta=pct_bruto((val_m / ap_m - 1) * 100) if ap_m > 0 else None)
+            st.caption(f"Detém {un_m / info['unidades'] * 100:.2f}% das cotas do Clube.")
+    periodo_vup = st.radio("Período", PERIODOS_GRAFICO, index=3, horizontal=True, key="vup_periodo")
+    painel_grafico("Valor da cota (VUP)", "Kz por cota", obter_serie_vup(periodo_vup), "Kz", periodo_vup)
+
+
+def _pdf_kpis_vup(pdf, info):
+    """Faixa de quatro indicadores: valor líquido, unidades, VUP e rentabilidade desde o início."""
+    rent = (info["vup"] / info["vup_base"] - 1) * 100 if info["vup_base"] > 0 else 0.0
+    itens = [("Valor líquido global", kz(info["vlg"])),
+             ("Cotas em circulação", f"{info['unidades']:,.2f}".replace(",", " ").replace(".", ",")),
+             ("Valor da cota (VUP)", kz2(info["vup"]) + " Kz"),
+             ("Rentabilidade desde o início", pct_bruto(rent))]
+    x0, largura = pdf.l_margin, pdf.w - pdf.l_margin - pdf.r_margin
+    w = (largura - 3 * 4) / 4
+    y = pdf.get_y() + 1
+    for i, (rot, val) in enumerate(itens):
+        x = x0 + i * (w + 4)
+        pdf.set_fill_color(244, 236, 239)
+        pdf.rect(x, y, w, 15, style="F")
+        pdf.set_fill_color(124, 31, 62)
+        pdf.rect(x, y, 1.2, 15, style="F")
+        pdf.set_xy(x + 3, y + 1.5)
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(110, 110, 110)
+        pdf.cell(w - 4, 4, rot)
+        pdf.set_xy(x + 3, y + 6.5)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(124, 31, 62)
+        pdf.cell(w - 4, 6, val)
+    pdf.set_y(y + 19)
+    pdf.set_text_color(0, 0, 0)
+
+
+# ---------------- Movimentos ----------------
+def inserir_movimento(tipo, descricao, montante, data_movimento):
+    exigir_admin()
+    executar("INSERT INTO movimentos (tipo, descricao, montante, data_movimento) VALUES (%s, %s, %s, %s)", (tipo, descricao, montante, data_movimento))
+
+def obter_movimentos() -> pd.DataFrame:
+    exigir_participante()
+    return consultar_df("SELECT tipo, descricao, montante, data_movimento, criado_em FROM movimentos ORDER BY data_movimento DESC, criado_em DESC")
+
+
+# ---------------- Activos + Favoritos + Índice ----------------
+def obter_activos() -> pd.DataFrame:
+    return consultar_df(
+        "SELECT id, ticker, nome, tipo, preco, variacao, "
+        "preco_abertura_dia, data_abertura_dia, actualizado_em "
+        "FROM activos ORDER BY nome")
+
+
+def obter_estado_simulador(email: str):
+    """Carrega (ou cria, se for a 1ª vez) o saldo, carteira e histórico
+    persistidos deste sócio no Simulador de Investimento."""
+    if not email:
+        return 3_000_000.0, {}, []
+
+    linha = consultar_um("SELECT saldo_caixa FROM sim_estado WHERE conta_email = %s", (email,))
+    if linha is None:
+        executar("INSERT INTO sim_estado (conta_email, saldo_caixa) VALUES (%s, %s)", (email, 3_000_000.0))
+        saldo = 3_000_000.0
+    else:
+        saldo = float(linha[0])
+
+    df_pos = consultar_df(
+        "SELECT ticker, nome, qtd, preco_medio FROM sim_posicoes WHERE conta_email = %s", (email,))
+    carteira = {
+        str(r["ticker"]): {"qtd": float(r["qtd"]), "preco_medio": float(r["preco_medio"]), "nome": str(r["nome"])}
+        for _, r in df_pos.iterrows()
+    }
+
+    df_hist = consultar_df(
+        'SELECT operacao AS "Operação", ticker AS "Ticker", qtd AS "Qtd", '
+        'preco_unit AS "Preço Unit.", total AS "Total" FROM sim_historico '
+        "WHERE conta_email = %s ORDER BY id DESC LIMIT 200", (email,))
+    historico = df_hist.to_dict("records") if not df_hist.empty else []
+
+    return saldo, carteira, historico
+
+
+def guardar_saldo_simulador(email: str, saldo: float):
+    if email:
+        executar("UPDATE sim_estado SET saldo_caixa = %s WHERE conta_email = %s", (saldo, email))
+
+
+def guardar_posicao_simulador(email: str, ticker: str, dados):
+    """dados=None remove a posição (venda total deste activo)."""
+    if not email or not ticker:
+        return
+    if dados is None:
+        executar("DELETE FROM sim_posicoes WHERE conta_email = %s AND ticker = %s", (email, ticker))
+    else:
+        executar("""
+            INSERT INTO sim_posicoes (conta_email, ticker, nome, qtd, preco_medio)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (conta_email, ticker)
+            DO UPDATE SET nome = EXCLUDED.nome, qtd = EXCLUDED.qtd, preco_medio = EXCLUDED.preco_medio
+        """, (email, ticker, dados["nome"], dados["qtd"], dados["preco_medio"]))
+
+
+def registar_operacao_simulador(email: str, operacao: str, ticker: str, qtd: float, preco_unit: float, total: float):
+    if email:
+        executar(
+            "INSERT INTO sim_historico (conta_email, operacao, ticker, qtd, preco_unit, total) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (email, operacao, ticker, qtd, preco_unit, total))
+
+
+def reiniciar_simulador_db(email: str):
+    if email:
+        executar("DELETE FROM sim_posicoes WHERE conta_email = %s", (email,))
+        executar("DELETE FROM sim_historico WHERE conta_email = %s", (email,))
+        executar("UPDATE sim_estado SET saldo_caixa = 3000000 WHERE conta_email = %s", (email,))
+
+
+# ---------------- Exportação para Excel (formatada, nas cores do Clube) ----------------
+def xlsx_disponivel() -> bool:
+    try:
+        import openpyxl  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _xlsx_estilos():
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    lado = Side(style="thin", color="E3D2D8")
+    return {
+        "borda": Border(left=lado, right=lado, top=lado, bottom=lado),
+        "f_bord": PatternFill("solid", fgColor="7C1F3E"),
+        "f_bord_esc": PatternFill("solid", fgColor="5E1830"),
+        "f_claro": PatternFill("solid", fgColor="F4ECEF"),
+        "f_creme": PatternFill("solid", fgColor="FBF8F6"),
+        "f_branco": PatternFill("solid", fgColor="FFFFFF"),
+        "Font": Font, "Alignment": Alignment,
+    }
+
+
+def _xlsx_banner(ws, ncols: int, titulo: str, subtitulo: str):
+    """Faixa institucional (3 linhas) + título do documento; devolve a próxima linha livre."""
+    from openpyxl.utils import get_column_letter
+    e = _xlsx_estilos()
+    ultima = get_column_letter(ncols)
+    textos = [
+        ("CLUBE DE INVESTIMENTO APPO", e["Font"](name="Calibri", size=18, bold=True, color="FFFFFF"), e["f_bord"], 30),
+        ("Casa nº 5 - Zona C, Av. Ministro Vieira Machado, Benguela, Angola  |  NIF: 001669404BA035  |  "
+         "Tel.: 940 762 278 / 937 696 088  |  clube.investimento.appo@gmail.com",
+         e["Font"](name="Calibri", size=8, color="F4ECEF"), e["f_bord"], 16),
+        (titulo, e["Font"](name="Calibri", size=13, bold=True, color="7C1F3E"), e["f_claro"], 26),
+    ]
+    for i, (txt, fonte, fundo, alt) in enumerate(textos, start=1):
+        ws.merge_cells(f"A{i}:{ultima}{i}")
+        c = ws[f"A{i}"]
+        c.value, c.font, c.fill = txt, fonte, fundo
+        c.alignment = e["Alignment"](horizontal="left", vertical="center", indent=1)
+        for col in range(1, ncols + 1):
+            ws.cell(row=i, column=col).fill = fundo
+        ws.row_dimensions[i].height = alt
+    ws.merge_cells(f"A4:{ultima}4")
+    ws["A4"].value = subtitulo
+    ws["A4"].font = e["Font"](name="Calibri", size=9, italic=True, color="6B6B6B")
+    ws["A4"].alignment = e["Alignment"](horizontal="left", vertical="center", indent=1)
+    ws.row_dimensions[4].height = 18
+    ws.sheet_view.showGridLines = False
+    return 6
+
+
+def _xlsx_rodape(ws, linha: int, ncols: int, nota: str = ""):
+    from openpyxl.utils import get_column_letter
+    e = _xlsx_estilos()
+    ultima = get_column_letter(ncols)
+    if nota:
+        ws.merge_cells(f"A{linha}:{ultima}{linha}")
+        ws[f"A{linha}"].value = nota
+        ws[f"A{linha}"].font = e["Font"](name="Calibri", size=8, italic=True, color="6B6B6B")
+        ws[f"A{linha}"].alignment = e["Alignment"](wrap_text=True, vertical="top", indent=1)
+        ws.row_dimensions[linha].height = 36
+        linha += 1
+    ws.merge_cells(f"A{linha}:{ultima}{linha}")
+    ws[f"A{linha}"].value = "Documento gerado automaticamente pela plataforma APPO. Uso interno e reservado."
+    ws[f"A{linha}"].font = e["Font"](name="Calibri", size=8, italic=True, color="9A9A9A")
+    ws[f"A{linha}"].alignment = e["Alignment"](horizontal="center")
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.oddFooter.center.text = "Clube de Investimento APPO  |  Página &P de &N"
+
+
+def _xlsx_cor_sinal(ws, intervalos, positivo_bom=True):
+    """Texto verde para valores > 0 e vermelho para < 0 (ou o inverso), por formatação condicional."""
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import Font
+    verde, verm = Font(color="16A34A", bold=True), Font(color="DC2626", bold=True)
+    for ref in intervalos:
+        ws.conditional_formatting.add(ref, CellIsRule(operator="greaterThan", formula=["0"], font=verde if positivo_bom else verm))
+        ws.conditional_formatting.add(ref, CellIsRule(operator="lessThan", formula=["0"], font=verm if positivo_bom else verde))
+
+
+def gerar_xlsx_tabela(titulo, subtitulo, colunas, linhas, larguras, formatos, folha="Dados", nota="", cor_cond=()) -> bytes:
+    """Tabela institucional: faixa do Clube, cabeçalho bordeaux, linhas alternadas, filtros e painel fixo."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+    e = _xlsx_estilos()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = folha[:31]
+    n = len(colunas)
+    for i, w in enumerate(larguras, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    cab = _xlsx_banner(ws, n, titulo, subtitulo)
+    for j, nome in enumerate(colunas, start=1):
+        c = ws.cell(row=cab, column=j, value=nome)
+        c.font = e["Font"](name="Calibri", size=10, bold=True, color="FFFFFF")
+        c.fill, c.border = e["f_bord"], e["borda"]
+        c.alignment = e["Alignment"](horizontal="center", vertical="center", wrap_text=True)
+    ws.row_dimensions[cab].height = 30
+    for i, linha in enumerate(linhas):
+        r = cab + 1 + i
+        fundo = e["f_creme"] if i % 2 else e["f_branco"]
+        for j, valor in enumerate(linha, start=1):
+            c = ws.cell(row=r, column=j, value=("n/d" if valor is None else valor))
+            c.fill, c.border = fundo, e["borda"]
+            c.font = e["Font"](name="Calibri", size=10, color="1A1A2E")
+            eh_num = isinstance(valor, (int, float)) and not isinstance(valor, bool)
+            if formatos[j - 1] and (eh_num or hasattr(valor, "year")):
+                c.number_format = formatos[j - 1]
+            c.alignment = e["Alignment"](horizontal="right" if eh_num else ("center" if valor is None else "left"),
+                                         vertical="center", indent=0 if eh_num else 1)
+        ws.row_dimensions[r].height = 20
+    ultima_linha = cab + len(linhas)
+    ws.freeze_panes = ws.cell(row=cab + 1, column=1)
+    if linhas:
+        ws.auto_filter.ref = f"A{cab}:{get_column_letter(n)}{ultima_linha}"
+        _xlsx_cor_sinal(ws, [f"{get_column_letter(j)}{cab + 1}:{get_column_letter(j)}{ultima_linha}" for j in cor_cond])
+    _xlsx_rodape(ws, ultima_linha + 2, n, nota)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def gerar_xlsx_cotacoes(df) -> bytes:
+    colunas = ["Ticker", "Título", "Tipo", "Cotação (Kz)", "Variação diária (%)", "Última actualização"]
+    verde_verm = '+0.00"%";-0.00"%";0.00"%"'
+    linhas = []
+    for _, r in df.iterrows():
+        act = r.get("actualizado_em")
+        try:
+            act = act.to_pydatetime().replace(tzinfo=None)
+        except Exception:
+            act = None
+        linhas.append([str(r.get("ticker") or ""), str(r["nome"]), str(r["tipo"]), float(r["preco"]), float(r["variacao"]), act])
+    from datetime import datetime as _dt
+    base = gerar_xlsx_tabela(
+        "Cotações da BODIVA - Carteira de Activos Seguidos", f"Gerado em {_dt.now():%d/%m/%Y %H:%M}  |  Fonte: BODIVA (actualização pelo administrador)",
+        colunas, linhas, [14, 44, 12, 16, 18, 22], [None, None, None, '#,##0.00', verde_verm, "dd/mm/yyyy hh:mm"], folha="Cotações", cor_cond=(5,),
+        nota="Cotações em kwanzas (Kz). A variação diária compara a última cotação com a de abertura do dia.")
+    return base
+
+
+def gerar_xlsx_comparacao(linhas) -> bytes:
+    """linhas: [empresa, sector, pe, pbv, roe, dy_nominal, upside] com valores numéricos (fracções) ou None."""
+    from datetime import datetime as _dt
+    colunas = ["Empresa", "Sector", "P/E (x)", "P/BV (x)", "ROE", "Dividend Yield nominal", "Upside DDM"]
+    verde_verm = '+0.00%;-0.00%;0.00%'
+    return gerar_xlsx_tabela(
+        "Comparação Sectorial - Avaliação de Activos", f"Gerado em {_dt.now():%d/%m/%Y %H:%M}  |  Modelo de avaliação do Clube (DDM)",
+        colunas, linhas, [26, 30, 12, 12, 14, 20, 16],
+        [None, None, '0.00"x"', '0.00"x"', verde_verm, '0.00%', verde_verm], folha="Comparação sectorial", cor_cond=(5, 7),
+        nota="P/E = preço sobre lucro; P/BV = preço sobre valor contabilístico; ROE = rentabilidade do capital próprio; "
+             "Upside DDM = diferença entre o valor justo estimado e o preço de mercado. O DDM depende das premissas "
+             "de crescimento (g) e custo de capital (Ke): use-o como referência, não como verdade absoluta.")
+
+
+def gerar_xlsx_orcamento(df_rec, df_desp, categorias) -> bytes:
+    """Orçamento mensal com fórmulas vivas (somas, % das receitas, comparação 50/30/20) e linhas extra para preencher."""
+    import io
+    from datetime import datetime as _dt
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+    e = _xlsx_estilos()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Orçamento mensal"
+    larg = [40, 26, 18, 18, 18, 18]
+    n = len(larg)
+    for i, w in enumerate(larg, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    r = _xlsx_banner(ws, n, "Orçamento Mensal Pessoal ou Familiar - Princípio 50/30/20",
+                     f"Gerado em {_dt.now():%d/%m/%Y %H:%M}  |  Pode editar os valores a azul: as somas e comparações actualizam-se sozinhas.")
+    FMT = '#,##0'
+    entrada = e["Font"](name="Calibri", size=10, color="1F4E9E")
+    normal = e["Font"](name="Calibri", size=10, color="1A1A2E")
+    negrito = e["Font"](name="Calibri", size=10, bold=True, color="7C1F3E")
+
+    def seccao(linha, texto):
+        ws.merge_cells(f"A{linha}:{get_column_letter(n)}{linha}")
+        c = ws[f"A{linha}"]
+        c.value, c.font, c.fill = texto, e["Font"](name="Calibri", size=11, bold=True, color="FFFFFF"), e["f_bord"]
+        c.alignment = e["Alignment"](vertical="center", indent=1)
+        for col in range(1, n + 1):
+            ws.cell(row=linha, column=col).fill = e["f_bord"]
+        ws.row_dimensions[linha].height = 22
+
+    def cabecalho(linha, nomes):
+        for j, nome in enumerate(nomes, start=1):
+            c = ws.cell(row=linha, column=j, value=nome)
+            c.font = e["Font"](name="Calibri", size=10, bold=True, color="7C1F3E")
+            c.fill, c.border = e["f_claro"], e["borda"]
+            c.alignment = e["Alignment"](horizontal="center", vertical="center", wrap_text=True)
+        ws.row_dimensions[linha].height = 26
+
+    def celula(linha, col, valor, fonte=normal, fmt=None, num=False, zebra=0):
+        c = ws.cell(row=linha, column=col, value=valor)
+        c.font, c.border = fonte, e["borda"]
+        c.fill = e["f_creme"] if zebra % 2 else e["f_branco"]
+        if fmt:
+            c.number_format = fmt
+        c.alignment = e["Alignment"](horizontal="right" if num else "left", vertical="center", indent=0 if num else 1)
+        return c
+
+    EXTRA = 4
+    # 1. Receitas
+    seccao(r, "1. RECEITAS DO MÊS")
+    r += 1
+    cabecalho(r, ["Descrição", "Tipo", "Valor (Kz)"])
+    r += 1
+    rec_ini = r
+    recs = [(str(x["Descrição"] or ""), x["Valor (Kz)"]) for _, x in df_rec.iterrows()
+            if str(x["Descrição"] or "").strip() or (x["Valor (Kz)"] == x["Valor (Kz)"] and x["Valor (Kz)"])]
+    for i in range(len(recs) + EXTRA):
+        d, v = recs[i] if i < len(recs) else ("", None)
+        celula(r, 1, d or None, entrada, zebra=i)
+        celula(r, 2, "Receita", normal, zebra=i)
+        celula(r, 3, (float(v) if v == v and v is not None else None), entrada, FMT, True, zebra=i)
+        r += 1
+    rec_fim = r - 1
+    celula(r, 1, "TOTAL DE RECEITAS", negrito); celula(r, 2, None, negrito)
+    celula(r, 3, f"=SUM(C{rec_ini}:C{rec_fim})", negrito, FMT, True)
+    for col in (1, 2, 3):
+        ws.cell(row=r, column=col).fill = e["f_claro"]
+    tot_rec = f"$C${r}"
+    r += 2
+
+    # 2. Despesas
+    seccao(r, "2. DESPESAS E POUPANÇA DO MÊS")
+    r += 1
+    cabecalho(r, ["Descrição", "Categoria", "Valor (Kz)", "% das receitas"])
+    r += 1
+    des_ini = r
+    desp = [(str(x["Categoria"] or ""), str(x["Descrição"] or ""), x["Valor (Kz)"]) for _, x in df_desp.iterrows()
+            if str(x["Descrição"] or "").strip() or (x["Valor (Kz)"] == x["Valor (Kz)"] and x["Valor (Kz)"])]
+    for i in range(len(desp) + EXTRA):
+        cat, d, v = desp[i] if i < len(desp) else ("", "", None)
+        celula(r, 1, d or None, entrada, zebra=i)
+        celula(r, 2, cat or None, entrada, zebra=i)
+        celula(r, 3, (float(v) if v == v and v is not None else None), entrada, FMT, True, zebra=i)
+        celula(r, 4, f"=IF(AND({tot_rec}>0,C{r}<>\"\"),C{r}/{tot_rec},\"\")", normal, "0.0%", True, zebra=i)
+        r += 1
+    des_fim = r - 1
+    dv = DataValidation(type="list", formula1='"' + ",".join(categorias) + '"', allow_blank=True)
+    ws.add_data_validation(dv)
+    dv.add(f"B{des_ini}:B{des_fim}")
+    celula(r, 1, "TOTAL DE DESPESAS E POUPANÇA", negrito); celula(r, 2, None, negrito)
+    celula(r, 3, f"=SUM(C{des_ini}:C{des_fim})", negrito, FMT, True)
+    celula(r, 4, f"=IF({tot_rec}>0,C{r}/{tot_rec},\"\")", negrito, "0.0%", True)
+    for col in (1, 2, 3, 4):
+        ws.cell(row=r, column=col).fill = e["f_claro"]
+    tot_des = f"$C${r}"
+    r += 2
+
+    # 3. Resultado
+    seccao(r, "3. RESULTADO - COMPARAÇÃO COM A REGRA 50/30/20")
+    r += 1
+    cabecalho(r, ["Categoria", "Meta (% das receitas)", "Meta (Kz)", "O seu orçamento (Kz)", "Diferença (Kz)", "Orçamento (% das receitas)"])
+    r += 1
+    metas = [0.50, 0.30, 0.20]
+    for i, (cat, meta) in enumerate(zip(categorias, metas)):
+        celula(r, 1, cat, normal, zebra=i)
+        celula(r, 2, meta, normal, "0%", True, zebra=i)
+        celula(r, 3, f"={tot_rec}*B{r}", normal, FMT, True, zebra=i)
+        celula(r, 4, f"=SUMIF($B${des_ini}:$B${des_fim},A{r},$C${des_ini}:$C${des_fim})", normal, FMT, True, zebra=i)
+        celula(r, 5, f"=D{r}-C{r}", normal, '+#,##0;-#,##0;0', True, zebra=i)
+        _xlsx_cor_sinal(ws, [f"E{r}"], positivo_bom=(i != 0))
+        celula(r, 6, f"=IF({tot_rec}>0,D{r}/{tot_rec},\"\")", normal, "0.0%", True, zebra=i)
+        r += 1
+    celula(r, 1, "SALDO POR ALOCAR (receitas - despesas e poupança)", negrito)
+    for col in (2, 3, 5, 6):
+        celula(r, col, None, negrito)
+    celula(r, 4, f"={tot_rec}-{tot_des}", negrito, '#,##0;-#,##0;0', True)
+    _xlsx_cor_sinal(ws, [f"D{r}"])
+    for col in range(1, 7):
+        ws.cell(row=r, column=col).fill = e["f_claro"]
+    r += 2
+    _xlsx_rodape(ws, r, n, "Consumo: ideal até 50% das receitas (diferença positiva = a gastar acima da meta). "
+                           "Investimento (30%) e Entesouramento (20%): metas mínimas de poupança (diferença negativa = falta poupar).")
+    ws.freeze_panes = "A6"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _xlsx_seguro(funcao):
+    """Corre a geração do Excel sem nunca deixar a página falhar: devolve bytes ou None."""
+    try:
+        if not xlsx_disponivel():
+            st.warning("Excel indisponível: falta a biblioteca openpyxl no servidor (adiciona 'openpyxl' ao requirements.txt). Usa o CSV como alternativa.")
+            return None
+        return funcao()
+    except Exception as _e_xl:
+        traceback.print_exc()
+        st.warning(f"Não foi possível gerar o Excel agora ({type(_e_xl).__name__}: {_e_xl}). Usa o CSV como alternativa.")
+        return None
+
+
+ORC_CATEGORIAS = ["Consumo (50%)", "Investimento (30%)", "Entesouramento (20%)"]
+
+
+def orcamento_modelo_inicial() -> dict:
+    """Modelo de orçamento mensal pré-preenchido (valores a 0, para o sócio preencher)."""
+    return {
+        "receitas": [
+            {"Descrição": "Salário / rendimento principal", "Valor (Kz)": 0.0},
+            {"Descrição": "Outras receitas", "Valor (Kz)": 0.0},
+        ],
+        "despesas": [
+            {"Categoria": ORC_CATEGORIAS[0], "Descrição": d, "Valor (Kz)": 0.0}
+            for d in ["Renda de casa", "Alimentação", "Transporte", "Energia e água",
+                      "Telecomunicações", "Saúde", "Educação", "Lazer e outros"]
+        ] + [
+            {"Categoria": ORC_CATEGORIAS[1], "Descrição": "Acções / investimentos (BODIVA)", "Valor (Kz)": 0.0},
+            {"Categoria": ORC_CATEGORIAS[2], "Descrição": "Fundo de emergência / poupança", "Valor (Kz)": 0.0},
+        ],
+    }
+
+
+def obter_orcamento(email: str) -> dict:
+    import json as _json
+    modelo = orcamento_modelo_inicial()
+    if not email:
+        return modelo
+    linha = consultar_um("SELECT dados FROM orcamento_pessoal WHERE conta_email = %s", (email,))
+    if not linha:
+        return modelo
+    try:
+        d = _json.loads(linha[0])
+        if isinstance(d.get("receitas"), list) and isinstance(d.get("despesas"), list):
+            return d
+    except (ValueError, TypeError):
+        pass
+    return modelo
+
+
+def guardar_orcamento(email: str, dados: dict):
+    import json as _json
+    if not email:
+        return
+    executar(
+        "INSERT INTO orcamento_pessoal (conta_email, dados) VALUES (%s, %s) "
+        "ON CONFLICT (conta_email) DO UPDATE SET dados = EXCLUDED.dados, actualizado_em = NOW()",
+        (email, _json.dumps(dados, ensure_ascii=False, default=float)))
+
+
+def obter_carteira_real() -> pd.DataFrame:
+    """Posições reais do Clube (dinheiro verdadeiro), para o relatório PDF. Só participantes."""
+    exigir_participante()
+    return consultar_df(
+        "SELECT id, ticker, nome, qtd, valor_aquisicao, actualizado_em "
+        "FROM carteira_real ORDER BY nome")
+
+
+def substituir_carteira_real(df: pd.DataFrame):
+    """
+    Substitui a carteira real do Clube a partir da tabela editada pelo admin.
+    Cada linha é uma posição: ticker, nome, quantidade de acções detidas, e o
+    valor TOTAL pago na aquisição (não o preço unitário — o relatório divide
+    por qtd para obter o preço médio, tal como fazia o dicionário fixo antigo).
+    """
+    exigir_admin()
+    executar("DELETE FROM carteira_real")
+    for _, linha in df.iterrows():
+        nome = str(linha.get("nome", "")).strip()
+        if not nome:
+            continue
+        ticker = str(linha.get("ticker", "") or "").strip().upper()
+        qtd    = _num_seguro(linha.get("qtd"), default=0.0)
+        val_aq = _num_seguro(linha.get("valor_aquisicao"), default=0.0)
+        executar(
+            "INSERT INTO carteira_real (ticker, nome, qtd, valor_aquisicao) VALUES (%s, %s, %s, %s)",
+            (ticker, nome, qtd, val_aq))
+
+def _eh_accao(tipo) -> bool:
+    """Reconhece 'Ação', 'ACÇÃO', 'Acção', 'Acao', 'Ações'... (a tabela de cotações usa 'ACÇÃO')."""
+    import unicodedata
+    n = "".join(c for c in unicodedata.normalize("NFKD", str(tipo or "")) if not unicodedata.combining(c)).upper().strip()
+    return n.startswith("AC") and (n.endswith("AO") or n.endswith("OES"))
+
+
+def calcular_indice_mercado(df_activos: pd.DataFrame) -> float:
+    acoes = df_activos[df_activos["tipo"].apply(_eh_accao)] if not df_activos.empty else df_activos
+    return float(acoes["variacao"].mean()) if not acoes.empty else 0.0
+
+def registar_historico_indice(valor: float):
+    hoje = datetime.now().date()
+    executar("INSERT INTO historico_indice_mercado (registado_em, indice_variacao) VALUES (%s, %s) ON CONFLICT (registado_em) DO UPDATE SET indice_variacao = EXCLUDED.indice_variacao",
+             (hoje, valor))
+
+def obter_historico_indice() -> pd.DataFrame:
+    return consultar_df("SELECT indice_variacao, registado_em FROM historico_indice_mercado ORDER BY registado_em")
+
+def _num_seguro(valor, default=0.0):
+    """Converte para float de forma segura; nunca lança excepção, nunca devolve NaN."""
+    try:
+        v = float(valor)
+    except (TypeError, ValueError):
+        return default
+    return default if v != v else v  # v != v só é True quando v é NaN
+
+
+def substituir_activos(df: pd.DataFrame):
+    """
+    Substitui a tabela de activos, recalculando a variação % de cada um face
+    ao PREÇO DE ABERTURA DO DIA — a mesma convenção da BFA/BODIVA: a "variação
+    diária" só muda quando o dia civil muda, nunca simplesmente por o admin ter
+    voltado a gravar a tabela (esse era o motivo real do "zera tudo": a versão
+    anterior comparava sempre com a última gravação, não com a abertura do dia).
+
+    Regra por activo (identificado pelo ticker):
+      - Se é a primeira vez que este ticker aparece, ou se a sua última
+        referência de abertura é de um dia diferente de hoje: hoje começa um
+        novo "dia de referência" — o preço de abertura de hoje passa a ser o
+        último preço conhecido deste activo ANTES desta gravação.
+      - Se já houve uma gravação hoje para este activo, a abertura do dia
+        MANTÉM-SE (não se move a cada gravação) — só a variação face a essa
+        abertura é que se recalcula com o preço novo.
+      - Variação = (preço novo − preço de abertura do dia) ÷ preço de abertura
+        do dia × 100.
+
+    Protecções mantidas:
+      - Tickers em branco ou duplicados nunca são usados como chave de
+        comparação (avisa, não sobrepõe silenciosamente).
+      - Preços não numéricos / NaN tratados como 0, nunca chegam à divisão.
+      - Se não há preço de abertura válido (activo novo) ou o preço novo é 0,
+        a variação é 0 — nunca se divide por zero.
+      - Variações acima de ±500% num só dia geram aviso visível (tipicamente
+        um erro de dígitos no preço introduzido).
+    """
+    exigir_admin()
+    df_anterior = obter_activos()
+    hoje = datetime.now().date()
+
+    referencia: dict[str, dict] = {}
+    tickers_duplicados = set()
+    for _, r in df_anterior.iterrows():
+        tk = str(r.get("ticker", "") or "").strip().upper()
+        if not tk:
+            continue
+        preco_r = _num_seguro(r.get("preco"), default=None)
+        if preco_r is None:
+            continue
+        if tk in referencia:
+            tickers_duplicados.add(tk)
+        referencia[tk] = {
+            "preco": preco_r,
+            "preco_abertura": _num_seguro(r.get("preco_abertura_dia"), default=None),
+            "data_abertura": r.get("data_abertura_dia"),
+        }
+
+    if tickers_duplicados:
+        st.warning(
+            "⚠️ Tickers duplicados na tabela de activos: "
+            f"{', '.join(sorted(tickers_duplicados))}. "
+            "A variação % destes activos pode estar a comparar o preço errado — "
+            "corrige os tickers para que sejam únicos."
+        )
+
+    # os favoritos guardam o id do activo; como a tabela é regravada (ids novos), lembra-os por ticker/nome
+    try:
+        fav_antigos = consultar_df("SELECT f.conta_id, a.ticker, a.nome FROM favoritos f JOIN activos a ON a.id = f.activo_id")
+    except Exception:
+        fav_antigos = pd.DataFrame(columns=["conta_id", "ticker", "nome"])
+    executar("DELETE FROM activos")
+    avisos_variacao_extrema = []
+
+    for _, linha in df.iterrows():
+        nome = str(linha.get("nome", "")).strip()
+        if not nome:
+            continue
+        tipo   = str(linha.get("tipo", "Ação")).strip() or "Ação"
+        preco  = _num_seguro(linha.get("preco"), default=0.0)
+        ticker = str(linha.get("ticker", "") or "").strip().upper()
+        ref = referencia.get(ticker) if ticker else None
+
+        if ref is None:
+            # activo novo para este ticker: hoje É a abertura dele
+            preco_abertura, data_abertura = preco, hoje
+        elif ref["data_abertura"] is None or ref["data_abertura"] != hoje:
+            # mudou o dia (ou nunca teve referência válida): fixa a abertura
+            # de hoje como o último preço conhecido antes desta gravação
+            preco_abertura = ref["preco"] if ref["preco"] else preco
+            data_abertura  = hoje
+        else:
+            # já houve gravação hoje: mantém a MESMA abertura, não a desloca
+            preco_abertura = ref["preco_abertura"] if ref["preco_abertura"] else preco
+            data_abertura  = ref["data_abertura"]
+
+        if not preco_abertura or not preco:
+            variacao = 0.0
+        else:
+            variacao = round((preco - preco_abertura) / preco_abertura * 100, 2)
+            if abs(variacao) > 500:
+                avisos_variacao_extrema.append(f"{ticker or nome}: {variacao:+.2f}%")
+
+        executar(
+            "INSERT INTO activos (nome, tipo, preco, variacao, ticker, preco_abertura_dia, data_abertura_dia) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (nome, tipo, preco, variacao, ticker, preco_abertura, data_abertura))
+
+    if avisos_variacao_extrema:
+        st.warning(
+            "⚠️ Variação invulgarmente elevada num só dia — confirma se não houve "
+            "um erro de dígitos ao introduzir o preço: " + "; ".join(avisos_variacao_extrema)
+        )
+
+    novos_activos = obter_activos()
+    try:
+        por_ticker = {str(r["ticker"]).strip().upper(): int(r["id"]) for _, r in novos_activos.iterrows() if str(r["ticker"]).strip()}
+        por_nome = {str(r["nome"]).strip().upper(): int(r["id"]) for _, r in novos_activos.iterrows()}
+        for _, f in fav_antigos.iterrows():
+            novo_id = por_ticker.get(str(f["ticker"] or "").strip().upper()) or por_nome.get(str(f["nome"] or "").strip().upper())
+            if novo_id:
+                executar("INSERT INTO favoritos (conta_id, activo_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (int(f["conta_id"]), novo_id))
+        executar("DELETE FROM favoritos WHERE activo_id NOT IN (SELECT id FROM activos)")
+    except Exception:
+        pass
+    registar_historico_indice(calcular_indice_mercado(novos_activos))
+    registar_cotacoes_hoje(novos_activos, sobrepor=True)
+    registar_vup_hoje()
+
+def obter_favoritos(conta_id: int) -> set:
+    df = consultar_df("SELECT activo_id FROM favoritos WHERE conta_id = %s", (conta_id,))
+    return set(df["activo_id"].tolist())
+
+def definir_favoritos(conta_id: int, ids_seleccionados: list):
+    executar("DELETE FROM favoritos WHERE conta_id = %s", (conta_id,))
+    for aid in ids_seleccionados:
+        executar("INSERT INTO favoritos (conta_id, activo_id) VALUES (%s, %s)", (conta_id, aid))
+
+
+# ---------------- Câmbio ----------------
+def registar_historico_cambio(rates: dict):
+    hoje = datetime.now().date()
+    executar("INSERT INTO historico_cambio_aoa (registado_em, usd, eur, gbp, zar, cny, brl) VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (registado_em) DO NOTHING",
+             (hoje, rates.get("USD"), rates.get("EUR"), rates.get("GBP"), rates.get("ZAR"), rates.get("CNY"), rates.get("BRL")))
+
+def obter_historico_cambio() -> pd.DataFrame:
+    return consultar_df("SELECT registado_em, usd, eur, gbp, zar, cny, brl FROM historico_cambio_aoa ORDER BY registado_em")
+
+
+# ---------------- Artigos ----------------
+_NIVEL_POR_CATEGORIA = {"Educação": "iniciante", "Institucional": "iniciante", "Análise de Mercado": "investidor", "Referência": "investidor"}
+
+
+def nivel_efectivo_artigo(categoria, nivel) -> str:
+    """Nível escolhido pelo administrador; se não houver, decide-se pela categoria."""
+    if nivel in NIVEIS:
+        return nivel
+    return _NIVEL_POR_CATEGORIA.get(str(categoria), "iniciante")
+
+
+def obter_artigos(categoria: str = None) -> pd.DataFrame:
+    if categoria and categoria != "Todas":
+        df = consultar_df("SELECT id, titulo, categoria, conteudo, criado_em, nivel FROM artigos WHERE categoria = %s ORDER BY criado_em DESC", (categoria,))
+    else:
+        df = consultar_df("SELECT id, titulo, categoria, conteudo, criado_em, nivel FROM artigos ORDER BY criado_em DESC")
+    df["nivel_efectivo"] = [nivel_efectivo_artigo(c, n) for c, n in zip(df["categoria"], df["nivel"])]
+    return df
+
+def inserir_artigo(titulo, categoria, conteudo, nivel=None):
+    exigir_admin()
+    executar("INSERT INTO artigos (titulo, categoria, conteudo, nivel) VALUES (%s, %s, %s, %s)", (titulo, categoria, conteudo, nivel if nivel in NIVEIS else None))
+
+def definir_nivel_artigo(artigo_id: int, nivel):
+    """nivel = 'iniciante', 'investidor' ou None (automático, pela categoria)."""
+    exigir_admin()
+    antes = consultar_um("SELECT nivel FROM artigos WHERE id = %s", (int(artigo_id),))
+    executar("UPDATE artigos SET nivel = %s WHERE id = %s", (nivel if nivel in NIVEIS else None, int(artigo_id)))
+    registar_auditoria("nivel_artigo", "artigo", artigo_id, antes={"nivel": antes[0] if antes else None}, depois={"nivel": nivel})
+
+
+def _mostrar_artigos(df: pd.DataFrame, tx: dict):
+    if df.empty:
+        st.info("Ainda não há artigos neste nível e categoria.")
+        return
+    for _, artigo in df.iterrows():
+        with st.expander(f"{ICONES_CATEGORIA.get(artigo['categoria'], '📄')} {artigo['titulo']}", key=f"artigo_exp_{artigo['id']}"):
+            banner_categoria(artigo["categoria"])
+            st.caption(f"{tx['bib_publicado']} {artigo['criado_em']}")
+            st.markdown(artigo["conteudo"])   # conteúdo mantém-se em PT conforme acordado
+
+def eliminar_artigo(artigo_id: int):
+    exigir_admin()
+    executar("DELETE FROM artigos WHERE id = %s", (artigo_id,))
+
+
+# ---------------- Documentos PDF (Biblioteca e Estatuto) ----------------
+PDF_TAMANHO_MAX = 15 * 1024 * 1024  # 15 MB
+
+
+def inserir_documento(titulo, categoria, descricao, nome_ficheiro, conteudo: bytes, tipo="biblioteca"):
+    exigir_admin()
+    executar(
+        "INSERT INTO documentos_pdf (titulo, categoria, descricao, nome_ficheiro, tipo, tamanho, conteudo) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (titulo, categoria, descricao or "", nome_ficheiro, tipo, len(conteudo), psycopg2.Binary(conteudo)))
+
+
+def obter_documentos(tipo="biblioteca") -> pd.DataFrame:
+    return consultar_df(
+        "SELECT id, titulo, categoria, descricao, nome_ficheiro, tamanho, criado_em FROM documentos_pdf "
+        "WHERE tipo = %s ORDER BY criado_em DESC", (tipo,))
+
+
+def eliminar_documento(doc_id: int):
+    exigir_admin()
+    executar("DELETE FROM documentos_pdf WHERE id = %s", (int(doc_id),))
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def obter_pdf_bytes(doc_id: int) -> bytes:
+    linha = consultar_um("SELECT conteudo FROM documentos_pdf WHERE id = %s", (int(doc_id),))
+    return bytes(linha[0]) if linha else b""
+
+
+_HTML_VISUALIZADOR_PDF = """
+<div id="vwr" style="height:__ALT__px;overflow-y:auto;background:#EDE6E9;border:1px solid #ECDEE3;border-radius:8px;padding:8px;box-sizing:border-box;font-family:sans-serif;color:#7C1F3E;">A carregar documento…</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+(function () {
+  var box = document.getElementById('vwr');
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    var raw = atob("__B64__");
+    var data = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) { data[i] = raw.charCodeAt(i); }
+    pdfjsLib.getDocument({data: data}).promise.then(function (pdf) {
+      box.innerHTML = "";
+      var chain = Promise.resolve();
+      for (var n = 1; n <= pdf.numPages; n++) {
+        (function (num) {
+          chain = chain.then(function () { return pdf.getPage(num).then(function (page) {
+            var largura = box.clientWidth - 20;
+            var v0 = page.getViewport({scale: 1});
+            var esc = (largura / v0.width) * (window.devicePixelRatio || 1);
+            var vp = page.getViewport({scale: esc});
+            var c = document.createElement('canvas');
+            c.width = vp.width; c.height = vp.height;
+            c.style.width = largura + 'px'; c.style.display = 'block';
+            c.style.margin = '0 auto 10px auto'; c.style.boxShadow = '0 1px 4px rgba(0,0,0,0.25)';
+            box.appendChild(c);
+            return page.render({canvasContext: c.getContext('2d'), viewport: vp}).promise;
+          }); });
+        })(n);
+      }
+    }).catch(function (e) { box.innerHTML = "Não foi possível mostrar o documento no ecrã. Use o botão de descarregar."; });
+  } catch (e) { box.innerHTML = "Não foi possível mostrar o documento no ecrã. Use o botão de descarregar."; }
+})();
+</script>
+"""
+
+
+def bloco_documento_pdf(doc_id: int, nome_ficheiro: str, chave: str, altura: int = 760):
+    """Caixa de selecção 'Abrir documento': mostra o PDF no ecrã e o botão de descarregar (só carrega quando aberto)."""
+    if st.checkbox("📖 Abrir documento", key=f"abrir_pdf_{chave}"):
+        dados = obter_pdf_bytes(int(doc_id))
+        if not dados:
+            st.warning("Documento não encontrado.")
+            return
+        st.download_button("⬇️ Descarregar PDF", data=dados, file_name=nome_ficheiro or "documento.pdf",
+                           mime="application/pdf", key=f"dl_pdf_{chave}")
+        import base64 as _b64
+        import streamlit.components.v1 as _components
+        _components.html(_HTML_VISUALIZADOR_PDF.replace("__ALT__", str(altura - 20)).replace(
+            "__B64__", _b64.b64encode(dados).decode()), height=altura)
+
+
+
+# ---------------- Sócios ----------------
+def inserir_socio(nome, email, telefone, bi, contribuicao_inicial):
+    executar("INSERT INTO socios (nome, email, telefone, bi, contribuicao_inicial) VALUES (%s, %s, %s, %s, %s)", (nome, email, telefone, bi, contribuicao_inicial))
+
+def obter_socios() -> pd.DataFrame:
+    exigir_admin()
+    return consultar_df("SELECT nome, email, telefone, bi, contribuicao_inicial, criado_em FROM socios ORDER BY criado_em DESC")
+
+def extrair_texto_pdf(ficheiro) -> str:
+    leitor = PdfReader(ficheiro)
+    return "\n\n".join(pagina.extract_text() or "" for pagina in leitor.pages).strip()
+
+
+def _pdf_linha(pdf, label, valor, bold=False):
+    pdf.set_font("Helvetica", "B" if bold else "", 10)
+    pdf.set_fill_color(246, 239, 242)
+    pdf.cell(105, 7, label, border="B", fill=bold, ln=False)
+    pdf.cell(0, 7, valor, border="B", align="R", fill=bold, ln=True)
+
+
+def _pdf_secao(pdf, titulo):
+    pdf.ln(4)
+    pdf.set_fill_color(124, 31, 62)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 8, f"  {titulo}", ln=True, fill=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(1)
+
+
+# ---------------- Gráficos do relatório PDF (desenhados com o próprio FPDF, sem bibliotecas extra) ----------------
+_PDF_PALETA = [(124, 31, 62), (166, 72, 106), (94, 24, 48), (200, 130, 150), (150, 110, 120), (210, 180, 190), (70, 50, 60)]
+
+
+def _pdf_nome_curto(nome: str) -> str:
+    """'BAI (ACÇÃO)' -> 'BAI'; 'Acção Unitel' -> 'Unitel'."""
+    import re as _re
+    n = _re.sub(r"\s*\(.*?\)", "", str(nome)).strip()
+    for pref in ("Acção ", "Ação ", "ACÇÃO ", "AÇÃO "):
+        if n.startswith(pref):
+            n = n[len(pref):].strip()
+    return n or str(nome)
+
+
+def _pdf_grafico_composicao(pdf, linhas):
+    """Barra horizontal 100%: nome e peso de cada activo; a legenda traz os valores em Kz."""
+    total = sum(max(l["val_act"], 0) for l in linhas)
+    if total <= 0:
+        return
+    x0 = pdf.l_margin
+    largura = pdf.w - pdf.l_margin - pdf.r_margin
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 6, "Composição da carteira (por valor actual)", ln=True)
+    y = pdf.get_y() + 1
+    x = x0
+    for i, l in enumerate(linhas):
+        peso = max(l["val_act"], 0) / total
+        w = largura * peso
+        pdf.set_fill_color(*_PDF_PALETA[i % len(_PDF_PALETA)])
+        pdf.rect(x, y, w, 11, style="F")
+        pdf.set_text_color(255, 255, 255)
+        nome = _pdf_nome_curto(l["nome"])
+        pdf.set_font("Helvetica", "B", 7)
+        cabe_nome = pdf.get_string_width(nome) + 3 <= w
+        if w > 9:
+            if cabe_nome:
+                pdf.set_xy(x, y + 1.3)
+                pdf.cell(w, 4.2, nome, align="C")
+                pdf.set_xy(x, y + 5.6)
+            else:
+                pdf.set_xy(x, y + 3.4)
+            pdf.cell(w, 4.2, f"{peso * 100:.1f}%", align="C")
+        x += w
+    # legenda: nome completo e valor em Kz (a percentagem já está nas barras)
+    pdf.set_font("Helvetica", "", 7.5)
+    pdf.set_text_color(40, 40, 40)
+    ly = y + 14
+    for i, l in enumerate(linhas):
+        cx = x0 + (i % 2) * (largura / 2)
+        cy = ly + (i // 2) * 5
+        pdf.set_fill_color(*_PDF_PALETA[i % len(_PDF_PALETA)])
+        pdf.rect(cx, cy + 0.8, 3, 3, style="F")
+        pdf.set_xy(cx + 4.5, cy)
+        pdf.cell(largura / 2 - 6, 4.5, f"{_pdf_nome_curto(l['nome'])[:34]}  -  {kz(l['val_act'])}")
+    pdf.set_y(ly + ((len(linhas) + 1) // 2) * 5 + 2)
+    pdf.set_text_color(0, 0, 0)
+
+
+def _pdf_grafico_mais_valias(pdf, linhas, x0, y0, w, h):
+    """Barras verticais: ganho (verde) ou perda (vermelho) por activo."""
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w, 6, "Mais-valias por activo (Kz)")
+    vals = [l["mais_valia"] for l in linhas]
+    vmax, vmin = max(0, max(vals)), min(0, min(vals))
+    rng = (vmax - vmin) or 1
+    top = y0 + 12
+    bottom = top + h
+
+    def yv(v):
+        return top + (vmax - v) / rng * h
+
+    pdf.set_draw_color(170, 170, 170)
+    pdf.set_line_width(0.2)
+    pdf.line(x0, yv(0), x0 + w, yv(0))
+    n = len(linhas)
+    slot = w / n
+    bw = min(slot * 0.6, 22)
+    for i, l in enumerate(linhas):
+        v = vals[i]
+        bx = x0 + slot * i + (slot - bw) / 2
+        y1, y2 = yv(max(v, 0)), yv(min(v, 0))
+        pdf.set_fill_color(*((22, 163, 74) if v >= 0 else (220, 38, 38)))
+        pdf.rect(bx, y1, bw, max(y2 - y1, 0.3), style="F")
+        pdf.set_font("Helvetica", "", 6.5)
+        pdf.set_text_color(60, 60, 60)
+        pdf.set_xy(bx - 5, (y1 - 3.8) if v >= 0 else (y2 + 0.5))
+        pdf.cell(bw + 10, 3.5, kz(v), align="C")
+        pdf.set_xy(x0 + slot * i, bottom + 6)
+        pdf.cell(slot, 3.5, (l["ticker"] or l["nome"])[:9], align="C")
+    pdf.set_text_color(0, 0, 0)
+
+
+def _pdf_grafico_evolucao(pdf, df_hist, x0, y0, w, h):
+    """Linha: evolução do património do Clube (histórico diário)."""
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w, 6, "Evolução do património do Clube (Kz)")
+    if df_hist is None or len(df_hist) < 2:
+        pdf.set_xy(x0, y0 + 14)
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(120, 120, 120)
+        pdf.multi_cell(w, 4.5, "O histórico ainda está a ser construído: o gráfico aparece a partir do segundo registo diário do património.")
+        pdf.set_text_color(0, 0, 0)
+        return
+    d = df_hist.tail(60)
+    ys = [float(v) for v in d["total"]]
+    datas = [str(v)[:10] for v in d["registado_em"]]
+    ymin, ymax = min(ys), max(ys)
+    if ymax == ymin:
+        pad = abs(ymax) * 0.05 or 1.0
+        ymin, ymax = ymin - pad, ymax + pad
+    esq = 24
+    px0, pw = x0 + esq, w - esq
+    top = y0 + 12
+    bottom = top + h
+    pdf.set_draw_color(225, 225, 225)
+    pdf.set_line_width(0.2)
+    pdf.set_font("Helvetica", "", 6.5)
+    pdf.set_text_color(90, 90, 90)
+    for k in range(4):
+        gy = top + h * k / 3
+        pdf.line(px0, gy, px0 + pw, gy)
+        pdf.set_xy(x0, gy - 1.8)
+        pdf.cell(esq - 2, 3.5, kz(ymax - (ymax - ymin) * k / 3), align="R")
+    n = len(ys)
+    pts = [(px0 + pw * i / (n - 1), top + (ymax - v) / (ymax - ymin) * h) for i, v in enumerate(ys)]
+    pdf.set_draw_color(124, 31, 62)
+    pdf.set_line_width(0.6)
+    for (xa, ya), (xb, yb) in zip(pts[:-1], pts[1:]):
+        pdf.line(xa, ya, xb, yb)
+    if n <= 20:
+        pdf.set_fill_color(124, 31, 62)
+        for (xp, yp) in pts:
+            pdf.rect(xp - 0.7, yp - 0.7, 1.4, 1.4, style="F")
+    pdf.set_font("Helvetica", "", 6.5)
+    pdf.set_text_color(90, 90, 90)
+    pdf.set_xy(px0, bottom + 2)
+    pdf.cell(30, 3.5, datas[0], align="L")
+    pdf.set_xy(px0 + pw - 30, bottom + 2)
+    pdf.cell(30, 3.5, datas[-1], align="R")
+    pdf.set_text_color(0, 0, 0)
+
+
+def _pdf_sector(l) -> str:
+    """Sector do activo, a partir do ticker/nome (Telecomunicações, Banca/Finanças ou Outros)."""
+    chave = f"{l['ticker']} {l['nome']}".upper()
+    if "UNTL" in chave or "UNITEL" in chave:
+        return "Telecomunicações"
+    if any(k in chave for k in ("BAIA", "BFA", "SBA", "STANDARD", "BCGA", "CAIXA", "BDVA", "BODIVA", "ENSA")):
+        return "Banca/Finanças"
+    return "Outros"
+
+
+def _pdf_barras_limite(pdf, titulo, itens, x0, y0, w, limite):
+    """Barras horizontais (rótulo, %) com linha vertical no limite; vermelho se o limite for excedido."""
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w, 6, titulo)
+    lab_w, linha_h = min(46, w * 0.32), 8
+    pmax = max([p for _, p in itens] + [limite * 1.5])
+    pw = w - lab_w - 16
+    top = y0 + 9
+    for i, (rot, p) in enumerate(itens):
+        y = top + i * linha_h
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(40, 40, 40)
+        pdf.set_xy(x0, y + 1)
+        pdf.cell(lab_w - 2, 5, rot[:26], align="R")
+        bw = pw * p / pmax
+        pdf.set_fill_color(*((220, 38, 38) if p > limite else (22, 163, 74)))
+        pdf.rect(x0 + lab_w, y + 0.5, max(bw, 0.3), 6, style="F")
+        pdf.set_xy(x0 + lab_w + max(bw, pw * limite / pmax) + 1.5, y + 1)
+        pdf.cell(14, 5, f"{p:.1f}%")
+    lx = x0 + lab_w + pw * limite / pmax
+    pdf.set_draw_color(220, 38, 38)
+    pdf.set_line_width(0.4)
+    pdf.line(lx, top - 1, lx, top + len(itens) * linha_h)
+    pdf.set_font("Helvetica", "B", 6.5)
+    pdf.set_text_color(220, 38, 38)
+    pdf.set_xy(lx - 15, top + len(itens) * linha_h + 0.5)
+    pdf.cell(30, 3.5, f"limite {limite:.0f}%", align="C")
+    pdf.set_text_color(0, 0, 0)
+    return top + len(itens) * linha_h + 6
+
+
+def _pdf_barras_simples(pdf, titulo, itens, x0, y0, w, cor=(124, 31, 62)):
+    """Barras horizontais (rótulo, %) numa só série."""
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w, 6, titulo)
+    lab_w, linha_h = min(46, w * 0.32), 8
+    pmax = max([p for _, p in itens] + [1]) * 1.15
+    pw = w - lab_w - 14
+    top = y0 + 9
+    for i, (rot, p) in enumerate(itens):
+        y = top + i * linha_h
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(40, 40, 40)
+        pdf.set_xy(x0, y + 1)
+        pdf.cell(lab_w - 2, 5, rot[:22], align="R")
+        bw = pw * p / pmax
+        pdf.set_fill_color(*cor)
+        pdf.rect(x0 + lab_w, y + 0.5, max(bw, 0.3), 6, style="F")
+        pdf.set_xy(x0 + lab_w + bw + 1, y + 1)
+        pdf.cell(14, 5, f"{p:.1f}%")
+    pdf.set_text_color(0, 0, 0)
+    return top + len(itens) * linha_h + 2
+
+
+def _pdf_barras_duplas(pdf, titulo, itens, x0, y0, w):
+    """Por activo, duas barras: % do número de títulos e % do valor da carteira."""
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w, 6, titulo)
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_fill_color(166, 72, 106)
+    pdf.rect(x0, y0 + 7.3, 3, 3, style="F")
+    pdf.set_xy(x0 + 4.5, y0 + 6.8)
+    pdf.cell(40, 4, "Quantidade de títulos")
+    pdf.set_fill_color(124, 31, 62)
+    pdf.rect(x0 + 48, y0 + 7.3, 3, 3, style="F")
+    pdf.set_xy(x0 + 52.5, y0 + 6.8)
+    pdf.cell(40, 4, "Valor monetário")
+    lab_w, linha_h = 40, 11
+    pmax = max([max(a, b) for _, a, b in itens] + [1])
+    pw = w - lab_w - 14
+    top = y0 + 13
+    for i, (rot, pq, pv) in enumerate(itens):
+        y = top + i * linha_h
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(40, 40, 40)
+        pdf.set_xy(x0, y + 2.5)
+        pdf.cell(lab_w - 2, 5, rot[:22], align="R")
+        for k, (p, cor) in enumerate(((pq, (166, 72, 106)), (pv, (124, 31, 62)))):
+            by = y + k * 4.6
+            bw = pw * p / pmax
+            pdf.set_fill_color(*cor)
+            pdf.rect(x0 + lab_w, by, max(bw, 0.3), 4, style="F")
+            pdf.set_font("Helvetica", "", 6.5)
+            pdf.set_xy(x0 + lab_w + bw + 1, by - 0.2)
+            pdf.cell(12, 4.4, f"{p:.1f}%")
+    pdf.set_text_color(0, 0, 0)
+    return top + len(itens) * linha_h + 2
+
+
+# =========================================================
+# INFRA-ESTRUTURA EXTRA + COMPONENTES DO RELATÓRIO PDF INSTITUCIONAL
+# =========================================================
+@st.cache_resource
+def _garantir_tabelas_extra() -> bool:
+    """Tabelas/colunas novas (mercado BODIVA, configuração, inflação). Idempotente; corre uma vez por processo."""
+    executar("""CREATE TABLE IF NOT EXISTS mercado_bodiva (
+        ticker TEXT PRIMARY KEY, nome TEXT, tipo TEXT, preco NUMERIC, variacao NUMERIC, volume NUMERIC,
+        fonte TEXT, actualizado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("CREATE TABLE IF NOT EXISTS config_mercado (chave TEXT PRIMARY KEY, valor TEXT)")
+    for _col, _tp in (("inflacao_homologa", "NUMERIC"), ("inflacao_vigente_m", "NUMERIC"), ("inflacao_projectada", "NUMERIC"),
+                      ("inflacao_ref", "TEXT"), ("inflacao_data", "DATE")):
+        executar(f"ALTER TABLE premissas_macro ADD COLUMN IF NOT EXISTS {_col} {_tp}")
+    for _ddl in ("ALTER TABLE contas ADD COLUMN IF NOT EXISTS estado TEXT NOT NULL DEFAULT 'activa'",     # contas antigas ficam 'activa'
+                 "ALTER TABLE contas ADD COLUMN IF NOT EXISTS origem TEXT NOT NULL DEFAULT 'admin'",
+                 "ALTER TABLE contas ADD COLUMN IF NOT EXISTS telefone TEXT",
+                 "CREATE TABLE IF NOT EXISTS subscritores (id SERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())"):
+        try:
+            executar(_ddl)
+        except Exception:
+            traceback.print_exc()
+    for _ddl in ("""CREATE TABLE IF NOT EXISTS taxas_bna (id SERIAL PRIMARY KEY, data DATE NOT NULL, moeda TEXT NOT NULL, compra NUMERIC NOT NULL, venda NUMERIC NOT NULL,
+                    registado_por TEXT, registado_em TIMESTAMP NOT NULL DEFAULT NOW(), UNIQUE (data, moeda))""",
+                 "ALTER TABLE manifestacoes_interesse ADD COLUMN IF NOT EXISTS localidade TEXT", "ALTER TABLE manifestacoes_interesse ADD COLUMN IF NOT EXISTS interesse TEXT",
+                 "ALTER TABLE manifestacoes_interesse ADD COLUMN IF NOT EXISTS contribuicao TEXT", "ALTER TABLE manifestacoes_interesse ADD COLUMN IF NOT EXISTS como_soube TEXT",
+                 "ALTER TABLE manifestacoes_interesse ADD COLUMN IF NOT EXISTS maior_18 BOOLEAN"):
+        try:
+            executar(_ddl)
+        except Exception:
+            traceback.print_exc()
+    # ticker correcto do Standard Bank Angola: SBAOAAAA. Renomeia o antigo (SBAAAAAA) sem perder dados nem criar duplicados
+    for _tab, _com_dia, _apaga in (("carteira_real", False, False), ("carteira_referencia", False, False), ("base_indice_appo", False, True),
+                                   ("opv_activos", False, True), ("historico_cotacoes", True, True)):
+        try:
+            if _tab == "carteira_real":
+                executar("UPDATE carteira_real SET ticker = 'SBAOAAAA' WHERE ticker = 'SBAAAAAA'")
+                continue
+            _cond = " AND x.dia = t.dia" if _com_dia else ""
+            executar(f"UPDATE {_tab} t SET ticker = 'SBAOAAAA' WHERE t.ticker = 'SBAAAAAA' AND NOT EXISTS (SELECT 1 FROM {_tab} x WHERE x.ticker = 'SBAOAAAA'{_cond})")
+            if _apaga:
+                executar(f"DELETE FROM {_tab} WHERE ticker = 'SBAAAAAA' AND EXISTS (SELECT 1 FROM {_tab} x WHERE x.ticker = 'SBAOAAAA'{_cond.replace('t.dia', f'{_tab}.dia')})")
+        except Exception:
+            traceback.print_exc()
+    return True
+
+
+# ---------- Texto seguro para o PDF (fonte Helvetica = Latin-1) ----------
+_PDF_TROCAS = {"\u2013": "-", "\u2014": "-", "\u2212": "-", "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+               "\u2026": "...", "\u2022": "-", "\u2192": "->", "\u2190": "<-", "\u2265": ">=", "\u2264": "<=",
+               "\u2605": "*", "\u20ac": "EUR", "\u00a0": " ", "\u2248": "~", "\u0394": "Delta", "\u03c3": "sigma",
+               "\u03b1": "alpha", "\u03b2": "beta"}
+
+
+def _pdf_txt(s) -> str:
+    """Troca pontuação Unicode e remove o que a fonte base não suporta (emojis, etc.), para o PDF nunca falhar."""
+    s = "" if s is None else str(s)
+    for k, v in _PDF_TROCAS.items():
+        s = s.replace(k, v)
+    return "".join(c for c in s if ord(c) < 256)
+
+
+class _FPDFSeguro(FPDF):
+    """FPDF que limpa o texto antes de o escrever: um carácter fora de Latin-1 (ex.: '–' numa descrição)
+    já não faz falhar o relatório inteiro."""
+    def cell(self, *args, **kwargs):
+        args = list(args)
+        if len(args) >= 3:
+            args[2] = _pdf_txt(args[2])
+        for k in ("text", "txt"):
+            if k in kwargs:
+                kwargs[k] = _pdf_txt(kwargs[k])
+        return super().cell(*args, **kwargs)
+
+    def multi_cell(self, *args, **kwargs):
+        args = list(args)
+        if len(args) >= 3:
+            args[2] = _pdf_txt(args[2])
+        for k in ("text", "txt"):
+            if k in kwargs:
+                kwargs[k] = _pdf_txt(kwargs[k])
+        return super().multi_cell(*args, **kwargs)
+
+
+_PDF_PALETA_FX = [(109, 40, 217), (225, 29, 72), (249, 115, 22), (124, 31, 62), (168, 85, 247),
+                  (251, 146, 60), (244, 63, 94), (99, 102, 241), (190, 24, 93), (180, 83, 9)]
+
+
+def _pdf_fmt(v, casas: int = 2, sinal: bool = True, sufixo: str = "%") -> str:
+    if v is None or (isinstance(v, float) and v != v):
+        return "n/d"
+    try:
+        return (f"{float(v):+.{casas}f}" if sinal else f"{float(v):.{casas}f}") + sufixo
+    except (TypeError, ValueError):
+        return "n/d"
+
+
+def _pdf_corta(pdf, txt: str, largura: float) -> str:
+    txt = _pdf_txt(txt)
+    while len(txt) > 1 and pdf.get_string_width(txt) > largura - 2:
+        txt = txt[:-1]
+    return txt
+
+
+def _pdf_paragrafo(pdf, titulo: str, texto: str):
+    larg = pdf.w - pdf.l_margin - pdf.r_margin
+    if pdf.get_y() > pdf.h - 48:
+        pdf.add_page("L")
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+    pdf.set_font("Helvetica", "B", 9.5)
+    pdf.set_text_color(109, 40, 217)
+    pdf.cell(larg, 6, titulo, ln=True)
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(40, 40, 40)
+    pdf.multi_cell(larg, 4.8, texto)
+    pdf.set_xy(pdf.l_margin, pdf.get_y() + 2)
+    pdf.set_text_color(0, 0, 0)
+
+
+def _pdf_tabela(pdf, cab, linhas, larg, alinh=None, h=6.0, negrito=(), sinal_cols=(), tam=7.5):
+    """Tabela com cabeçalho repetido em nova página; verde/vermelho nas colunas de sinal."""
+    alinh = alinh or (["L"] + ["R"] * (len(cab) - 1))
+
+    def _cab():
+        pdf.set_xy(pdf.l_margin, pdf.get_y())
+        pdf.set_font("Helvetica", "B", tam)
+        pdf.set_fill_color(236, 222, 227)
+        pdf.set_text_color(0, 0, 0)
+        for i, (c, w) in enumerate(zip(cab, larg)):
+            pdf.cell(w, h + 1.5, _pdf_corta(pdf, c, w), border="B", fill=True, ln=(i == len(cab) - 1), align="C")
+
+    _cab()
+    for k, linha in enumerate(linhas):
+        if pdf.get_y() + h > pdf.h - 22:
+            pdf.add_page("L")
+            _cab()
+        pdf.set_xy(pdf.l_margin, pdf.get_y())
+        pdf.set_fill_color(250, 248, 246) if k % 2 == 0 else pdf.set_fill_color(255, 255, 255)
+        for i, (v, w) in enumerate(zip(linha, larg)):
+            txt = _pdf_txt(v)
+            pdf.set_font("Helvetica", "B" if k in negrito else "", tam)
+            cor = (0, 0, 0)
+            if i in sinal_cols and txt not in ("n/d", "") and txt[:1] in "+-":
+                cor = (22, 163, 74) if txt[:1] == "+" else (220, 38, 38)
+            pdf.set_text_color(*cor)
+            pdf.cell(w, h, _pdf_corta(pdf, txt, w), border="B", fill=True, ln=(i == len(linha) - 1), align=alinh[i])
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_xy(pdf.l_margin, pdf.get_y() + 1)
+
+
+def _pdf_donut(pdf, itens, cx, cy, r, r_int, titulo, centro=""):
+    """Gráfico de anel desenhado com polígonos (sem bibliotecas extra). `itens` = [(rótulo, valor, texto_valor)].
+    Se o FPDF não tiver `polygon`, desenha só a legenda."""
+    import math
+    itens = [(n, float(v), tv) for n, v, tv in itens if v and float(v) > 0]
+    pdf.set_xy(cx - r - 6, cy - r - 9)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(60, 30, 90)
+    pdf.cell(2 * r + 12, 6, titulo, align="C")
+    total = sum(v for _, v, _ in itens)
+    if total <= 0:
+        return cy + r
+    ang = -math.pi / 2
+    pdf.set_draw_color(255, 255, 255)
+    pdf.set_line_width(0.5)
+    for i, (_, v, _) in enumerate(itens):
+        fim = ang + 2 * math.pi * v / total
+        passos = max(3, int((fim - ang) / (2 * math.pi) * 120))
+        ext = [(cx + r * math.cos(ang + (fim - ang) * j / passos), cy + r * math.sin(ang + (fim - ang) * j / passos)) for j in range(passos + 1)]
+        inte = [(cx + r_int * math.cos(fim - (fim - ang) * j / passos), cy + r_int * math.sin(fim - (fim - ang) * j / passos)) for j in range(passos + 1)]
+        pdf.set_fill_color(*_PDF_PALETA_FX[i % len(_PDF_PALETA_FX)])
+        try:
+            pdf.polygon(ext + inte, style="DF")
+        except Exception:
+            break
+        ang = fim
+    pdf.set_line_width(0.2)
+    pdf.set_draw_color(0, 0, 0)
+    if centro:
+        pdf.set_xy(cx - r_int, cy - 4)
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(27, 16, 51)
+        pdf.cell(2 * r_int, 4, centro, align="C")
+    # legenda
+    ly = cy + r + 5
+    pdf.set_font("Helvetica", "", 7)
+    for i, (n, v, tv) in enumerate(itens[:9]):
+        pdf.set_fill_color(*_PDF_PALETA_FX[i % len(_PDF_PALETA_FX)])
+        pdf.rect(cx - r - 4, ly + 0.9, 2.6, 2.6, style="F")
+        pdf.set_xy(cx - r, ly)
+        pdf.set_text_color(40, 40, 40)
+        pdf.cell(2 * r + 8, 4.4, _pdf_corta(pdf, f"{n}: {v / total * 100:.1f}%  {tv}", 2 * r + 8))
+        ly += 4.4
+    pdf.set_text_color(0, 0, 0)
+    return ly
+
+
+def _rotulo_horiz(a: dict, p: str, curto: bool = True) -> str:
+    nomes_c = {"1d": "Intradia", "7d": "Semanal 7D", "3m": "Trimestral", "6m": "Semestral", "1a": "Anual YoY", "5a": "Longo prazo 5A"}
+    nomes_l = dict(HORIZ_RENT)
+    if p == "5a" and a.get("acumulado") and a.get("inicio_comum") is not None:
+        return f"Acum. {a['inicio_comum']:%d/%m/%y}"
+    return nomes_c[p] if curto else nomes_l[p]
+
+
+def _pdf_bloco_executivo(pdf, a: dict, resumo: dict, mercado, linhas_carteira: list):
+    """Sumário executivo, matriz multitemporal (com Alpha), inflação real, risco e composição em anéis."""
+    larg = pdf.w - pdf.l_margin - pdf.r_margin
+    ps = [p for p, _ in HORIZ_RENT]
+    # ---- 1. Sumário executivo e teses ----
+    pdf.add_page("L")
+    _pdf_secao(pdf, "SUMARIO EXECUTIVO E TESES DE INVESTIMENTO")
+    for titulo, texto in gerar_comentario_executivo(a, resumo, mercado):
+        _pdf_paragrafo(pdf, titulo, texto)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+    pdf.multi_cell(larg, 3.8, "Comentario gerado automaticamente a partir dos dados da plataforma (cotacoes, carteira e premissas macro). "
+                              "Tem natureza informativa e nao constitui recomendacao personalizada de investimento.")
+    pdf.set_text_color(0, 0, 0)
+
+    # ---- 2. Matriz comparativa ----
+    pdf.add_page("L")
+    _pdf_secao(pdf, "MATRIZ COMPARATIVA DE DESEMPENHO - CARTEIRA vs INDICES vs INFLACAO")
+    cab = ["Indicador"] + [_rotulo_horiz(a, p) for p in ps]
+    W = [58] + [round((larg - 58) / 6, 2)] * 6
+    f = lambda d: [_pdf_fmt(d.get(p)) for p in ps]
+    fpp = lambda d: [_pdf_fmt(d.get(p), sufixo=" p.p.") for p in ps]
+    inf = a["inflacao"]
+    real = a["real"]
+    lin = [
+        ["Carteira do Clube (nominal)"] + f(a["ret_carteira"]),
+        ["Indice APPO"] + f(a["ret_appo"]),
+        ["Indice BODIVA"] + f(a["ret_bodiva"]),
+        ["Alpha vs Indice APPO"] + fpp(a["alpha_appo"]),
+        ["Alpha vs Indice BODIVA"] + fpp(a["alpha_bodiva"]),
+        ["Inflacao homologa (YoY) no periodo"] + [_pdf_fmt(inf[p]["yoy"], sinal=False) for p in ps],
+        ["Inflacao vigente no periodo"] + [_pdf_fmt(inf[p]["vig"], sinal=False) for p in ps],
+        ["Inflacao projectada no periodo"] + [_pdf_fmt(inf[p]["proj"], sinal=False) for p in ps],
+        ["Rentab. real (deflac. YoY)"] + [_pdf_fmt(real[p]["yoy"]) if real.get(p) else "n/d" for p in ps],
+        ["Rentab. real (deflac. vigente)"] + [_pdf_fmt(real[p]["vig"]) if real.get(p) else "n/d" for p in ps],
+        ["Rentab. real (deflac. projectada)"] + [_pdf_fmt(real[p]["proj"]) if real.get(p) else "n/d" for p in ps],
+    ]
+    _pdf_tabela(pdf, cab, lin, W, negrito=(0, 3, 4, 8), sinal_cols=tuple(range(1, 7)))
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(120, 120, 120)
+    nota = ("Rentabilidade de preco (sem dividendos nem custos de transaccao); alpha = excesso de retorno da carteira face ao indice, em pontos percentuais, "
+            "na mesma janela temporal. Janelas sem historico completo aparecem como n/d. ")
+    if a.get("acumulado"):
+        nota += f"A coluna de longo prazo e acumulada desde {a['inicio_comum']:%d/%m/%Y}, a data comum das tres series. "
+    nota += "Indice BODIVA: cotacao media encadeada (entradas de novos titulos nao geram saltos). Carteira: quantidades actuais mantidas durante o periodo."
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+    pdf.multi_cell(larg, 3.8, nota)
+    pdf.set_text_color(0, 0, 0)
+
+    _pdf_secao(pdf, "RENTABILIDADE MULTITEMPORAL POR TITULO (em vez de uma unica coluna Var.%)")
+    cab2 = ["Titulo", "Peso"] + [_rotulo_horiz(a, p) for p in ps]
+    W2 = [52, 18] + [round((larg - 70) / 6, 2)] * 6
+    lin2 = [[_pdf_nome_curto(t["nome"]), f"{t['peso'] * 100:.1f}%"] + [_pdf_fmt(t["ret"].get(p)) for p in ps] for t in a["titulos"]]
+    lin2.append(["CARTEIRA", "100%"] + f(a["ret_carteira"]))
+    _pdf_tabela(pdf, cab2, lin2, W2, alinh=["L", "R"] + ["R"] * 6, negrito=(len(lin2) - 1,), sinal_cols=tuple(range(2, 8)))
+
+    # ---- 3. Inflação e poder de compra ----
+    pdf.add_page("L")
+    _pdf_secao(pdf, "AJUSTE MACROECONOMICO - INFLACAO REAL DE ANGOLA E PODER DE COMPRA")
+    pr = a["premissas"]
+    vig_anual = ((1 + pr["inflacao_vigente_m"]) ** 12 - 1) * 100
+    ref = pr.get("inflacao_ref") or "valores por defeito - por confirmar com o INE"
+    lin3 = [
+        ["Inflacao homologa (YoY)", f"{pr['inflacao_homologa'] * 100:.2f}%", "Ganho/perda real de poder de compra nos ultimos 12 meses"],
+        ["Inflacao vigente (ultima leitura mensal)", f"{pr['inflacao_vigente_m'] * 100:.2f}% m/m  (~{vig_anual:.1f}% anualizada)", "Pulso conjuntural imediato"],
+        ["Inflacao projectada (proximos 12 meses)", f"{pr['inflacao_projectada'] * 100:.2f}%", "Teste de stress e preservacao de capital a medio/longo prazo"],
+    ]
+    _pdf_tabela(pdf, ["Dimensao", "Valor", "Leitura"], lin3, [75, 75, larg - 150], alinh=["L", "L", "L"], h=6.5, tam=8)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+    pdf.cell(larg, 4, f"Fonte/data das premissas: {ref}", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(2)
+    cab4 = ["Rentabilidade real"] + [_rotulo_horiz(a, p) for p in ps]
+    lin4 = [["Carteira - nominal"] + f(a["ret_carteira"]),
+            ["Real (deflacionada pela inflacao YoY)"] + [_pdf_fmt(real[p]["yoy"]) if real.get(p) else "n/d" for p in ps],
+            ["Real (inflacao vigente)"] + [_pdf_fmt(real[p]["vig"]) if real.get(p) else "n/d" for p in ps],
+            ["Real (inflacao projectada)"] + [_pdf_fmt(real[p]["proj"]) if real.get(p) else "n/d" for p in ps],
+            ["Poder de compra (YoY)"] + [("Ganho" if real[p]["yoy"] > 0 else "Perda") if real.get(p) else "n/d" for p in ps]]
+    _pdf_tabela(pdf, cab4, lin4, W, negrito=(1,), sinal_cols=tuple(range(1, 7)))
+    pdf.ln(2)
+    _pdf_paragrafo(pdf, "Teste de stress - poder de compra de 100 000 Kz mantidos sem rendimento",
+                   "Mostra quanto valeria hoje o capital se ficasse parado, e que retorno nominal acumulado seria preciso para o preservar.")
+    base_inf = pr["inflacao_projectada"]
+    stress = []
+    for nome_c, ip in (("Projectada", base_inf), ("Projectada + 5 p.p. (stress)", base_inf + 0.05)):
+        stress.append([f"Poder de compra em {nome_c}"] + [f"{100000 / (1 + ip) ** n:,.0f} Kz".replace(",", " ") for n in (1, 3, 5)])
+        stress.append([f"Retorno nominal necessario ({nome_c})"] + [f"{((1 + ip) ** n - 1) * 100:.1f}%" for n in (1, 3, 5)])
+    _pdf_tabela(pdf, ["Cenario", "1 ano", "3 anos", "5 anos"], stress, [100, 49, 49, larg - 198], alinh=["L", "R", "R", "R"], h=6)
+
+    # ---- 4. Risco ----
+    pdf.add_page("L")
+    _pdf_secao(pdf, "ANALISE DE RISCO E DESVIO PADRAO")
+    rk = a["risco"]
+    def _g(nome, chave, casas=2, suf="%", sinal=False):
+        return [_pdf_fmt(rk[x].get(chave), casas, sinal, suf) if rk.get(x) else "n/d" for x in ("carteira", "appo", "bodiva")]
+    lin5 = [["Observacoes (retornos)"] + [str(rk[x]["n"]) if rk.get(x) else "n/d" for x in ("carteira", "appo", "bodiva")],
+            ["Desvio padrao diario (sigma)"] + _g("", "sigma_d"),
+            ["Volatilidade anualizada (sigma x raiz de 252)"] + _g("", "sigma_a"),
+            ["Drawdown maximo"] + _g("", "dd_max"),
+            ["VaR historico 95% (1 dia)"] + _g("", "var95"),
+            ["Tracking error vs Indice APPO (anualizado)"] + [_pdf_fmt(rk["carteira"].get("te"), 2, False, "%"), "-", "-"],
+            ["Information ratio vs Indice APPO"] + [_pdf_fmt(rk["carteira"].get("ir"), 2, False, ""), "-", "-"],
+            ["Beta vs Indice BODIVA"] + [_pdf_fmt(rk["carteira"].get("beta"), 2, False, ""), "-", "-"],
+            ["Sharpe (Rf das premissas)"] + [_pdf_fmt(rk["carteira"].get("sharpe"), 2, False, ""), "-", "-"]]
+    _pdf_tabela(pdf, ["Metrica", "Carteira", "Indice APPO", "Indice BODIVA"], lin5, [95, 50, 50, larg - 195], alinh=["L", "R", "R", "R"], h=6.2, tam=8)
+    pdf.ln(2)
+    cab6 = ["Titulo", "Peso", "Volat. anual.", "Drawdown max.", "Contrib. p/ risco total", "Peso / Risco"]
+    lin6, alertas = [], []
+    for t_ in a["titulos"]:
+        c_ = t_.get("contrib")
+        rel = (f"{c_ / t_['peso']:.2f}x" if c_ is not None and t_["peso"] > 0 else "n/d")
+        lin6.append([_pdf_nome_curto(t_["nome"]), f"{t_['peso'] * 100:.1f}%", _pdf_fmt(t_.get("sigma_a"), 2, False),
+                     _pdf_fmt(t_.get("dd_max"), 2, False), _pdf_fmt(c_ * 100 if c_ is not None else None, 1, False), rel])
+        if c_ is not None and t_["peso"] > 0 and c_ / t_["peso"] > 1.25:
+            alertas.append(f"{_pdf_nome_curto(t_['nome'])} contribui {c_ * 100:.1f}% do risco com {t_['peso'] * 100:.1f}% do peso")
+    _pdf_tabela(pdf, cab6, lin6, [62, 28, 34, 36, 45, larg - 205], alinh=["L", "R", "R", "R", "R", "R"], h=6)
+    cc = a["concentracao"]
+    txt_ef = (f"Numero efectivo de activos (1/HHI): {cc['n_efectivo']:.1f} em {len(a['titulos'])} posicoes. "
+              + ("Desalinhamento peso/risco: " + "; ".join(alertas) + "." if alertas else "A contribuicao para o risco esta alinhada com os pesos da carteira."))
+    pdf.set_font("Helvetica", "", 8.5)
+    pdf.set_text_color(40, 40, 40)
+    pdf.set_xy(pdf.l_margin, pdf.get_y() + 1)
+    pdf.multi_cell(larg, 4.6, txt_ef)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_xy(pdf.l_margin, pdf.get_y() + 1)
+    n_obs = rk["carteira"]["n"] if rk.get("carteira") else 0
+    pdf.multi_cell(larg, 3.8, f"Metricas calculadas sobre {n_obs} retornos observados (preco de fecho registado). Com amostras curtas (<30) os valores sao indicativos. "
+                              "Contribuicao para o risco = peso x covariancia com a carteira / variancia total.")
+    pdf.set_text_color(0, 0, 0)
+
+    # ---- 5. Composição em anéis ----
+    if linhas_carteira:
+        pdf.add_page("L")
+        _pdf_secao(pdf, "COMPOSICAO DA CARTEIRA (GRAFICOS DE ANEL)")
+        y0 = pdf.get_y() + 14
+        r, ri = 24, 14
+        cxs = [pdf.l_margin + larg / 6, pdf.l_margin + larg / 2, pdf.l_margin + 5 * larg / 6]
+        por_val = [(_pdf_nome_curto(l["nome"]), max(l["val_act"], 0), kz(l["val_act"])) for l in linhas_carteira]
+        por_qtd = [(_pdf_nome_curto(l["nome"]), max(l["qtd"], 0), f"{l['qtd']:,.0f} tit.".replace(",", " ")) for l in linhas_carteira]
+        sect = {}
+        for l in linhas_carteira:
+            sect[_pdf_sector(l)] = sect.get(_pdf_sector(l), 0.0) + max(l["val_act"], 0)
+        por_sec = [(k, v, kz(v)) for k, v in sorted(sect.items(), key=lambda x: -x[1])]
+        tot = sum(max(l["val_act"], 0) for l in linhas_carteira)
+        _pdf_donut(pdf, por_val, cxs[0], y0 + r, r, ri, "Por activo (valor actual)", kz(tot))
+        _pdf_donut(pdf, por_qtd, cxs[1], y0 + r, r, ri, "Por activo (quantidade de titulos)", "")
+        _pdf_donut(pdf, por_sec, cxs[2], y0 + r, r, ri, "Por sector", "")
+        y1 = y0 + r + 5 + 4.4 * 9 + 22
+        if y1 + 70 < pdf.h - 20:
+            res_liq = float(resumo.get("reservas", 0) or 0)
+            por_rea = float(resumo.get("capital_subscrito", 0) or 0) - float(resumo.get("capital_realizado", 0) or 0)
+            fundo = [("Carteira de acoes", tot, kz(tot)), ("Reservas de liquidez", res_liq, kz(res_liq)), ("Capital por realizar", max(por_rea, 0), kz(max(por_rea, 0)))]
+            _pdf_donut(pdf, fundo, cxs[1], y1 + r, r, ri, "Estrutura do fundo global", "")
+
+
+def gerar_relatorio_pdf(resumo, df_activos, df_movimentos) -> bytes:
+    tx  = t()
+    pdf = _FPDFSeguro()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page("L")  # Landscape
+    pdf.set_margins(left=20, top=30, right=30)  # esq 2cm, sup 3cm, dir 3cm
+    pdf.set_fill_color(124, 31, 62)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.cell(0, 12, "  CLUBE DE INVESTIMENTO APPO", ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(0, 5, "  Casa nº 5 - Zona C, Av. Ministro Vieira Machado, Benguela, Angola", ln=True, fill=True)
+    pdf.cell(0, 5, "  NIF: 001669404BA035  |  Tel.: 940 762 278 / 937 696 088  |  clube.investimento.appo@gmail.com", ln=True, fill=True)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.cell(0, 5, f"  Relatorio Patrimonial  |  Gerado em: {agora()}", ln=True, fill=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(3)
+    _pdf_secao(pdf, "RESUMO PATRIMONIAL")
+    cap_sub  = resumo["capital_subscrito"]
+    cap_real = resumo["capital_realizado"]
+    cap_por  = cap_sub - cap_real
+    invest   = resumo["investimentos"]
+    reservas = resumo["reservas"]
+    _pdf_linha(pdf, "Capital Subscrito (total comprometido pelos socios)", kz(cap_sub))
+    _pdf_linha(pdf, "Capital Realizado", kz(cap_real))
+    _pdf_linha(pdf, "Capital por Realizar", kz(cap_por))
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(15, 6, "", ln=False)
+    pdf.cell(90, 6, "dos quais, aplicado em Investimentos:", ln=False)
+    pdf.cell(0, 6, kz(invest), align="R", ln=True)
+    pdf.cell(15, 6, "", ln=False)
+    pdf.cell(90, 6, "dos quais, em Reservas de Liquidez:", ln=False)
+    pdf.cell(0, 6, kz(reservas), align="R", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(1)
+    _pdf_linha(pdf, "PATRIMONIO TOTAL DO CLUBE", kz(cap_real), bold=True)
+    # Carteira Real do Clube — dados registados nas avaliações com qtd e preco aquisição
+    _pdf_secao(pdf, "CARTEIRA DE INVESTIMENTOS DO CLUBE")
+    # Cruzar activos cotados com avaliações para obter qtd e preco aquisição
+    df_aval_pdf = obter_avaliacoes()
+    # Carteira REAL do Clube — lida ao vivo da tabela carteira_real (editável
+    # pelo admin em "Painel do Administrador › Carteira Real"), já não de um
+    # dicionário fixo no código. Se a tabela estiver vazia, o relatório mostra
+    # isso mesmo, em vez de números antigos congelados.
+    carteira_real_df = obter_carteira_real()
+    df_cotacoes_pdf = df_activos.copy()
+    linhas_carteira = []
+    valor_total_carteira = 0.0
+    mais_valias_total = 0.0
+    # Limpar tickers da BD (podem vir como "UNTLAAAA" ou campo nome pode ter variações)
+    df_cotacoes_pdf["ticker_clean"] = df_cotacoes_pdf["ticker"].str.strip().str.upper()
+    for _, pos in carteira_real_df.iterrows():
+        ticker_r = str(pos["ticker"] or "").strip().upper()
+        row_cot = df_cotacoes_pdf[df_cotacoes_pdf["ticker_clean"] == ticker_r] if ticker_r else pd.DataFrame()
+        if row_cot.empty:
+            # recurso: se o ticker não bateu certo (ex.: activo entretanto
+            # renomeado em Cotações), tenta encontrar pelo nome antes de
+            # desistir e mostrar 0 — mais seguro do que esconder a posição.
+            nome_r = str(pos["nome"] or "").strip().upper()
+            if nome_r:
+                row_cot = df_cotacoes_pdf[df_cotacoes_pdf["nome"].str.strip().str.upper() == nome_r]
+        preco_act = float(row_cot["preco"].values[0]) if not row_cot.empty else 0.0
+        var_dia   = float(row_cot["variacao"].values[0]) if not row_cot.empty else 0.0
+        qtd       = float(pos["qtd"])
+        val_aq    = float(pos["valor_aquisicao"])
+        preco_aq  = val_aq / qtd if qtd else 0
+        # Se cotação actual não disponível, usar valor de aquisição (sem mais-valia)
+        val_act   = round(qtd * preco_act, 2) if preco_act and preco_act > 0 else val_aq
+        mais_valia= val_act - val_aq
+        mais_valia_pct = (mais_valia / val_aq * 100) if val_aq else 0
+        valor_total_carteira += val_act
+        mais_valias_total    += mais_valia
+        linhas_carteira.append({
+            "ticker": ticker_r, "nome": str(pos["nome"]), "qtd": qtd,
+            "preco_aq": preco_aq, "preco_act": preco_act,
+            "val_aq": val_aq, "val_act": val_act,
+            "mais_valia": mais_valia, "mais_valia_pct": mais_valia_pct,
+            "var_dia": var_dia,
+        })
+
+    # mesma ordem de Cotações & Activos (alfabética pelo nome do activo)
+    linhas_carteira.sort(key=lambda l: l["nome"].strip().upper())
+    if not linhas_carteira:
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.cell(0, 7, "Sem posicoes registadas na carteira.", ln=True)
+    else:
+        # Cabeçalho tabela
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_fill_color(236, 222, 227)
+        # Landscape A4 útil = 297 - 20(esq) - 30(dir) = 247mm
+        # [20+48+10+28+28+32+32+30+19] = 247 exacto
+        W = [20, 48, 10, 28, 28, 32, 32, 30, 19]
+        headers = ["Ticker","Nome","Qtd","P. Aquis.(Kz)","P. Actual(Kz)","V. Aquis.(Kz)","V. Actual(Kz)","Mais-Valia","Mais-V.%"]
+        for h, w in zip(headers[:-1], W[:-1]):
+            pdf.cell(w, 7, h, border="B", fill=True, ln=False, align="C")
+        pdf.cell(0, 7, headers[-1], border="B", fill=True, ln=True, align="C")
+
+        pdf.set_font("Helvetica", "", 8)
+        for i, l in enumerate(linhas_carteira):
+            fill = i % 2 == 0
+            if fill:
+                pdf.set_fill_color(250, 248, 246)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+            mv = l["mais_valia"]
+            cor_mv = (107,114,128) if round(mv) == 0 else ((22,163,74) if mv > 0 else (220,38,38))
+
+            def _c(txt, w, align="C", color=None, bold=False):
+                if color:
+                    pdf.set_text_color(*color)
+                if bold:
+                    pdf.set_font("Helvetica","B",8)
+                pdf.cell(w, 6, str(txt), border="B", fill=fill, align=align, ln=False)
+                if color or bold:
+                    pdf.set_text_color(0,0,0)
+                    pdf.set_font("Helvetica","",8)
+
+            _c(l["ticker"][:8],       W[0])
+            _c(l["nome"][:20],        W[1], "L")
+            _c(str(l["qtd"]),         W[2])
+            _c(kz(l["preco_aq"]),     W[3], "R")
+            _c(kz(l["preco_act"]),    W[4], "R")
+            _c(kz(l["val_aq"]),       W[5], "R")
+            _c(kz(l["val_act"]),      W[6], "R")
+            _c(kz(mv),                W[7], "R", cor_mv, True)
+            vp = round(float(l["mais_valia_pct"]), 2)
+            cor_vp = (107,114,128) if vp == 0 else ((22,163,74) if vp > 0 else (220,38,38))
+            pdf.set_text_color(*cor_vp)
+            pdf.set_font("Helvetica","B",8)
+            pdf.cell(0, 6, pct_bruto(vp), border="B", fill=fill, align="R", ln=True)
+            pdf.set_text_color(0,0,0)
+            pdf.set_font("Helvetica","",8)
+
+        # Totais
+        pdf.ln(1)
+        pdf.set_font("Helvetica","B",9)
+        pdf.set_fill_color(236, 222, 227)
+        mv_total_pct = (mais_valias_total / (valor_total_carteira - mais_valias_total) * 100) if (valor_total_carteira - mais_valias_total) else 0
+        # W = [22,52,12,32,32,38,38,32,0] — soma fixas = 260, ultima=0
+        # soma até V.Actual = 20+48+10+28+28+32+32 = 198
+        soma_ate_vact = 20+48+10+28+28+32
+        pdf.cell(soma_ate_vact, 7, "TOTAL DA CARTEIRA", border="B", fill=True, ln=False, align="R")
+        pdf.cell(32, 7, kz(valor_total_carteira), border="B", fill=True, align="R", ln=False)
+        cor_tot = (107,114,128) if round(mais_valias_total) == 0 else ((22,163,74) if mais_valias_total > 0 else (220,38,38))
+        pdf.set_text_color(*cor_tot)
+        pdf.cell(30, 7, kz(mais_valias_total), border="B", fill=True, align="R", ln=False)
+        pdf.cell(19, 7, pct_bruto(round(mv_total_pct, 2)), border="B", fill=True, align="R", ln=True)
+        pdf.set_text_color(0,0,0)
+    # ---- Relatório executivo: sumário, matriz multitemporal + Alpha, inflação real, risco e gráficos de anel ----
+    if linhas_carteira:
+        try:
+            _analise_pdf = calcular_analise_completa(df_activos)
+            try:
+                _mercado_pdf = ler_mercado_guardado()
+            except Exception:
+                _mercado_pdf = None
+            if _analise_pdf.get("ok"):
+                _pdf_bloco_executivo(pdf, _analise_pdf, resumo, _mercado_pdf, linhas_carteira)
+            else:
+                pdf.add_page("L")
+                _pdf_secao(pdf, "RELATORIO EXECUTIVO")
+                pdf.set_font("Helvetica", "I", 9)
+                pdf.multi_cell(0, 5, "Seccao analitica indisponivel: " + str(_analise_pdf.get("motivo") or "dados insuficientes."))
+        except Exception:
+            traceback.print_exc()
+            pdf.set_text_color(0, 0, 0)
+    # Análise gráfica (página própria): composição, mais-valias por activo e evolução do património
+    if linhas_carteira:
+        try:
+            pdf.add_page("L")
+            _pdf_secao(pdf, "ANÁLISE GRÁFICA DA CARTEIRA")
+            try:
+                _vi_pdf = obter_vup_info()
+            except Exception:
+                _vi_pdf = None
+            if _vi_pdf and _vi_pdf["unidades"] > 0 and _vi_pdf["vup"] > 0:
+                _pdf_kpis_vup(pdf, _vi_pdf)
+            _pdf_grafico_composicao(pdf, linhas_carteira)
+            y_g = pdf.get_y() + 3
+            if y_g + 76 > pdf.h - 20:
+                pdf.add_page("L")
+                y_g = pdf.get_y()
+            _pdf_grafico_mais_valias(pdf, linhas_carteira, pdf.l_margin, y_g, 115, 50)
+            try:
+                df_hist_pdf = obter_historico_patrimonio()
+            except Exception:
+                df_hist_pdf = None
+            _pdf_grafico_evolucao(pdf, df_hist_pdf, pdf.l_margin + 130, y_g, 117, 50)
+            pdf.set_y(y_g + 72)
+            pdf.set_text_color(0, 0, 0)
+        except Exception:
+            # os gráficos são um complemento: se algo falhar, o relatório sai na mesma, sem eles
+            pdf.set_text_color(0, 0, 0)
+        try:
+            _tot_cart = sum(max(l["val_act"], 0) for l in linhas_carteira)
+            _tot_qtd = sum(max(l["qtd"], 0) for l in linhas_carteira)
+            _fundo = _tot_cart + float(resumo.get("reservas", 0) or 0)
+            if _tot_cart > 0 and _tot_qtd > 0 and _fundo > 0:
+                pdf.add_page("L")
+                _pdf_secao(pdf, "CONCENTRAÇÃO E GOVERNANÇA DA CARTEIRA")
+                y1 = pdf.get_y() + 2
+                larg3 = 77
+                x_a, x_b, x_c = pdf.l_margin, pdf.l_margin + larg3 + 8, pdf.l_margin + 2 * (larg3 + 8)
+                itens_qtd = [(_pdf_nome_curto(l["nome"]), max(l["qtd"], 0) / _tot_qtd * 100) for l in linhas_carteira]
+                itens_val = [(_pdf_nome_curto(l["nome"]), max(l["val_act"], 0) / _tot_cart * 100) for l in linhas_carteira]
+                itens_act = [(_pdf_nome_curto(l["nome"]), max(l["val_act"], 0) / _fundo * 100) for l in linhas_carteira]
+                f_a = _pdf_barras_simples(pdf, "Quantidade de títulos (% da carteira)", itens_qtd, x_a, y1, larg3, (166, 72, 106))
+                f_b = _pdf_barras_simples(pdf, "Valor monetário (% da carteira)", itens_val, x_b, y1, larg3, (124, 31, 62))
+                f_c = _pdf_barras_limite(pdf, "Peso no fundo global (limite 10%)", itens_act, x_c, y1, larg3, 10)
+                fim_esq, fim_dir = max(f_a, f_b), f_c
+                y2 = max(fim_esq, fim_dir) + 4
+                por_sector = {}
+                for l in linhas_carteira:
+                    sct = _pdf_sector(l)
+                    por_sector[sct] = por_sector.get(sct, 0.0) + max(l["val_act"], 0)
+                itens_sec = sorted(((k, v / _fundo * 100) for k, v in por_sector.items()), key=lambda t: -t[1])
+                fim_sec = _pdf_barras_limite(pdf, "Peso de cada sector no fundo global (limite: 20%)", itens_sec,
+                                             pdf.l_margin, y2, 118, 20)
+                # resumo de conformidade
+                pdf.set_xy(pdf.l_margin + 130, y2)
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(117, 6, "Cumprimento dos limites do Clube")
+                excessos = [(f"{_pdf_nome_curto(l['nome'])}", max(l["val_act"], 0) / _fundo * 100) for l in linhas_carteira
+                            if max(l["val_act"], 0) / _fundo * 100 > 10]
+                excessos_s = [(k, p_) for k, p_ in itens_sec if p_ > 20]
+                pdf.set_xy(pdf.l_margin + 130, y2 + 8)
+                pdf.set_font("Helvetica", "", 8)
+                if excessos or excessos_s:
+                    pdf.set_text_color(220, 38, 38)
+                    linhas_txt = [f"- {n}: {p_:.1f}% do fundo global (limite por activo: 10%)." for n, p_ in excessos]
+                    linhas_txt += [f"- Sector {n}: {p_:.1f}% do fundo global (limite por sector: 20%)." for n, p_ in excessos_s]
+                    pdf.multi_cell(117, 4.5, "\n".join(linhas_txt))
+                else:
+                    pdf.set_text_color(22, 163, 74)
+                    pdf.multi_cell(117, 4.5, "Todos os limites de concentração (10% por activo e 20% por sector) estão a ser cumpridos.")
+                pdf.set_text_color(120, 120, 120)
+                pdf.set_font("Helvetica", "I", 7)
+                pdf.set_xy(pdf.l_margin, max(fim_sec, pdf.get_y()) + 4)
+                pdf.multi_cell(0, 3.8, "Fundo global = valor actual da carteira + reservas de liquidez. "
+                                       "Sectores atribuídos pela app (Banca/Finanças inclui banca, seguros e BODIVA). "
+                                       "O peso em títulos e em valor refere-se apenas à carteira de acções.")
+                pdf.set_text_color(0, 0, 0)
+        except Exception:
+            pdf.set_text_color(0, 0, 0)
+    _pdf_secao(pdf, "MOVIMENTOS RECENTES")
+    if df_movimentos.empty:
+        pdf.set_font("Helvetica", "I", 10)
+        pdf.cell(0, 7, tx["pdf_sem_mov"], ln=True)
+    else:
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(236, 222, 227)
+        pdf.cell(28, 7, "Data",     border="B", fill=True, ln=False)
+        pdf.cell(50, 7, "Tipo",     border="B", fill=True, ln=False)
+        pdf.cell(70, 7, "Descricao",border="B", fill=True, ln=False)
+        pdf.cell(0,  7, "Montante", border="B", fill=True, align="R", ln=True)
+        pdf.set_font("Helvetica", "", 9)
+        for i, (_, linha) in enumerate(df_movimentos.head(30).iterrows()):
+            fill = i % 2 == 0
+            if fill:
+                pdf.set_fill_color(250, 248, 246)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+            pdf.cell(28, 6, str(linha["data_movimento"]),           border="B", fill=fill, ln=False)
+            pdf.cell(50, 6, str(linha["tipo"])[:26],                border="B", fill=fill, ln=False)
+            pdf.cell(70, 6, str(linha.get("descricao","") or "")[:38], border="B", fill=fill, ln=False)
+            pdf.cell(0,  6, kz(linha["montante"]),                  border="B", fill=fill, align="R", ln=True)
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 5, "Clube de Investimento APPO  |  clube.investimento.appo@gmail.com  |  Benguela, Angola", align="C", ln=True)
+    pdf.cell(0, 5, "Documento gerado automaticamente pela plataforma APPO. Uso interno e reservado.", align="C", ln=True)
+    return bytes(pdf.output())
+
+
+# ---------------- Avaliação ----------------
+def obter_premissas_macro() -> dict:
+    _garantir_tabelas_extra()
+    linha = consultar_um("SELECT inflacao, taxa_livre_risco, premio_risco, beta_banca, beta_telecom, beta_outros, "
+                         "inflacao_homologa, inflacao_vigente_m, inflacao_projectada, inflacao_ref, inflacao_data FROM premissas_macro WHERE id = 1")
+    base = float(linha[0])
+    return {"inflacao": base, "taxa_livre_risco": float(linha[1]), "premio_risco": float(linha[2]),
+            "beta_banca": float(linha[3]), "beta_telecom": float(linha[4]), "beta_outros": float(linha[5]),
+            # três medidas para os relatórios; sem valor guardado, usam-se valores por defeito derivados da inflação anual
+            "inflacao_homologa": float(linha[6]) if linha[6] is not None else base,
+            "inflacao_vigente_m": float(linha[7]) if linha[7] is not None else (1 + base) ** (1 / 12) - 1,
+            "inflacao_projectada": float(linha[8]) if linha[8] is not None else base,
+            "inflacao_ref": linha[9] or "", "inflacao_data": linha[10]}
+
+
+def actualizar_inflacao_macro(homologa: float, vigente_m: float, projectada: float, ref: str):
+    """Valores em fracção (0.135 = 13,5%). `vigente_m` é a variação mensal mais recente."""
+    exigir_admin()
+    _garantir_tabelas_extra()
+    executar("UPDATE premissas_macro SET inflacao_homologa=%s, inflacao_vigente_m=%s, inflacao_projectada=%s, inflacao_ref=%s, inflacao_data=CURRENT_DATE WHERE id = 1",
+             (homologa, vigente_m, projectada, ref.strip()))
+    registar_auditoria("inflacao_macro", "premissas", "1", depois={"homologa": homologa, "vigente_m": vigente_m, "projectada": projectada, "ref": ref.strip()})
+
+
+def actualizar_premissas_macro(inflacao, rf, erp, beta_banca, beta_telecom, beta_outros):
+    exigir_admin()
+    executar("UPDATE premissas_macro SET inflacao=%s, taxa_livre_risco=%s, premio_risco=%s, beta_banca=%s, beta_telecom=%s, beta_outros=%s, actualizado_em=NOW() WHERE id = 1",
+             (inflacao, rf, erp, beta_banca, beta_telecom, beta_outros))
+
+def obter_avaliacoes() -> pd.DataFrame:
+    return consultar_df("SELECT id, empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, crescimento_g, actualizado_em FROM avaliacoes ORDER BY empresa")
+
+def substituir_avaliacoes(df: pd.DataFrame):
+    exigir_admin()
+    executar("DELETE FROM avaliacoes")
+    for _, linha in df.iterrows():
+        empresa = str(linha.get("empresa", "")).strip()
+        if not empresa:
+            continue
+        executar("INSERT INTO avaliacoes (empresa, sector, preco, acoes_circulacao, lucro_liquido, ganho_pontual, capital_proprio, dividendo_total, crescimento_g) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                 (empresa, str(linha.get("sector", "") or ""), float(linha.get("preco", 0) or 0),
+                  float(linha.get("acoes_circulacao", 0) or 0), float(linha.get("lucro_liquido", 0) or 0),
+                  float(linha.get("ganho_pontual", 0) or 0), float(linha.get("capital_proprio", 0) or 0),
+                  float(linha.get("dividendo_total", 0) or 0), float(linha.get("crescimento_g", 0) or 0)))
+
+def ke_por_sector(sector: str, premissas: dict) -> float:
+    if sector == "Banca":
+        beta = premissas["beta_banca"]
+    elif sector == "Telecomunicações":
+        beta = premissas["beta_telecom"]
+    else:
+        beta = premissas["beta_outros"]
+    return premissas["taxa_livre_risco"] + beta * premissas["premio_risco"]
+
+def calcular_metricas_avaliacao(av: dict, premissas: dict) -> dict:
+    preco             = av["preco"]
+    acoes             = av["acoes_circulacao"] or 0
+    lucro_normalizado = av["lucro_liquido"] - av["ganho_pontual"]
+    eps    = (av["lucro_liquido"] / acoes) if acoes else 0
+    pe     = (preco / eps) if eps and eps > 0 else None
+    bvps   = (av["capital_proprio"] / acoes) if acoes and av["capital_proprio"] else 0
+    pbv    = (preco / bvps) if bvps and bvps > 0 else None
+    dps    = (av["dividendo_total"] / acoes) if acoes else 0
+    payout = (av["dividendo_total"] / av["lucro_liquido"]) if av["lucro_liquido"] else None
+    dy_nominal = (dps / preco) if preco else 0
+    dy_real    = dy_nominal - premissas["inflacao"]
+    roe    = (lucro_normalizado / av["capital_proprio"]) if av["capital_proprio"] else None
+    ke     = ke_por_sector(av["sector"], premissas)
+    g      = av["crescimento_g"]
+    d1     = dps * (1 + g)
+    valor_justo = (d1 / (ke - g)) if ke > g else None
+    upside = ((valor_justo - preco) / preco) if (valor_justo is not None and preco) else None
+    return {"cap_mercado": preco * acoes, "eps": eps, "pe": pe, "pbv": pbv, "dps": dps,
+            "payout": payout, "dy_nominal": dy_nominal, "dy_real": dy_real, "roe": roe,
+            "ke": ke, "valor_justo": valor_justo, "upside": upside}
+
+
+@st.cache_resource(show_spinner="A preparar a base de dados…")
+def _arranque_bd():
+    inicializar_bd()
+    _garantir_tabelas_extra()
+    return True
+
+
+try:
+    _arranque_bd()
+except Exception as _erro_bd:
+    st.error(f"Não foi possível preparar a base de dados: {type(_erro_bd).__name__}: {_erro_bd}")
+    st.stop()
+
+# =========================================================
+# AUTENTICAÇÃO
+# =========================================================
+for _k, _v in [("autenticado", False), ("login_timestamp", None), ("conta_nome", ""), ("conta_email", ""), ("is_admin", False), ("is_premium", False), ("is_participante", False), ("nivel", "iniciante"), ("perfil", None), ("perfil_data", None), ("trocar_password", False)]:
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
+
+if st.session_state["autenticado"] and st.session_state["login_timestamp"]:
+    if time.time() - st.session_state["login_timestamp"] > TEMPO_LIMITE_SESSAO_SEGUNDOS:
+        st.session_state["autenticado"] = False
+        st.session_state["login_timestamp"] = None
+        st.warning("A tua sessão expirou por inactividade. Inicia sessão novamente.")
+
+
+# =========================================================
+# EDUCAÇÃO & SERVIÇOS · MANIFESTAÇÃO DE INTERESSE · DESPESAS DO GRUPO
+# (as áreas públicas NÃO dão acesso à carteira nem tornam ninguém participante dos investimentos)
+# =========================================================
+import re as _re_pub
+
+TEXTO_MANIFESTACAO = ("Manifestação de interesse — este pedido não constitui admissão, atribuição de cotas nem autorização para transferir dinheiro. "
+                      "As novas admissões dependem da definição e validação da estrutura aplicável.")
+MSG_INSCRICAO = "Inscrição recebida. A confirmação e as instruções de pagamento serão comunicadas posteriormente."
+AVISO_EDUCACAO = ("Conteúdo educativo e informativo, sem recomendações personalizadas de compra ou venda. "
+                  "A inscrição num serviço educativo não representa subscrição de valores mobiliários nem atribuição de participação patrimonial. "
+                  "O APPO é uma iniciativa independente de educação financeira, sem vínculo com a BODIVA, a CMC ou correctoras.")
+ESTADOS_SERVICO = ["Recebido", "Confirmado", "Cancelado", "Concluído"]
+ESTADOS_MANIFESTACAO = ["Recebida", "Em análise", "Arquivada"]
+ESTADOS_DESPESA = ["Proposta", "Aprovada", "Rejeitada"]
+_REGEX_EMAIL = _re_pub.compile(r"^[^@\s]{1,64}@[^@\s]{1,200}\.[^@\s]{2,}$")
+
+
+def validar_contacto(nome: str, email: str, telefone: str):
+    """Devolve uma mensagem de erro ou None se os dados de contacto forem aceitáveis."""
+    nome, email, telefone = (nome or "").strip(), (email or "").strip(), (telefone or "").strip()
+    if len(nome) < 2 or len(nome) > 120:
+        return "Indique o seu nome (2 a 120 caracteres)."
+    if not email and not telefone:
+        return "Indique pelo menos um contacto: e-mail ou telefone."
+    if email and not _REGEX_EMAIL.match(email):
+        return "O e-mail indicado não parece válido."
+    if len(telefone) > 30:
+        return "O telefone indicado é demasiado longo."
+    return None
+
+
+def _pode_enviar(chave: str, segundos: int = 30) -> bool:
+    """Limite simples por sessão para evitar envios repetidos por engano ou abuso."""
+    agora = time.time()
+    if agora - float(st.session_state.get(chave, 0)) < segundos:
+        return False
+    st.session_state[chave] = agora
+    return True
+
+
+def obter_servicos_publicos() -> pd.DataFrame:
+    # Só serviços educativos, activos e visíveis: as propostas de consultoria nunca aparecem em público.
+    return consultar_df("SELECT id, nome, descricao, preco, nota_preco, contratavel FROM servicos_catalogo "
+                        "WHERE activo = TRUE AND visivel_publico = TRUE AND tipo = 'educativo' ORDER BY ordem, id")
+
+
+def registar_pedido_servico(servico_id: int, nome: str, email: str, telefone: str, participantes: int, mensagem: str):
+    s = consultar_um("SELECT id, nome FROM servicos_catalogo WHERE id = %s AND activo = TRUE AND visivel_publico = TRUE AND tipo = 'educativo'", (int(servico_id),))
+    if not s:
+        raise ValueError("Este serviço já não está disponível.")
+    executar("INSERT INTO pedidos_servicos (servico_id, servico_nome, nome, email, telefone, participantes, mensagem) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+             (s[0], s[1], nome.strip(), email.strip() or None, telefone.strip() or None, int(participantes), (mensagem or "").strip()[:1000] or None))
+
+
+def registar_manifestacao_interesse(nome: str, email: str, telefone: str, mensagem: str, profissao: str = "", extra: dict = None):
+    e = extra or {}
+    executar("INSERT INTO manifestacoes_interesse (nome, email, telefone, mensagem, profissao, consentimento, localidade, interesse, contribuicao, como_soube, maior_18) "
+             "VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s, %s, %s, %s)",
+             (nome.strip(), email.strip() or None, telefone.strip() or None, (mensagem or "").strip()[:1000] or None, (profissao or "").strip()[:120] or None,
+              e.get("localidade"), "; ".join(e.get("interesse") or []) or None, e.get("contribuicao"), e.get("como_soube"), bool(e.get("maior_18"))))
+
+
+# ---------------- Admissão formal (fase 2): dados sensíveis, só administradores ----------------
+ESTADOS_ADMISSAO = ["Em preparação", "Documentos recebidos", "Aprovada pela Comissão", "Recusada", "Arquivada"]
+ORIGENS_FUNDOS = ["Rendimento do trabalho (salário)", "Actividade empresarial", "Poupanças", "Herança ou doação", "Venda de bens", "Outra"]
+TEXTO_CONSENTIMENTO_FORMAL = ("O titular foi informado de que os seus dados de identificação (BI, NIF, morada, data de nascimento e origem de fundos) são recolhidos apenas para a "
+                              "análise da sua admissão, ficam acessíveis só aos administradores e consentiu expressamente, nos termos da Lei n.º 22/11.")
+
+
+def _fernet():
+    import os as _os
+    chave = _os.environ.get("APPO_CHAVE_DADOS", "").strip()
+    if not chave:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(chave.encode())
+    except Exception:
+        return None
+
+
+def _cifrar(txt: str) -> str:
+    txt = (txt or "").strip()
+    f = _fernet()
+    return ("enc:" + f.encrypt(txt.encode()).decode()) if (f and txt) else txt
+
+
+def _decifrar(txt) -> str:
+    txt = txt or ""
+    if not str(txt).startswith("enc:"):
+        return str(txt)
+    f = _fernet()
+    if not f:
+        return "[cifrado — falta a chave APPO_CHAVE_DADOS]"
+    try:
+        return f.decrypt(str(txt)[4:].encode()).decode()
+    except Exception:
+        return "[não foi possível decifrar]"
+
+
+def _mascarar(txt: str) -> str:
+    t_ = _decifrar(txt)
+    return "—" if not t_ else ("•" * max(len(t_) - 3, 3)) + t_[-3:]
+
+
+def registar_admissao_formal(manifestacao_id: int, nome: str, bi: str, nif: str, nascimento, morada: str, origem: str, consentimento: bool):
+    exigir_admin()
+    import re as _re
+    if not consentimento:
+        raise ValueError("Sem consentimento expresso do titular não é possível guardar estes dados.")
+    for rot, v in (("BI", bi), ("NIF", nif)):
+        if not _re.fullmatch(r"[A-Za-z0-9]{6,20}", (v or "").strip()):
+            raise ValueError(f"{rot} inválido: use 6 a 20 letras e algarismos, sem espaços.")
+    if not (morada or "").strip():
+        raise ValueError("Indique a morada.")
+    if origem not in ORIGENS_FUNDOS:
+        raise ValueError("Indique a origem dos fundos.")
+    if consultar_um("SELECT 1 FROM admissoes_formais WHERE manifestacao_id = %s", (int(manifestacao_id),)):
+        raise ValueError("Já existe uma admissão formal para esta manifestação.")
+    with transaccao() as cur:
+        cur.execute("""INSERT INTO admissoes_formais (manifestacao_id, nome, bi, nif, data_nascimento, morada, origem_fundos, consentimento_formal, consentimento_em, criado_por)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, NOW(), %s) RETURNING id""",
+                    (int(manifestacao_id), nome.strip(), _cifrar(bi), _cifrar(nif), nascimento, _cifrar(morada), origem, utilizador_actual()))
+        novo = cur.fetchone()[0]
+        registar_auditoria("admissao_formal_criada", "admissoes_formais", novo, depois={"manifestacao_id": int(manifestacao_id), "estado": "Em preparação"}, cur=cur)  # sem dados sensíveis na auditoria
+
+
+def actualizar_estado_admissao(aid: int, novo_estado: str, nota: str = ""):
+    exigir_admin()
+    if novo_estado not in ESTADOS_ADMISSAO:
+        raise ValueError("Estado inválido.")
+    antes = consultar_um("SELECT estado FROM admissoes_formais WHERE id = %s", (int(aid),))
+    if not antes:
+        raise ValueError("Admissão inexistente.")
+    with transaccao() as cur:
+        cur.execute("UPDATE admissoes_formais SET estado = %s, nota = COALESCE(nota || ' | ', '') || %s WHERE id = %s", (novo_estado, (nota or "").strip()[:300], int(aid)))
+        registar_auditoria("admissao_formal_estado", "admissoes_formais", aid, antes={"estado": antes[0]}, depois={"estado": novo_estado}, motivo=(nota or "").strip()[:300], cur=cur)
+
+
+def painel_admissao_formal(mid: int, nome_manifestacao: str):
+    """Só administradores. Mostra dados mascarados; ver os dados completos fica registado na auditoria."""
+    exigir_admin()
+    if _fernet():
+        st.caption("🔒 Cifragem activa: BI, NIF e morada são guardados cifrados.")
+    else:
+        st.warning("🔓 Cifragem inactiva: BI, NIF e morada ficariam guardados em texto simples. Defina a variável APPO_CHAVE_DADOS no Render "
+                   "(uma chave Fernet) e adicione «cryptography» ao requirements.txt antes de recolher dados reais.")
+    ex = consultar_um("SELECT id, estado FROM admissoes_formais WHERE manifestacao_id = %s", (int(mid),))
+    if not ex:
+        st.caption("Dados pedidos só nesta fase, depois de o candidato avançar. Não crie esta ficha sem o consentimento expresso do titular.")
+        with st.form(f"form_admissao_{mid}", clear_on_submit=True):
+            a1, a2 = st.columns(2)
+            bi = a1.text_input("Nº do BI", max_chars=20)
+            nif = a2.text_input("NIF", max_chars=20)
+            import datetime as _dt
+            nasc = st.date_input("Data de nascimento", value=_dt.date(1990, 1, 1), min_value=_dt.date(1920, 1, 1), max_value=_dt.date.today(), format="DD/MM/YYYY")
+            morada = st.text_area("Morada", max_chars=300, height=80)
+            origem = st.selectbox("Origem dos fundos", ORIGENS_FUNDOS)
+            cons = st.checkbox(TEXTO_CONSENTIMENTO_FORMAL)
+            gravar = st.form_submit_button("Guardar ficha de admissão")
+        if gravar:
+            try:
+                registar_admissao_formal(mid, nome_manifestacao, bi, nif, nasc, morada, origem, cons)
+                st.success("Ficha de admissão guardada. Isto não atribui cotas nem faz do candidato sócio.")
+                st.rerun()
+            except Exception as e:
+                st.error(str(e))
+        return
+    aid = int(ex[0])
+    d = consultar_um("SELECT nome, bi, nif, data_nascimento, morada, origem_fundos, estado, consentimento_em FROM admissoes_formais WHERE id = %s", (aid,))
+    st.write(f"**Estado:** {d[6]} · **Origem dos fundos:** {d[5]} · Consentimento: {d[7]:%d/%m/%Y}" if d[7] else f"**Estado:** {d[6]}")
+    st.write(f"BI: {_mascarar(d[1])} · NIF: {_mascarar(d[2])}")
+    if st.button("👁️ Ver dados completos (fica registado)", key=f"ver_adm_{aid}"):
+        registar_auditoria("admissao_formal_consulta", "admissoes_formais", aid, motivo="consulta de dados completos")
+        st.info(f"BI: {_decifrar(d[1])}\n\nNIF: {_decifrar(d[2])}\n\nData de nascimento: {d[3]:%d/%m/%Y}\n\nMorada: {_decifrar(d[4])}")
+    ne = st.selectbox("Estado da admissão", ESTADOS_ADMISSAO, index=ESTADOS_ADMISSAO.index(d[6]) if d[6] in ESTADOS_ADMISSAO else 0, key=f"adm_est_{aid}")
+    nt = st.text_input("Nota (opcional)", key=f"adm_nota_{aid}", max_chars=300)
+    if st.button("Guardar estado da admissão", key=f"adm_btn_{aid}"):
+        try:
+            actualizar_estado_admissao(aid, ne, nt)
+            st.rerun()
+        except Exception as e:
+            st.error(str(e))
+    st.caption("A aprovação pela Comissão não atribui cotas: a admissão continua dependente da validação da estrutura aplicável.")
+
+
+def pagina_educacao_servicos():
+    st.markdown("### 🎓 APPO — Educação Financeira")
+    st.write("O APPO nasceu em Benguela, em 2024, como um grupo de estudo e prática de investimento. Aqui encontra formação, guias e ferramentas educativas "
+             "sobre o mercado angolano: BODIVA, acções, dividendos, riscos e comissões, leitura de demonstrações financeiras, valuation com exercícios e planeamento financeiro (regra 50/30/20).")
+    aviso_discreto(AVISO_EDUCACAO)
+    st.markdown("#### Formação e workshops")
+    try:
+        df = obter_servicos_publicos()
+    except Exception:
+        st.warning("O catálogo não está disponível neste momento. Tente novamente dentro de instantes.")
+        return
+    if df.empty:
+        st.info("Brevemente. Entretanto, pode deixar o seu contacto na secção «Manifestação de interesse».")
+        return
+    for _, s in df.iterrows():
+        sid = int(s["id"])
+        _preco_txt = (f"{kz(s['preco'])} por participante" if pd.notna(s["preco"]) else "Sob consulta")
+        _nota_p = str(s["nota_preco"] or "").strip() if pd.notna(s["preco"]) else ""
+        render_html(f'<div class="fx-servico fx-g{sid % 4}"><div class="fx-servico-topo"></div><div class="fx-servico-corpo">'
+                    f'<div class="fx-servico-nome">{_esc(s["nome"])}</div><div class="fx-servico-desc">{_esc(s["descricao"] or "")}</div>'
+                    f'<span class="fx-chip">💰 {_esc(_preco_txt)}</span>' + (f'<span class="fx-chip-nota">{_esc(_nota_p)}</span>' if _nota_p else "") + '</div></div>')
+        with st.container():
+            rotulo = "Pedir inscrição" if bool(s["contratavel"]) else "Pedir informações"
+            with st.expander(rotulo):
+                with st.form(f"form_pedido_{sid}", clear_on_submit=True):
+                    _pn, _ap = st.columns(2)
+                    _nome_p = _pn.text_input("Nome próprio", key=f"ped_nome_{sid}", max_chars=60)
+                    _apelido = _ap.text_input("Apelido(s)", key=f"ped_apel_{sid}", max_chars=60)
+                    nome = f"{_nome_p.strip()} {_apelido.strip()}".strip()
+                    c1, c2 = st.columns(2)
+                    email = c1.text_input("E-mail", key=f"ped_email_{sid}", max_chars=200)
+                    tel = c2.text_input("Telefone", key=f"ped_tel_{sid}", max_chars=30)
+                    n_part = st.number_input("Número de participantes", min_value=1, max_value=200, value=1, step=1, key=f"ped_n_{sid}")
+                    msg = st.text_area("Mensagem (opcional)", key=f"ped_msg_{sid}", max_chars=1000)
+                    ok = st.checkbox("Autorizo o APPO a usar estes dados apenas para responder a este pedido.", key=f"ped_ok_{sid}")
+                    enviar = st.form_submit_button(rotulo)
+                if enviar:
+                    erro = "Indique o nome próprio e o apelido." if not (_nome_p.strip() and _apelido.strip()) else validar_contacto(nome, email, tel)
+                    if erro:
+                        st.error(erro)
+                    elif not ok:
+                        st.error("É necessário autorizar o uso dos dados para responder ao pedido.")
+                    elif not _pode_enviar("ultimo_pedido_servico"):
+                        st.warning("Aguarde alguns segundos antes de enviar outro pedido.")
+                    else:
+                        try:
+                            registar_pedido_servico(sid, nome, email, tel, int(n_part), msg)
+                            st.success(MSG_INSCRICAO)
+                        except Exception as e:
+                            st.error(f"Não foi possível registar o pedido: {e}")
+    aviso_discreto("Valores indicativos, sujeitos a alteração. Nenhum pagamento é pedido nesta página.")
+
+
+def pagina_manifestacao_interesse():
+    st.markdown("### 🤝 Manifestação de interesse")
+    st.info(TEXTO_MANIFESTACAO)
+    aviso_discreto("Nesta fase pedimos apenas o necessário: nome, contacto, profissão e motivação. Não pedimos capital, BI, NIF, morada nem origem de fundos — esses dados só são solicitados, mais tarde, se avançar para a admissão formal, e ficam acessíveis apenas aos administradores.")
+    with st.form("form_manifestacao", clear_on_submit=True):
+        _pn, _ap = st.columns(2)
+        _nome_p = _pn.text_input("Nome próprio", max_chars=60)
+        _apelido = _ap.text_input("Apelido(s)", max_chars=60)
+        nome = f"{_nome_p.strip()} {_apelido.strip()}".strip()
+        c1, c2 = st.columns(2)
+        email = c1.text_input("E-mail", max_chars=200)
+        tel = c2.text_input("Telefone", max_chars=30)
+        profissao = st.text_input("Profissão", max_chars=120)
+        c3, c4 = st.columns(2)
+        localidade = c3.selectbox("Província onde resides", PROVINCIAS_AO, index=None, placeholder="Escolhe")
+        como_soube = c4.selectbox("Como conheceste o APPO?", COMO_SOUBE, index=None, placeholder="Escolhe")
+        interesse = st.multiselect("Tens interesse em…", INTERESSES)
+        contribuicao = st.selectbox("Contribuição mensal que poderias fazer (opcional)", CONTRIBUICOES, index=0)
+        msg = st.text_area("Motivação: porque quer participar no Clube?", max_chars=1000)
+        ok = st.checkbox("Compreendo que isto não é uma admissão e consinto, de forma expressa, que o APPO trate estes dados apenas para me contactar sobre este assunto, nos termos da Lei n.º 22/11 (Lei da Protecção de Dados Pessoais).")
+        maior = st.checkbox("Confirmo que tenho 18 anos ou mais.")
+        enviar = st.form_submit_button("Enviar manifestação de interesse")
+    if enviar:
+        erro = "Indique o nome próprio e o apelido." if not (_nome_p.strip() and _apelido.strip()) else validar_contacto(nome, email, tel)
+        if erro:
+            st.error(erro)
+        elif not maior:
+            st.error("É necessário confirmar que tens 18 anos ou mais.")
+        elif not ok:
+            st.error("É necessário confirmar que compreende o âmbito deste pedido.")
+        elif not _pode_enviar("ultima_manifestacao"):
+            st.warning("Aguarde alguns segundos antes de enviar outro pedido.")
+        else:
+            try:
+                registar_manifestacao_interesse(nome, email, tel, msg, profissao, {"localidade": localidade, "interesse": interesse, "contribuicao": contribuicao, "como_soube": como_soube, "maior_18": maior})
+                st.success("Manifestação de interesse recebida. Entraremos em contacto, se e quando houver novidades.")
+            except Exception as e:
+                st.error(f"Não foi possível registar o pedido: {e}")
+
+
+# ---------------- Administração (sempre protegida no código, não só escondida) ----------------
+def actualizar_estado_pedido(pid: int, novo_estado: str):
+    exigir_admin()
+    if novo_estado not in ESTADOS_SERVICO:
+        raise ValueError("Estado inválido.")
+    antes = consultar_um("SELECT estado_servico FROM pedidos_servicos WHERE id = %s", (int(pid),))
+    if not antes:
+        raise ValueError("Pedido inexistente.")
+    with transaccao() as cur:
+        cur.execute("UPDATE pedidos_servicos SET estado_servico = %s WHERE id = %s", (novo_estado, int(pid)))
+        registar_auditoria("pedido_estado_servico", "pedidos_servicos", pid, antes={"estado_servico": antes[0]}, depois={"estado_servico": novo_estado}, cur=cur)
+
+
+def confirmar_pagamento_pedido(pid: int, nota: str):
+    """O recebimento só é confirmado pelo administrador, com nota, e fica auditado. Um comprovativo recebido não confirma nada por si."""
+    exigir_admin()
+    if not (nota or "").strip():
+        raise ValueError("Indique uma nota (referência, data, forma de recebimento).")
+    antes = consultar_um("SELECT estado_pagamento FROM pedidos_servicos WHERE id = %s", (int(pid),))
+    if not antes:
+        raise ValueError("Pedido inexistente.")
+    if antes[0] == "Confirmado":
+        raise ValueError("O pagamento já está confirmado.")
+    with transaccao() as cur:
+        cur.execute("UPDATE pedidos_servicos SET estado_pagamento = 'Confirmado', pagamento_confirmado_por = %s, pagamento_confirmado_em = NOW(), pagamento_nota = %s "
+                    "WHERE id = %s AND estado_pagamento <> 'Confirmado'", (utilizador_actual(), nota.strip(), int(pid)))
+        registar_auditoria("pagamento_confirmado", "pedidos_servicos", pid, antes={"estado_pagamento": antes[0]}, depois={"estado_pagamento": "Confirmado"}, motivo=nota.strip(), cur=cur)
+
+
+def actualizar_estado_manifestacao(mid: int, novo_estado: str):
+    exigir_admin()
+    if novo_estado not in ESTADOS_MANIFESTACAO:
+        raise ValueError("Estado inválido.")
+    antes = consultar_um("SELECT estado FROM manifestacoes_interesse WHERE id = %s", (int(mid),))
+    if not antes:
+        raise ValueError("Registo inexistente.")
+    with transaccao() as cur:
+        cur.execute("UPDATE manifestacoes_interesse SET estado = %s WHERE id = %s", (novo_estado, int(mid)))
+        registar_auditoria("manifestacao_estado", "manifestacoes_interesse", mid, antes={"estado": antes[0]}, depois={"estado": novo_estado}, cur=cur)
+
+
+def actualizar_servico_catalogo(sid: int, preco, nota_preco: str, activo: bool, visivel: bool, contratavel: bool):
+    exigir_admin()
+    antes = consultar_um("SELECT tipo, preco, nota_preco, activo, visivel_publico, contratavel FROM servicos_catalogo WHERE id = %s", (int(sid),))
+    if not antes:
+        raise ValueError("Serviço inexistente.")
+    if antes[0] != "educativo":
+        raise ValueError("As propostas de consultoria ficam bloqueadas até o enquadramento profissional e regulatório ser validado.")
+    if preco is not None and preco < 0:
+        raise ValueError("O preço não pode ser negativo.")
+    with transaccao() as cur:
+        cur.execute("UPDATE servicos_catalogo SET preco = %s, nota_preco = %s, activo = %s, visivel_publico = %s, contratavel = %s WHERE id = %s",
+                    (preco, (nota_preco or "").strip() or None, bool(activo), bool(visivel), bool(contratavel), int(sid)))
+        registar_auditoria("catalogo_alterado", "servicos_catalogo", sid,
+                           antes={"preco": antes[1], "nota_preco": antes[2], "activo": antes[3], "visivel": antes[4], "contratavel": antes[5]},
+                           depois={"preco": preco, "nota_preco": nota_preco, "activo": activo, "visivel": visivel, "contratavel": contratavel}, cur=cur)
+
+
+def registar_despesa_admin(data, descricao: str, categoria: str, valor, fornecedor: str, nota: str):
+    exigir_admin()
+    v = dec(valor)
+    if v <= 0:
+        raise ValueError("O valor deve ser maior que zero.")
+    if not (descricao or "").strip():
+        raise ValueError("Indique a descrição.")
+    with transaccao() as cur:
+        cur.execute("INSERT INTO despesas_admin (data, descricao, categoria, valor, fornecedor, estado, nota, criado_por) VALUES (%s, %s, %s, %s, %s, 'Proposta', %s, %s) RETURNING id",
+                    (data, descricao.strip(), (categoria or "").strip() or None, v, (fornecedor or "").strip() or None, (nota or "").strip() or None, utilizador_actual()))
+        novo_id = cur.fetchone()[0]
+        registar_auditoria("despesa_proposta", "despesas_admin", novo_id, depois={"descricao": descricao.strip(), "valor": str(v)}, cur=cur)
+
+
+def decidir_despesa_admin(did: int, aprovar: bool, motivo: str):
+    exigir_admin()
+    if not (motivo or "").strip():
+        raise ValueError("Indique o fundamento da decisão (ex.: deliberação dos participantes).")
+    antes = consultar_um("SELECT estado FROM despesas_admin WHERE id = %s", (int(did),))
+    if not antes:
+        raise ValueError("Despesa inexistente.")
+    if antes[0] != "Proposta":
+        raise ValueError("Só se decide sobre despesas em estado «Proposta».")
+    novo = "Aprovada" if aprovar else "Rejeitada"
+    with transaccao() as cur:
+        cur.execute("UPDATE despesas_admin SET estado = %s, aprovada_por = %s, aprovada_em = NOW(), nota = COALESCE(nota || ' | ', '') || %s WHERE id = %s AND estado = 'Proposta'",
+                    (novo, utilizador_actual(), motivo.strip(), int(did)))
+        registar_auditoria("despesa_decisao", "despesas_admin", did, antes={"estado": antes[0]}, depois={"estado": novo}, motivo=motivo.strip(), cur=cur)
+
+
+def painel_educacao_servicos_admin():
+    exigir_admin()
+    sub_ped, sub_man, sub_cat = st.tabs(["Pedidos e inscrições", "Manifestações de interesse", "Catálogo"])
+    with sub_ped:
+        df = consultar_df("SELECT id, criado_em, servico_nome, nome, email, telefone, participantes, mensagem, estado_servico, estado_pagamento, "
+                          "pagamento_confirmado_por, pagamento_confirmado_em, pagamento_nota FROM pedidos_servicos ORDER BY id DESC LIMIT 500")
+        if df.empty:
+            st.info("Ainda não há pedidos.")
+        else:
+            st.dataframe(df, hide_index=True)
+            st.caption("O estado do serviço e o estado do pagamento são independentes. Um pedido ou comprovativo recebido não é pagamento: só o administrador confirma o recebimento, com nota, e fica auditado.")
+            _ids = [int(i) for i in df["id"].tolist()]
+            pid = st.selectbox("Pedido", _ids, key="adm_ped_sel",
+                               format_func=lambda i: f"#{i} · {df.loc[df['id'] == i, 'nome'].iloc[0]} · {df.loc[df['id'] == i, 'servico_nome'].iloc[0]}")
+            lin = df[df["id"] == pid].iloc[0]
+            c1, c2 = st.columns(2)
+            with c1:
+                _idx = ESTADOS_SERVICO.index(lin["estado_servico"]) if lin["estado_servico"] in ESTADOS_SERVICO else 0
+                novo = st.selectbox("Estado do serviço", ESTADOS_SERVICO, index=_idx, key=f"adm_est_{pid}")
+                if st.button("Guardar estado do serviço", key=f"adm_est_btn_{pid}"):
+                    try:
+                        actualizar_estado_pedido(int(pid), novo)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+            with c2:
+                st.markdown(f"Pagamento: **{lin['estado_pagamento']}**")
+                if lin["estado_pagamento"] != "Confirmado":
+                    nota = st.text_input("Nota do recebimento (obrigatória)", key=f"adm_pag_nota_{pid}")
+                    if st.button("Confirmar recebimento do pagamento", key=f"adm_pag_btn_{pid}"):
+                        try:
+                            confirmar_pagamento_pedido(int(pid), nota)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(str(e))
+    with sub_man:
+        dfm = consultar_df("SELECT id, criado_em, nome, email, telefone, profissao, localidade, interesse, contribuicao, como_soube, mensagem, consentimento, estado FROM manifestacoes_interesse ORDER BY id DESC LIMIT 500")
+        st.caption("Registos de interesse. Não são admissões nem dão direito a cotas. A admissão futura continua desactivada.")
+        if dfm.empty:
+            st.info("Ainda não há manifestações de interesse.")
+        else:
+            st.dataframe(dfm, hide_index=True)
+            _mids = [int(i) for i in dfm["id"].tolist()]
+            mid = st.selectbox("Registo", _mids, key="adm_man_sel", format_func=lambda i: f"#{i} · {dfm.loc[dfm['id'] == i, 'nome'].iloc[0]}")
+            _est = dfm.loc[dfm["id"] == mid, "estado"].iloc[0]
+            nm = st.selectbox("Estado", ESTADOS_MANIFESTACAO, index=ESTADOS_MANIFESTACAO.index(_est) if _est in ESTADOS_MANIFESTACAO else 0, key=f"adm_man_est_{mid}")
+            if st.button("Guardar estado", key=f"adm_man_btn_{mid}"):
+                try:
+                    actualizar_estado_manifestacao(int(mid), nm)
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+            with st.expander("📝 Admissão formal (dados sensíveis — só administradores)"):
+                painel_admissao_formal(int(mid), str(dfm.loc[dfm["id"] == mid, "nome"].iloc[0]))
+    with sub_cat:
+        dfc = consultar_df("SELECT id, nome, tipo, preco, nota_preco, activo, visivel_publico, contratavel FROM servicos_catalogo ORDER BY ordem, id")
+        st.dataframe(dfc, hide_index=True)
+        st.caption("As propostas de consultoria ficam bloqueadas (inactivas e não contratáveis) até validar o enquadramento profissional e regulatório.")
+        _edu = dfc[dfc["tipo"] == "educativo"]
+        if not _edu.empty:
+            _sids = [int(i) for i in _edu["id"].tolist()]
+            sid = st.selectbox("Serviço educativo a editar", _sids, key="adm_cat_sel", format_func=lambda i: str(_edu.loc[_edu["id"] == i, "nome"].iloc[0]))
+            r = _edu[_edu["id"] == sid].iloc[0]
+            with st.form(f"form_cat_{sid}"):
+                sem_preco = st.checkbox("Sob consulta (sem preço)", value=pd.isna(r["preco"]))
+                preco = st.number_input("Preço por participante (Kz)", min_value=0.0, step=500.0, value=0.0 if pd.isna(r["preco"]) else float(r["preco"]))
+                nota_p = st.text_input("Nota do preço", value=str(r["nota_preco"] or ""))
+                a1, a2, a3 = st.columns(3)
+                activo = a1.checkbox("Activo", value=bool(r["activo"]))
+                visivel = a2.checkbox("Visível ao público", value=bool(r["visivel_publico"]))
+                contr = a3.checkbox("Aceita inscrições", value=bool(r["contratavel"]))
+                if st.form_submit_button("Guardar serviço"):
+                    try:
+                        actualizar_servico_catalogo(int(sid), None if sem_preco else preco, nota_p, activo, visivel, contr)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+
+
+def painel_despesas_admin():
+    exigir_admin()
+    st.caption("Despesas aprovadas do grupo (informação especializada, ferramentas, IA, contabilidade, funcionamento). Não servem para pagar aos fundadores nem para recuperar perdas históricas. "
+               "A regra de repartição dos custos deve ser aprovada pelos participantes; a aplicação não a escolhe sozinha.")
+    df = consultar_df("SELECT id, data, descricao, categoria, valor, fornecedor, estado, aprovada_por, aprovada_em, nota FROM despesas_admin ORDER BY data DESC, id DESC LIMIT 500")
+    if not df.empty:
+        st.dataframe(df, hide_index=True)
+        _tot = consultar_um("SELECT COALESCE(SUM(valor), 0) FROM despesas_admin WHERE estado = 'Aprovada'")[0]
+        st.metric("Total de despesas aprovadas", kz(_tot))
+        _pend = [int(i) for i in df.loc[df["estado"] == "Proposta", "id"].tolist()]
+        if _pend:
+            did = st.selectbox("Despesa em proposta", _pend, key="adm_desp_sel", format_func=lambda i: f"#{i} · {df.loc[df['id'] == i, 'descricao'].iloc[0]}")
+            mot = st.text_input("Fundamento da decisão (obrigatório)", key=f"adm_desp_mot_{did}")
+            b1, b2 = st.columns(2)
+            if b1.button("Aprovar", key=f"adm_desp_ok_{did}"):
+                try:
+                    decidir_despesa_admin(int(did), True, mot)
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+            if b2.button("Rejeitar", key=f"adm_desp_no_{did}"):
+                try:
+                    decidir_despesa_admin(int(did), False, mot)
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+    else:
+        st.info("Ainda não há despesas registadas.")
+    with st.expander("Registar despesa (fica como «Proposta»)"):
+        with st.form("form_despesa_admin", clear_on_submit=True):
+            d1, d2 = st.columns(2)
+            _data = d1.date_input("Data", value=datetime.now().date())
+            _valor = d2.number_input("Valor (Kz)", min_value=0.0, step=500.0)
+            _desc = st.text_input("Descrição")
+            e1, e2 = st.columns(2)
+            _cat = e1.text_input("Categoria (ex.: ferramentas, IA, contabilidade)")
+            _forn = e2.text_input("Fornecedor")
+            _nota = st.text_input("Nota / referência do documento comprovativo")
+            if st.form_submit_button("Registar proposta"):
+                try:
+                    registar_despesa_admin(_data, _desc, _cat, _valor, _forn, _nota)
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+
+
+# =========================================================
+# CAPACIDADE FINANCEIRA — diagnóstico, treino e ferramentas
+# Modelo de Kempson et al. (2005): 3 componentes (conhecimento, atitude, comportamento) × 5 domínios.
+# Instrumento educativo; não é uma escala psicometricamente validada.
+# =========================================================
+DOMINIOS_CF = {
+    "D1": "Fazer face às despesas",
+    "D2": "Manter o controlo",
+    "D3": "Planear o futuro",
+    "D4": "Escolher produtos",
+    "D5": "Manter-se informado e obter ajuda",
+}
+COMPONENTES_CF = {"K": "Conhecimento", "A": "Atitude e confiança", "B": "Comportamento"}
+ESCALA_FREQ = ["Nunca", "Raramente", "Às vezes", "Frequentemente", "Sempre"]
+ESCALA_CONC = ["Discordo totalmente", "Discordo", "Neutro", "Concordo", "Concordo totalmente"]
+_NAO_SEI = "Não sei"
+
+ITENS_CF = [
+    # ---- Conhecimento (resposta certa/errada) ----
+    {"id": "k1", "dom": "D2", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Depositou 500.000 Kz numa conta com juro de 5% ao ano. Ao fim de 2 anos, sem levantamentos, o saldo será:",
+     "opcoes": ["Exactamente 550.000 Kz", "Mais de 550.000 Kz", "Menos de 550.000 Kz", _NAO_SEI]},
+    {"id": "k2", "dom": "D1", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Se a inflação anual for 10% e o juro da sua poupança for 6%, ao fim de um ano o poder de compra do dinheiro depositado:",
+     "opcoes": ["Aumenta", "Diminui", "Permanece igual", _NAO_SEI]},
+    {"id": "k3", "dom": "D3", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Diversificar uma carteira de investimentos significa:",
+     "opcoes": ["Aplicar todo o capital num único activo de baixo risco", "Distribuir o capital por diferentes activos para reduzir o risco total",
+                "Aplicar apenas em activos de elevada rentabilidade esperada", _NAO_SEI]},
+    {"id": "k4", "dom": "D3", "comp": "K", "tipo": "mc", "correcta": 0,
+     "texto": "Em geral, a relação entre risco e retorno esperado de um investimento é:",
+     "opcoes": ["Maior risco tende a acompanhar maior retorno esperado", "Menor risco tende a acompanhar maior retorno esperado",
+                "Não existe qualquer relação", _NAO_SEI]},
+    {"id": "k5", "dom": "D4", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "O que é um dividendo?",
+     "opcoes": ["Uma taxa cobrada pelo banco pela manutenção da conta", "Uma parte dos lucros de uma empresa distribuída aos seus accionistas",
+                "O valor nominal de uma obrigação do tesouro", _NAO_SEI]},
+    {"id": "k6", "dom": "D4", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Os Bilhetes do Tesouro (BT) emitidos pelo Estado angolano são:",
+     "opcoes": ["Acções de empresas públicas cotadas na BODIVA",
+                "Títulos de dívida pública de curto prazo (menos de 1 ano), remunerados por desconto",
+                "Depósitos a prazo garantidos pelo Banco Nacional de Angola", _NAO_SEI]},
+    {"id": "k7", "dom": "D5", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Qual é a entidade reguladora e supervisora do mercado de capitais angolano?",
+     "opcoes": ["Banco Nacional de Angola (BNA)", "Comissão do Mercado de Capitais (CMC)", "Ministério das Finanças (MINFIN)", _NAO_SEI]},
+    {"id": "k8", "dom": "D5", "comp": "K", "tipo": "mc", "correcta": 1,
+     "texto": "Para um investidor individual comprar e vender títulos na BODIVA é necessário, em regra:",
+     "opcoes": ["Ter conta directamente na BODIVA, sem intermediários", "Recorrer a uma sociedade correctora autorizada pela CMC",
+                "Ser funcionário de uma instituição financeira", _NAO_SEI]},
+    # ---- Atitude e confiança (concordância 1–5) ----
+    {"id": "a1", "dom": "D1", "comp": "A", "tipo": "conc", "texto": "Sinto-me confiante para equilibrar o meu orçamento mesmo quando o rendimento varia."},
+    {"id": "a2", "dom": "D2", "comp": "A", "tipo": "conc", "texto": "Sei, em cada momento, quanto gasto e para onde vai o meu dinheiro."},
+    {"id": "a3", "dom": "D3", "comp": "A", "tipo": "conc", "texto": "Sinto-me capaz de planear o meu futuro financeiro (reserva, objectivos, investimento)."},
+    {"id": "a4", "dom": "D4", "comp": "A", "tipo": "conc", "texto": "Sei escolher produtos financeiros adequados ao meu perfil e aos meus objectivos."},
+    {"id": "a5", "dom": "D5", "comp": "A", "tipo": "conc", "texto": "Sei como proceder, na prática, para começar a investir hoje."},
+    {"id": "a6", "dom": "D4", "comp": "A", "tipo": "conc", "meta": True, "texto": "Considero que compreendo bem o que são os Bilhetes do Tesouro."},
+    # ---- Comportamento (frequência / concordância 1–5) ----
+    {"id": "b1", "dom": "D1", "comp": "B", "tipo": "freq", "texto": "Consigo cobrir as despesas do mês sem recorrer a empréstimos ou dívidas."},
+    {"id": "b2", "dom": "D2", "comp": "B", "tipo": "freq", "texto": "Registo as minhas receitas e despesas (caderno, folha de cálculo ou aplicação)."},
+    {"id": "b3", "dom": "D2", "comp": "B", "tipo": "freq", "texto": "Pago as contas e as dívidas dentro do prazo."},
+    {"id": "b4", "dom": "D3", "comp": "B", "tipo": "conc", "texto": "Tenho uma reserva de emergência para pelo menos 3 meses de despesas essenciais."},
+    {"id": "b5", "dom": "D3", "comp": "B", "tipo": "freq", "texto": "Poupo uma parte do meu rendimento todos os meses."},
+    {"id": "b6", "dom": "D4", "comp": "B", "tipo": "freq", "texto": "Antes de contratar um produto financeiro, comparo custos (comissões, taxas) e condições."},
+    {"id": "b7", "dom": "D5", "comp": "B", "tipo": "freq", "texto": "Procuro informação em fontes fiáveis antes de tomar uma decisão financeira importante."},
+]
+_ITEM_CF = {i["id"]: i for i in ITENS_CF}
+
+ACOES_CF = {
+    ("D1", "K"): ("Perceba como a inflação corrói o poder de compra e porque é que o rendimento real é o que conta.", "Reserva de emergência e inflação"),
+    ("D1", "A"): ("Treine com números: calcule o seu rendimento prudente e veja que o essencial fica coberto mesmo no pior mês.", "Orçamento com rendimento variável"),
+    ("D1", "B"): ("Defina um «ordenado» mensal estável a partir do rendimento prudente e guarde o excedente dos meses melhores.", "Orçamento com rendimento variável"),
+    ("D2", "K"): ("Reveja juros simples e compostos e veja o efeito do tempo no simulador de juros compostos.", "Simulador de Investimento"),
+    ("D2", "A"): ("Faça 30 dias de registo de todas as despesas: a confiança vem de conhecer os números.", "Princípio 50/30/20 (orçamento mensal)"),
+    ("D2", "B"): ("Dedique 10 minutos por semana a registar receitas e despesas e pague as contas no dia em que recebe.", "Princípio 50/30/20 (orçamento mensal)"),
+    ("D3", "K"): ("Estude diversificação e a relação risco–retorno e aplique-as na carteira virtual.", "Simulador de Investimento"),
+    ("D3", "A"): ("Defina um objectivo concreto (valor e prazo) e divida-o em metas mensais.", "Reserva de emergência e inflação"),
+    ("D3", "B"): ("Construa a reserva de emergência por etapas e automatize a poupança no dia do recebimento.", "Reserva de emergência e inflação"),
+    ("D4", "K"): ("Distinga depósito a prazo, bilhete do Tesouro, obrigação e acção: liquidez, risco, prazo e rendimento real.", "Comparador de instrumentos"),
+    ("D4", "A"): ("Compare instrumentos pelo rendimento real antes de decidir; a confiança constrói-se com prática simulada.", "Comparador de instrumentos"),
+    ("D4", "B"): ("Antes de contratar, compare sempre custos (comissões, taxas), prazo e liquidez numa tabela.", "Comparador de instrumentos"),
+    ("D5", "K"): ("Conheça o circuito: quem regula, onde se negoceia e porque é necessária uma correctora autorizada.", "Primeiro investimento guiado"),
+    ("D5", "A"): ("Siga o percurso guiado do primeiro investimento, passo a passo, e treine no Home Broker virtual.", "Primeiro investimento guiado"),
+    ("D5", "B"): ("Escolha 2 ou 3 fontes fiáveis e reserve 30 minutos por semana para as ler antes de decidir.", "Biblioteca Educativa"),
+}
+
+LICOES_CF = {
+    "D1": ("Fazer face às despesas com rendimento irregular",
+           "Quando o rendimento varia, planeie pelo mês fraco, não pelo mês bom. O «rendimento prudente» (média dos 3 meses mais baixos) é a base do orçamento; "
+           "o que sobra nos meses melhores alimenta um fundo de alisamento. Em Kwanzas, a inflação faz com que dinheiro parado perca poder de compra.",
+           "Introduza os últimos 6 meses de rendimento na ferramenta de orçamento variável e veja se o essencial fica coberto no pior cenário."),
+    "D2": ("Manter o controlo",
+           "Controlo é saber quanto entra, quanto sai e para onde vai. Um registo simples e regular vale mais do que uma folha complicada. "
+           "Pagar a tempo evita juros e multas; os juros compostos funcionam a favor de quem poupa e contra quem deve.",
+           "Durante 30 dias registe todas as despesas no orçamento mensal e compare com a regra 50/30/20."),
+    "D3": ("Planear o futuro",
+           "Planear é transformar objectivos em metas mensais. A reserva de emergência (3 a 6 meses de despesas essenciais, mais se o rendimento for variável) vem antes de investir. "
+           "Diversificar reduz o risco; maior retorno esperado costuma exigir maior risco.",
+           "Calcule a sua reserva-alvo ajustada à inflação e defina quanto poupar por mês para a atingir."),
+    "D4": ("Escolher produtos",
+           "Escolher bem é comparar o rendimento REAL (depois de inflação e impostos), a liquidez, o risco e os custos. Um Bilhete do Tesouro é dívida pública de curto prazo "
+           "emitida ao desconto; não é um depósito bancário. Dividendos não são garantidos.",
+           "Preencha o comparador com as taxas actuais que encontrar e compare o rendimento real de cada instrumento."),
+    "D5": ("Manter-se informado e obter ajuda",
+           "Informar-se é saber quem regula (CMC), onde se negoceia (BODIVA) e por que via se acede (sociedade correctora autorizada). "
+           "Saber onde procurar ajuda fiável é parte da capacidade financeira; pedir informação não é fraqueza.",
+           "Siga o percurso guiado do primeiro investimento e anote as dúvidas que precisa de esclarecer com a correctora."),
+}
+
+PASSOS_PRIMEIRO_INVESTIMENTO = [
+    ("Reserva de emergência", "Antes de investir, tenha 3 a 6 meses de despesas essenciais em liquidez (mais se o rendimento for variável)."),
+    ("Objectivo e prazo", "Defina para quê e para quando: um objectivo a 1 ano e um a 10 anos pedem instrumentos diferentes."),
+    ("Quanto pode investir", "Use o orçamento para saber quanto sobra de forma regular, sem comprometer o essencial. A regra 50/30/20 é uma referência, não uma obrigação."),
+    ("Perceber os instrumentos", "Compare depósito a prazo, Bilhetes do Tesouro, Obrigações do Tesouro e acções: liquidez, risco, prazo e rendimento real."),
+    ("Escolher o intermediário", "Para negociar na BODIVA é necessária uma sociedade correctora autorizada pela CMC. Confirme a autorização junto da CMC e peça a tabela de comissões por escrito."),
+    ("Custos e prazos", "Pergunte pelas comissões de corretagem, custódia e impostos, e pelo prazo de liquidação. Os custos percepcionados são uma das maiores barreiras na evidência da UKB."),
+    ("Treinar sem risco", "Pratique no Home Broker virtual (dinheiro fictício) para perder o medo do procedimento."),
+    ("Primeira operação pequena", "Comece com um montante que não afecte o essencial, registe a tese e reveja ao fim de um período definido."),
+]
+
+
+def nivel_capacidade(score):
+    if score is None:
+        return "—"
+    if score < 40:
+        return "Inicial"
+    if score < 60:
+        return "Em desenvolvimento"
+    if score < 80:
+        return "Sólida"
+    return "Avançada"
+
+
+def pontuar_diagnostico(respostas: dict) -> dict:
+    """Pontua (0–100) cada célula domínio×componente, os totais por domínio e componente e o índice geral. Itens sem resposta não contam."""
+    celulas_pts = {}
+    for it in ITENS_CF:
+        if it.get("meta"):
+            continue
+        r = respostas.get(it["id"])
+        if r is None:
+            continue
+        pts = 100.0 if (it["tipo"] == "mc" and int(r) == it["correcta"]) else (0.0 if it["tipo"] == "mc" else (int(r) - 1) / 4 * 100)
+        celulas_pts.setdefault((it["dom"], it["comp"]), []).append(pts)
+    celulas = {k: sum(v) / len(v) for k, v in celulas_pts.items()}
+
+    def media(vals):
+        vals = [v for v in vals if v is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    por_dom = {d: media([celulas.get((d, c)) for c in COMPONENTES_CF]) for d in DOMINIOS_CF}
+    por_comp = {c: media([celulas.get((d, c)) for d in DOMINIOS_CF]) for c in COMPONENTES_CF}
+    geral = media(list(por_comp.values()))
+    lacuna = (por_comp["K"] - por_comp["B"]) if (por_comp["K"] is not None and por_comp["B"] is not None) else None
+    auto_bt, k6 = respostas.get("a6"), respostas.get("k6")
+    incompetencia = bool(auto_bt is not None and k6 is not None and int(auto_bt) >= 4 and int(k6) != _ITEM_CF["k6"]["correcta"])
+    return {"celulas": celulas, "dominios": por_dom, "componentes": por_comp, "geral": geral, "lacuna_kb": lacuna,
+            "incompetencia_bt": incompetencia, "nivel": nivel_capacidade(geral)}
+
+
+def plano_de_accao(resultado: dict, maximo: int = 3) -> list:
+    """Até `maximo` acções, para as células com pontuação mais baixa (< 70)."""
+    fracas = sorted([(v, k) for k, v in resultado["celulas"].items() if v < 70])[:maximo]
+    return [{"dominio": DOMINIOS_CF[d], "componente": COMPONENTES_CF[c], "pontos": v, "accao": ACOES_CF[(d, c)][0], "ferramenta": ACOES_CF[(d, c)][1]}
+            for v, (d, c) in fracas]
+
+
+def orcamento_variavel(rendimentos: list, essenciais: float) -> dict:
+    """Rendimento prudente = média dos 3 meses mais baixos. «Ordenado» alisado = rendimento prudente; o excedente vai para um fundo de alisamento."""
+    r = [float(x) for x in rendimentos if x is not None and float(x) > 0]
+    if len(r) < 3:
+        raise ValueError("Indique o rendimento de pelo menos 3 meses.")
+    if essenciais < 0:
+        raise ValueError("As despesas essenciais não podem ser negativas.")
+    baixos = sorted(r)[:3]
+    prudente = sum(baixos) / 3
+    media = sum(r) / len(r)
+    desvio = (sum((x - media) ** 2 for x in r) / len(r)) ** 0.5
+    fundo, linhas, fundo_min = 0.0, [], 0.0
+    for i, x in enumerate(r, start=1):
+        fundo += x - prudente
+        fundo_min = min(fundo_min, fundo)
+        linhas.append({"Mês": i, "Rendimento": x, "«Ordenado» alisado": prudente, "Fundo de alisamento": fundo})
+    return {"prudente": prudente, "media": media, "minimo": min(r), "maximo": max(r), "variabilidade": (desvio / media) if media else 0.0,
+            "cobre_essencial": prudente >= essenciais, "essenciais_pct": (essenciais / prudente) if prudente else None,
+            "folga": prudente - essenciais, "fundo_final": fundo, "fundo_min": fundo_min,
+            "consumo_50": prudente * 0.5, "investimento_30": prudente * 0.3, "entesouramento_20": prudente * 0.2, "linhas": linhas}
+
+
+def reserva_emergencia(despesas_essenciais: float, meses_alvo: float, inflacao_anual: float, meses_para_construir: int,
+                       poupanca_actual: float = 0.0, taxa_anual: float = 0.0) -> dict:
+    """Reserva-alvo a preços de hoje e a preços futuros (inflação), poupança mensal necessária e perda de poder de compra do dinheiro parado."""
+    if despesas_essenciais <= 0 or meses_alvo <= 0:
+        raise ValueError("Indique despesas essenciais e meses-alvo superiores a zero.")
+    n = int(meses_para_construir)
+    if n < 1:
+        raise ValueError("O prazo para construir a reserva deve ser de pelo menos 1 mês.")
+    alvo_hoje = despesas_essenciais * meses_alvo
+    alvo_futuro = alvo_hoje * (1 + inflacao_anual) ** (n / 12)
+    r_m = (1 + taxa_anual) ** (1 / 12) - 1
+    fv_actual = poupanca_actual * (1 + r_m) ** n
+    falta = max(0.0, alvo_futuro - fv_actual)
+    contribuicao = (falta * r_m / ((1 + r_m) ** n - 1)) if r_m > 0 else falta / n
+    return {"alvo_hoje": alvo_hoje, "alvo_futuro": alvo_futuro, "falta": falta, "contribuicao_mensal": contribuicao,
+            "poder_compra_parado": poupanca_actual / (1 + inflacao_anual) ** (n / 12), "n": n}
+
+
+def comparar_instrumentos(inflacao: float, imposto: float, taxas: dict) -> list:
+    """Rendimento nominal → líquido de imposto → real (descontada a inflação). Valores ilustrativos escolhidos pelo utilizador."""
+    out = []
+    for nome, nominal in taxas.items():
+        liquido = nominal * (1 - imposto)
+        real = (1 + liquido) / (1 + inflacao) - 1
+        out.append({"Instrumento": nome, "Nominal (% ao ano)": nominal * 100, "Líquido de imposto (%)": liquido * 100, "Real (%)": real * 100})
+    return out
+
+
+CARACTERISTICAS_INSTRUMENTOS = pd.DataFrame([
+    {"Instrumento": "Depósito a prazo", "Liquidez": "Baixa a média (levantamento antecipado conforme o contrato)", "Risco": "Baixo: risco do banco",
+     "Rendimento": "Taxa contratada para o prazo", "Prazo": "Definido no contrato", "Custos": "Confirme com o banco", "Acesso": "Balcão do banco"},
+    {"Instrumento": "Bilhete do Tesouro (BT)", "Liquidez": "Média: mercado secundário com liquidez limitada", "Risco": "Soberano (Estado emissor). Não é um depósito bancário",
+     "Rendimento": "Emitido ao desconto: ganho = valor nominal − preço pago", "Prazo": "91 a 364 dias", "Custos": "Comissões do intermediário", "Acesso": "Correctora ou banco autorizado"},
+    {"Instrumento": "Obrigação do Tesouro (OT)", "Liquidez": "Média: mercado secundário com liquidez limitada", "Risco": "Soberano; o preço varia com as taxas de juro até ao vencimento",
+     "Rendimento": "Cupões periódicos + devolução do capital", "Prazo": "2 anos ou mais", "Custos": "Comissões do intermediário", "Acesso": "Correctora ou banco autorizado"},
+    {"Instrumento": "Acção cotada na BODIVA", "Liquidez": "Variável: mercado com liquidez limitada", "Risco": "Elevado: preço e dividendos variam",
+     "Rendimento": "Dividendos (não garantidos) + variação do preço", "Prazo": "Sem prazo; horizonte longo", "Custos": "Comissões de corretagem", "Acesso": "Sociedade correctora autorizada pela CMC"},
+])
+
+
+# ---------------- Persistência (cada conta só vê os seus próprios resultados) ----------------
+def guardar_diagnostico_cf(resultado: dict, respostas: dict):
+    import json as _json
+    if not st.session_state.get("autenticado"):
+        return
+    executar("INSERT INTO capacidade_diagnosticos (conta_email, versao, respostas, resultados) VALUES (%s, %s, %s, %s)",
+             (utilizador_actual(), "1", _json.dumps(respostas), _json.dumps({"geral": resultado["geral"], "componentes": resultado["componentes"],
+                                                                            "dominios": resultado["dominios"]}, default=float)))
+
+
+def obter_diagnosticos_cf() -> pd.DataFrame:
+    if not st.session_state.get("autenticado"):
+        return pd.DataFrame()
+    return consultar_df("SELECT id, criado_em, resultados FROM capacidade_diagnosticos WHERE conta_email = %s ORDER BY criado_em", (utilizador_actual(),))
+
+
+def _ir_para(destino: str):
+    st.session_state["nav_pagina"] = destino
+
+
+# ---------------- Interface ----------------
+def _mostrar_resultado_cf(res: dict):
+    st.markdown("#### Resultado")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Índice geral", f"{res['geral']:.0f}/100" if res["geral"] is not None else "—", help=f"Nível: {res['nivel']}")
+    for col, c in zip((c2, c3, c4), COMPONENTES_CF):
+        v = res["componentes"][c]
+        col.metric(COMPONENTES_CF[c], f"{v:.0f}/100" if v is not None else "—")
+    st.caption(f"Nível global: **{res['nivel']}**. Cada componente é a média dos cinco domínios; o índice geral é a média dos três componentes.")
+    linhas = {DOMINIOS_CF[d]: {COMPONENTES_CF[c]: res["celulas"].get((d, c)) for c in COMPONENTES_CF} for d in DOMINIOS_CF}
+    df = pd.DataFrame(linhas).T
+    fx_barras(df.fillna(0), height=300)
+    st.dataframe(df.round(0).fillna("—"), use_container_width=True)
+    if res["lacuna_kb"] is not None and res["lacuna_kb"] >= 15:
+        st.info(f"O seu conhecimento ({res['componentes']['K']:.0f}) está acima do seu comportamento ({res['componentes']['B']:.0f}). "
+                "É um padrão comum: saber não basta, é preciso transformar o conhecimento em hábitos e em passos práticos. O plano abaixo vai nessa direcção.")
+    if res["incompetencia_bt"]:
+        st.warning("Disse compreender bem os Bilhetes do Tesouro, mas a resposta sobre o que são não coincidiu. É frequente confundi-los com depósitos a prazo: "
+                   "reveja a ficha «Comparador de instrumentos» na aba Ferramentas.")
+    st.markdown("#### O seu plano de acção")
+    plano = plano_de_accao(res)
+    if not plano:
+        st.success("Todas as áreas estão acima de 70/100. Mantenha os hábitos e avance para o percurso do primeiro investimento.")
+    for i, p in enumerate(plano, start=1):
+        with st.container(border=True):
+            st.markdown(f"**{i}. {p['dominio']} · {p['componente']}** ({p['pontos']:.0f}/100)")
+            st.write(p["accao"])
+            st.caption(f"Ferramenta sugerida: {p['ferramenta']}")
+
+
+def diagnostico_cf(prefixo: str, guardar: bool):
+    st.markdown("Responda com sinceridade: não há respostas «más», só um ponto de partida. Demora cerca de 5 minutos.")
+    with st.form(f"form_diag_{prefixo}"):
+        respostas = {}
+        for comp, titulo in (("K", "Parte 1 · Conhecimento"), ("A", "Parte 2 · Atitude e confiança"), ("B", "Parte 3 · Comportamento")):
+            _its = [x for x in ITENS_CF if x["comp"] == comp]
+            with st.expander(f"{titulo}  ·  {len(_its)} perguntas"):
+                for it in _its:
+                    escala = it.get("opcoes") or (ESCALA_FREQ if it["tipo"] == "freq" else ESCALA_CONC)
+                    escolha = st.radio(it["texto"], escala, index=None, key=f"diag_{prefixo}_{it['id']}", horizontal=(it["tipo"] != "mc"))
+                    respostas[it["id"]] = escala.index(escolha) if (escolha is not None and it["tipo"] == "mc") else (escala.index(escolha) + 1 if escolha is not None else None)
+        enviar = st.form_submit_button("Ver o meu resultado", type="primary")
+    if enviar:
+        em_falta = [k for k, v in respostas.items() if v is None]
+        if em_falta:
+            st.error(f"Faltam {len(em_falta)} resposta(s). Responda a todas as perguntas para ver o resultado.")
+        else:
+            res = pontuar_diagnostico(respostas)
+            st.session_state[f"diag_res_{prefixo}"] = res
+            if guardar:
+                try:
+                    guardar_diagnostico_cf(res, respostas)
+                    st.session_state[f"diag_gravado_{prefixo}"] = True
+                except Exception:
+                    st.session_state[f"diag_gravado_{prefixo}"] = False
+    res = st.session_state.get(f"diag_res_{prefixo}")
+    if res:
+        _mostrar_resultado_cf(res)
+        if guardar and st.session_state.get(f"diag_gravado_{prefixo}"):
+            st.caption("Resultado guardado na sua conta. Repita o diagnóstico daqui a algumas semanas para medir a evolução.")
+        elif not guardar:
+            st.caption("Este resultado não fica guardado. Crie ou use uma conta para acompanhar a evolução ao longo do tempo.")
+
+
+def ferramenta_orcamento_variavel(prefixo: str):
+    st.markdown("**Orçamento com rendimento variável.** Indique o que recebeu nos últimos meses e as suas despesas essenciais mensais (renda de casa, alimentação, transporte, saúde, dívidas).")
+    cols = st.columns(3)
+    vals = []
+    for i in range(6):
+        vals.append(cols[i % 3].number_input(f"Mês {i + 1} (Kz)", min_value=0.0, step=5000.0, value=0.0, key=f"ov_{prefixo}_{i}"))
+    ess = st.number_input("Despesas essenciais por mês (Kz)", min_value=0.0, step=5000.0, value=0.0, key=f"ov_ess_{prefixo}")
+    if sum(1 for v in vals if v > 0) < 3:
+        st.info("Preencha pelo menos 3 meses para ver o resultado.")
+        return
+    try:
+        r = orcamento_variavel(vals, ess)
+    except ValueError as e:
+        st.warning(str(e))
+        return
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Rendimento prudente", kz(r["prudente"]), help="Média dos 3 meses mais baixos")
+    m2.metric("Rendimento médio", kz(r["media"]))
+    m3.metric("Variabilidade", f"{r['variabilidade'] * 100:.0f}%", help="Desvio-padrão em % da média")
+    if r["cobre_essencial"]:
+        st.success(f"O rendimento prudente cobre o essencial, com folga de {kz(r['folga'])} por mês.")
+    else:
+        st.warning(f"O rendimento prudente não cobre o essencial: faltam {kz(-r['folga'])} por mês. Reveja despesas ou procure estabilizar parte do rendimento.")
+    if r["essenciais_pct"] is not None and r["essenciais_pct"] > 0.5:
+        st.caption(f"Os essenciais pesam {r['essenciais_pct'] * 100:.0f}% do rendimento prudente, acima dos 50% que a regra 50/30/20 reserva ao consumo.")
+    st.markdown("**Como distribuir o «ordenado» alisado (regra 50/30/20 sobre o rendimento prudente)**")
+    a1, a2, a3 = st.columns(3)
+    a1.metric("Consumo (50%)", kz(r["consumo_50"]))
+    a2.metric("Investimento (30%)", kz(r["investimento_30"]))
+    a3.metric("Entesouramento (20%)", kz(r["entesouramento_20"]))
+    df = pd.DataFrame(r["linhas"]).set_index("Mês")
+    fx_linhas(df[["Rendimento", "«Ordenado» alisado"]], height=240)
+    st.caption(f"Fundo de alisamento ao fim de {len(df)} meses: {kz(r['fundo_final'])}. Os meses acima do rendimento prudente enchem o fundo; os abaixo, esvaziam-no.")
+
+
+def ferramenta_reserva(prefixo: str):
+    st.markdown("**Reserva de emergência ajustada à inflação.** A reserva-alvo cresce com a inflação até ao dia em que a terminar de a construir.")
+    try:
+        infl_def = float(obter_premissas_macro()["inflacao"]) * 100
+    except Exception:
+        infl_def = 13.5
+    c1, c2 = st.columns(2)
+    ess = c1.number_input("Despesas essenciais por mês (Kz)", min_value=0.0, step=5000.0, value=0.0, key=f"re_ess_{prefixo}")
+    meses = c2.slider("Meses de cobertura", 1, 12, 6, key=f"re_meses_{prefixo}", help="3 meses para rendimento estável; 6 ou mais se for variável")
+    c3, c4, c5 = st.columns(3)
+    infl = c3.number_input("Inflação anual assumida (%)", min_value=0.0, max_value=100.0, value=round(infl_def, 1), step=0.5, key=f"re_infl_{prefixo}")
+    prazo = c4.slider("Meses para construir", 1, 60, 12, key=f"re_prazo_{prefixo}")
+    actual = c5.number_input("Já tenho guardado (Kz)", min_value=0.0, step=5000.0, value=0.0, key=f"re_act_{prefixo}")
+    taxa = st.number_input("Rendimento anual do local onde a guarda (%, 0 se for dinheiro parado)", min_value=0.0, max_value=100.0, value=0.0, step=0.5, key=f"re_tx_{prefixo}")
+    if ess <= 0:
+        st.info("Indique as despesas essenciais mensais.")
+        return
+    try:
+        r = reserva_emergencia(ess, meses, infl / 100, prazo, actual, taxa / 100)
+    except ValueError as e:
+        st.warning(str(e))
+        return
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Reserva-alvo a preços de hoje", kz(r["alvo_hoje"]))
+    m2.metric(f"Reserva-alvo daqui a {r['n']} meses", kz(r["alvo_futuro"]), help="Com a inflação assumida")
+    m3.metric("Poupar por mês", kz(r["contribuicao_mensal"]))
+    if actual > 0:
+        st.caption(f"Se o que já tem ({kz(actual)}) ficar parado, daqui a {r['n']} meses terá o poder de compra de {kz(r['poder_compra_parado'])} de hoje.")
+    if r["falta"] <= 0:
+        st.success("Com o que já tem, e com o rendimento indicado, a reserva-alvo fica coberta no prazo.")
+
+
+def ferramenta_comparador(prefixo: str):
+    st.markdown("**Comparador de instrumentos.** Introduza taxas actuais que encontrar (os valores abaixo são apenas exemplos, não cotações). O que conta é o rendimento REAL.")
+    st.caption("Confirme sempre as taxas, os impostos e as comissões aplicáveis junto da instituição.")
+    c1, c2 = st.columns(2)
+    infl = c1.number_input("Inflação anual (%)", min_value=0.0, max_value=100.0, value=13.5, step=0.5, key=f"cp_infl_{prefixo}")
+    imp = c2.number_input("Imposto sobre o rendimento (%) — confirme a taxa aplicável", min_value=0.0, max_value=100.0, value=0.0, step=0.5, key=f"cp_imp_{prefixo}")
+    d1, d2, d3, d4 = st.columns(4)
+    dp = d1.number_input("Depósito a prazo (% ao ano)", min_value=0.0, value=10.0, step=0.5, key=f"cp_dp_{prefixo}")
+    bt = d2.number_input("Bilhete do Tesouro (% ao ano)", min_value=0.0, value=14.0, step=0.5, key=f"cp_bt_{prefixo}")
+    ot = d3.number_input("Obrigação do Tesouro (% ao ano)", min_value=0.0, value=17.0, step=0.5, key=f"cp_ot_{prefixo}")
+    ac = d4.number_input("Acção: dividendo + crescimento esperado (% ao ano)", min_value=0.0, value=15.0, step=0.5, key=f"cp_ac_{prefixo}",
+                         help="Hipótese do utilizador; dividendos e preços não são garantidos")
+    linhas = comparar_instrumentos(infl / 100, imp / 100, {"Depósito a prazo": dp / 100, "Bilhete do Tesouro": bt / 100, "Obrigação do Tesouro": ot / 100, "Acção BODIVA": ac / 100})
+    df = pd.DataFrame(linhas)
+    fx_barras(df.set_index("Instrumento")[["Real (%)"]], height=240)
+    st.dataframe(df.round(2), hide_index=True, use_container_width=True)
+    pior = df.loc[df["Real (%)"] < 0, "Instrumento"].tolist()
+    if pior:
+        st.warning("Com estes pressupostos, o rendimento real é negativo em: " + ", ".join(pior) + ". O dinheiro perde poder de compra.")
+    st.markdown("**Características qualitativas**")
+    st.dataframe(CARACTERISTICAS_INSTRUMENTOS, hide_index=True, use_container_width=True)
+    aviso_discreto("Uma acção tem risco de preço e os dividendos não são garantidos; o rendimento mostrado é uma hipótese, não uma previsão.")
+
+
+def pagina_capacidade_financeira(autenticado: bool):
+    pref = "app" if autenticado else "pub"
+    st.markdown("### 🧠 Capacidade financeira prática")
+    st.write("Capacidade financeira é mais do que saber: é conseguir aplicar o que se sabe, com confiança, nas decisões do dia-a-dia. "
+             "Aqui mede o seu ponto de partida em 5 domínios e treina o que mais precisa.")
+    nomes = ["🔎 Diagnóstico", "🏋️ Treino", "🧰 Ferramentas", "🚀 Primeiro investimento"] + (["📈 A minha evolução"] if autenticado else []) + ["📚 Fundamentos"]
+    abas = st.tabs(nomes)
+    with abas[0]:
+        diagnostico_cf(pref, guardar=autenticado)
+    with abas[1]:
+        st.write("Cinco domínios, um exercício prático em cada. Comece pelo domínio com a pontuação mais baixa no diagnóstico.")
+        for d, (titulo, ideia, exercicio) in LICOES_CF.items():
+            with st.expander(f"{d[1]}. {titulo}"):
+                st.write(ideia)
+                st.markdown(f"**Exercício:** {exercicio}")
+    with abas[2]:
+        ferr = st.radio("Ferramenta", ["Orçamento com rendimento variável", "Reserva de emergência e inflação", "Comparador de instrumentos"],
+                        horizontal=True, key=f"cf_ferr_{pref}")
+        if ferr.startswith("Orçamento"):
+            ferramenta_orcamento_variavel(pref)
+        elif ferr.startswith("Reserva"):
+            ferramenta_reserva(pref)
+        else:
+            ferramenta_comparador(pref)
+        if autenticado:
+            st.divider()
+            b1, b2, b3 = st.columns(3)
+            b1.button("Orçamento mensal 50/30/20", on_click=_ir_para, args=("🧮 Princípio 50/30/20",), key=f"go_r50_{pref}")
+            b2.button("Simulador e Home Broker virtual", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key=f"go_sim_{pref}")
+            b3.button("Cotações da BODIVA", on_click=_ir_para, args=("📈 Cotações & Activos",), key=f"go_cot_{pref}")
+    with abas[3]:
+        st.write("Um percurso em 8 passos para o primeiro investimento. É educativo: não recomenda nenhum produto nem substitui o aconselhamento do intermediário.")
+        for i, (titulo, texto) in enumerate(PASSOS_PRIMEIRO_INVESTIMENTO, start=1):
+            with st.container(border=True):
+                st.markdown(f"**{i}. {titulo}**")
+                st.write(texto)
+    if autenticado:
+        with abas[4]:
+            try:
+                dfd = obter_diagnosticos_cf()
+            except Exception:
+                dfd = pd.DataFrame()
+            if dfd.empty:
+                st.info("Ainda não guardou nenhum diagnóstico. Faça o primeiro na aba Diagnóstico.")
+            else:
+                import json as _json
+                linhas = []
+                for _, r in dfd.iterrows():
+                    res = _json.loads(r["resultados"]) if isinstance(r["resultados"], str) else r["resultados"]
+                    linhas.append({"Data": pd.to_datetime(r["criado_em"]), "Geral": res.get("geral"),
+                                   **{COMPONENTES_CF[c]: (res.get("componentes") or {}).get(c) for c in COMPONENTES_CF}})
+                dv = pd.DataFrame(linhas).set_index("Data")
+                fx_linhas(dv, height=280)
+                if len(dv) >= 2 and dv["Geral"].iloc[0] is not None and dv["Geral"].iloc[-1] is not None:
+                    st.metric("Evolução do índice geral", f"{dv['Geral'].iloc[-1]:.0f}/100", delta=f"{dv['Geral'].iloc[-1] - dv['Geral'].iloc[0]:+.0f} desde o primeiro diagnóstico")
+                st.dataframe(dv.round(0), use_container_width=True)
+    with abas[-1]:
+        st.markdown("##### O modelo")
+        st.write("Kempson, Collard e Moore (2005) propuseram a capacidade financeira como a combinação de três componentes (conhecimento, atitude e comportamento) "
+                 "em cinco domínios da vida financeira. O diagnóstico desta página usa essa matriz.")
+        matriz = pd.DataFrame({DOMINIOS_CF[d]: {COMPONENTES_CF[c]: ACOES_CF[(d, c)][0] for c in COMPONENTES_CF} for d in DOMINIOS_CF}).T
+        st.dataframe(matriz, use_container_width=True)
+        st.markdown("##### Porque se treina o comportamento, e não só o conhecimento")
+        st.write("Em dois estudos na Faculdade de Economia da UKB (86 e 100 estudantes), o conhecimento teórico era sólido, mas só 9% identificou correctamente os Bilhetes do Tesouro, "
+                 "a auto-confiança era mais baixa no «como fazer na prática» e as barreiras mais citadas foram os custos de corretagem e a falta de tempo. "
+                 "Por isso o treino desta app insiste em procedimentos, comparação de custos e prática simulada.")
+        st.markdown("##### Fontes")
+        st.markdown(
+            "- Kempson, E., Collard, S., & Moore, N. (2005). *Measuring financial capability: An exploratory study*. Financial Services Authority (Reino Unido).\n"
+            "- Johnson, E., & Sherraden, M. S. (2007). From financial literacy to financial capability among youth. *Journal of Sociology & Social Welfare*, 34(3).\n"
+            "- Kempson, E., Perotti, V., & Scott, K. (2013). *Measuring financial capability: A new instrument and results from low- and middle-income countries*. World Bank (Russia Financial Literacy and Education Trust Fund; 12 países).\n"
+            "- OECD/INFE (2023). *OECD/INFE 2023 International Survey of Adult Financial Literacy* (39 países; conhecimento, comportamento e atitudes).\n"
+            "- Money and Pensions Service (2020). *UK Strategy for Financial Wellbeing 2020–2030*; Money Advice Service (2015). *Financial Capability Strategy for the UK*.\n"
+            "- Casaco (2023), Molossande (2026) e Costa (2026): estudos e síntese na FE-UKB sobre capacidade financeira e mercado de capitais angolano.")
+        aviso_discreto("O diagnóstico é um instrumento educativo inspirado nestes modelos; não é uma escala psicometricamente validada nem substitui aconselhamento financeiro.")
+
+
+# =========================================================
+# PERFIL DE INVESTIDOR (SUITABILITY): perguntas → perfil de risco → portal recomendado
+# Instrumento educativo de autoconhecimento: não é recomendação personalizada de compra ou venda.
+# O portal (Iniciante / Investidor) resulta do diagnóstico, não de uma escolha livre.
+# =========================================================
+import json as _json_perfil
+from datetime import timedelta
+
+VERSAO_PERFIL = 1
+DIAS_ENTRE_REPETICOES = 7
+HORIZONTES = ["Menos de 1 ano", "1 a 3 anos", "3 a 5 anos", "Mais de 5 anos"]
+MIN_CONHECIMENTO_INVESTIDOR = 4   # pontos em 7 (4 perguntas de conhecimento + experiência)
+AVISO_PERFIL = ("Instrumento educativo de autoconhecimento: orienta o teu percurso na plataforma. "
+                "Não é uma recomendação personalizada nem substitui a avaliação de adequação feita por uma entidade autorizada.")
+TITULOS_SEC_PERFIL = {"A": "A · A tua situação financeira", "B": "B · O objectivo e o prazo", "C": "C · Como reages ao risco", "D": "D · O que já sabes"}
+BENS_OPCOES = ["Casa ou terreno", "Viatura", "Negócio próprio", "Poupanças ou depósitos",
+               "Investimentos financeiros (acções, BT, OT, fundos)", "Nenhum dos anteriores"]
+
+QUESTOES_PERFIL = [
+    {"id": "rend", "sec": "A", "t": "Como descreves a estabilidade do teu rendimento?",
+     "op": [("Irregular ou sem rendimento próprio", 0), ("Variável, com meses fracos", 1), ("Estável, mas depende de uma única fonte", 2), ("Estável e com mais de uma fonte", 3)]},
+    {"id": "reserva", "sec": "A", "t": "Sem rendimento, durante quantos meses conseguirias pagar as tuas despesas com dinheiro disponível (sem contar o que queres investir)?",
+     "op": [("Menos de 1 mês", 0), ("1 a 3 meses", 1), ("3 a 6 meses", 2), ("Mais de 6 meses", 3)]},
+    {"id": "dividas", "sec": "A", "t": "Que parte do teu rendimento mensal vai para prestações e dívidas?",
+     "op": [("Mais de 50%", 0), ("Entre 30% e 50%", 1), ("Entre 10% e 30%", 2), ("Menos de 10% ou nenhuma", 3)]},
+    {"id": "dependentes", "sec": "A", "t": "Quantas pessoas dependem do teu rendimento (além de ti)?",
+     "op": [("5 ou mais", 0), ("3 ou 4", 1), ("1 ou 2", 2), ("Nenhuma", 3)]},
+    {"id": "bens", "sec": "A", "t": "Que bens possuis? (escolhe todos os que se aplicam)", "multi": True},
+    {"id": "peso", "sec": "A", "t": "O valor que pretendes investir representa que parte de tudo o que possuis, depois de descontar o que deves?",
+     "op": [("Mais de 50%", 0), ("Entre 25% e 50%", 1), ("Entre 10% e 25%", 2), ("Menos de 10%", 3)]},
+    {"id": "horizonte", "sec": "B", "t": "Quando vais precisar deste dinheiro?",
+     "op": [("Em menos de 1 ano", 0), ("Daqui a 1 a 3 anos", 1), ("Daqui a 3 a 5 anos", 2), ("Só daqui a mais de 5 anos", 3)]},
+    {"id": "liquidez", "sec": "B", "t": "Com que probabilidade poderás ter de levantar este dinheiro de repente (doença, desemprego, emergência)?",
+     "op": [("É provável nos próximos meses", 0), ("Pode acontecer", 1), ("É improvável", 2), ("É praticamente impossível", 3)]},
+    {"id": "queda", "sec": "C", "t": "Investiste 100 000 Kz e, um mês depois, valem 80 000 Kz. O que fazes?",
+     "op": [("Vendo tudo para não perder mais", 0), ("Vendo uma parte", 1), ("Mantenho e espero", 2), ("Aproveito para comprar mais", 3)]},
+    {"id": "resultado", "sec": "C", "t": "Qual destes resultados possíveis, num ano, preferes? (valores ilustrativos)",
+     "op": [("Ganho pequeno e quase certo, sem perdas", 0), ("Entre −5% e +15%", 1), ("Entre −15% e +30%", 2), ("Entre −30% e +50%", 3)]},
+    {"id": "perda", "sec": "C", "t": "Se perdesses o dinheiro que queres investir, o que aconteceria?",
+     "op": [("Não conseguiria pagar despesas essenciais", 0), ("Teria de mudar planos importantes", 1), ("Ficaria desconfortável, mas conseguiria continuar", 2), ("Seria um contratempo pequeno", 3)]},
+    {"id": "experiencia", "sec": "D", "t": "Que experiência tens com investimentos?",
+     "op": [("Nenhuma", 0), ("Só depósitos a prazo, BT ou OT", 1), ("Já comprei acções ou fundos", 2), ("Invisto regularmente há mais de 2 anos", 3)]},
+    {"id": "q_acao", "sec": "D", "t": "Uma acção representa:",
+     "op": [("Um empréstimo feito à empresa", 0), ("Uma fracção da propriedade da empresa", 1), ("Um depósito garantido pelo Estado", 0)]},
+    {"id": "q_bt", "sec": "D", "t": "Um Bilhete do Tesouro (BT) é:",
+     "op": [("Um depósito a prazo garantido pelo Estado", 0), ("Dívida pública de curto prazo emitida pelo Estado", 1), ("Uma acção de uma empresa pública", 0)]},
+    {"id": "q_div", "sec": "D", "t": "Diversificar uma carteira serve para:",
+     "op": [("Reduzir o risco de depender de um único activo", 1), ("Garantir que nunca há perdas", 0), ("Aumentar o valor do dividendo", 0)]},
+    {"id": "q_pe", "sec": "D", "t": "Se o P/E de uma empresa é 10x, isso significa que:",
+     "op": [("A empresa paga 10% de dividendo", 0), ("A acção subiu 10% este ano", 0), ("O preço da acção é cerca de 10 vezes o lucro anual por acção", 1)]},
+]
+_QP = {q["id"]: q for q in QUESTOES_PERFIL}
+_QUIZ = ["q_acao", "q_bt", "q_div", "q_pe"]
+
+DESCRICAO_PERFIL = {
+    "Conservador": "Dás prioridade a proteger o capital e a ter o dinheiro disponível. Os instrumentos de menor risco são o teu ponto de partida natural.",
+    "Moderado": "Aceitas oscilações moderadas em troca de maior potencial de retorno, desde que o prazo seja suficiente para as absorver.",
+    "Dinâmico": "Aceitas oscilações fortes e tens margem financeira e prazo para as suportar. Mesmo assim, o risco concentra-se: diversifica.",
+}
+
+
+def _pts_perfil(r: dict, qid: str) -> int:
+    return dict(_QP[qid]["op"])[r[qid]]
+
+
+def calcular_perfil(r: dict) -> dict:
+    """Pontua as respostas. O perfil é o mais cauteloso entre capacidade, prazo e tolerância ('o elo mais fraco'); alguns sinais de alerta limitam o risco."""
+    n_bens = len([b for b in r["bens"] if b != BENS_OPCOES[-1]])
+    cap = sum(_pts_perfil(r, i) for i in ["rend", "reserva", "dividas", "dependentes", "peso"]) + min(3, n_bens)
+    hor = _pts_perfil(r, "horizonte") + _pts_perfil(r, "liquidez")
+    tol = sum(_pts_perfil(r, i) for i in ["queda", "resultado", "perda"])
+    quiz = sum(_pts_perfil(r, i) for i in _QUIZ)
+    conh = quiz + _pts_perfil(r, "experiencia")
+
+    alertas, bloq_portal = [], False
+    if _pts_perfil(r, "reserva") <= 1:
+        alertas.append("A tua reserva de emergência cobre menos de 3 meses de despesas: antes de assumir risco de mercado, constrói esta reserva em dinheiro disponível ou depósitos.")
+        bloq_portal = True
+    if _pts_perfil(r, "horizonte") == 0:
+        alertas.append("Vais precisar deste dinheiro em menos de 1 ano: não deve ficar exposto a activos cujo preço pode cair, como acções e fundos de acções.")
+        bloq_portal = True
+    if _pts_perfil(r, "perda") == 0:
+        alertas.append("Perder este dinheiro comprometeria despesas essenciais: não é dinheiro para arriscar.")
+        bloq_portal = True
+    bloq_risco = bloq_portal
+    if _pts_perfil(r, "dividas") == 0:
+        alertas.append("Mais de metade do teu rendimento vai para dívidas: vale a pena avaliar primeiro a redução de dívidas caras, antes de assumir risco de mercado.")
+        bloq_risco = True
+
+    base = min(cap / 18.0, hor / 6.0, tol / 9.0)
+    if bloq_risco or base < 0.34:
+        perfil = "Conservador"
+    elif base < 0.67:
+        perfil = "Moderado"
+    else:
+        perfil = "Dinâmico"
+
+    portal = "investidor" if (conh >= MIN_CONHECIMENTO_INVESTIDOR and not bloq_portal) else "iniciante"
+    motivos = []
+    if portal == "iniciante":
+        if bloq_portal:
+            motivos.append("há sinais de alerta na tua situação (ver acima): o primeiro passo é protegê-la")
+        if conh < MIN_CONHECIMENTO_INVESTIDOR:
+            motivos.append(f"o teu resultado de conhecimento e experiência foi {conh}/7 (o portal Investidor pede pelo menos {MIN_CONHECIMENTO_INVESTIDOR})")
+    return {"perfil": perfil, "portal": portal, "bloq_risco": bloq_risco, "alertas": alertas, "motivos": motivos,
+            "horizonte_idx": _pts_perfil(r, "horizonte"),
+            "pontos": {"capacidade": cap, "prazo": hor, "tolerancia": tol, "conhecimento": conh},
+            "maximos": {"capacidade": 18, "prazo": 6, "tolerancia": 9, "conhecimento": 7}}
+
+
+# ---- Adequação por tipo de instrumento (regras gerais de prazo e perfil; sem produtos nem recomendações individuais) ----
+_A, _C, _N = "Adequado", "Com cautela", "Não adequado"
+_CLASSE_ADEQ = {_A: "A", _C: "C", _N: "N"}
+_ACCOES = {0: (_N, _N, _N), 1: (_N, _N, _N), 2: (_N, _C, _C), 3: (_C, _A, _A)}   # por prazo: (Conservador, Moderado, Dinâmico)
+_PERFIS_ORDEM = ["Conservador", "Moderado", "Dinâmico"]
+
+
+def adequacao_instrumentos(h: int, perfil: str, bloq_risco: bool):
+    h = max(0, min(3, int(h)))
+    ip = _PERFIS_ORDEM.index(perfil) if perfil in _PERFIS_ORDEM else 0
+    risco = _N if (bloq_risco or h <= 1) else _ACCOES[h][ip]
+    if bloq_risco:
+        pq_risco = "Há sinais de alerta na tua situação (reserva, prazo, dívidas ou capacidade de suportar perdas) que devem ser resolvidos antes de assumir este risco."
+    elif h <= 1:
+        pq_risco = "Os preços podem cair e demorar anos a recuperar: dinheiro com data marcada nos próximos 3 anos não deve ficar exposto."
+    elif risco == _N:
+        pq_risco = "Com este prazo e perfil, o risco de precisares de vender com perda é elevado."
+    elif risco == _C:
+        pq_risco = "Possível apenas com uma parte pequena e diversificada: o prazo ou o perfil ainda deixam pouca margem."
+    else:
+        pq_risco = "O prazo e o perfil permitem absorver oscilações, mas o risco continua: diversifica e respeita os limites da carteira."
+    return [
+        ("Liquidez e depósitos à ordem", _A, "Disponível quando precisares; é o lugar do dinheiro com data marcada e da reserva de emergência."),
+        ("Depósitos a prazo", _C if h == 0 else _A, "Escolhe um prazo que termine antes da data em que precisas do dinheiro; levantar antes pode ter penalização."),
+        ("Dívida pública (BT e OT)", _C if h == 0 else _A, "Escolhe vencimentos até à data em que precisas do dinheiro: vender antes do vencimento pode implicar perda."),
+        ("Fundos de investimento com acções", risco, pq_risco + " A diversificação reduz, mas não elimina, o risco."),
+        ("Acções cotadas na BODIVA", risco, pq_risco + " O mercado angolano tem pouca liquidez: pode ser difícil vender ao preço desejado."),
+    ]
+
+
+def _tabela_adequacao_html(linhas) -> str:
+    corpo = "".join(f'<tr><td><b>{_esc(c)}</b></td><td><span class="appo-adeq appo-adeq-{_CLASSE_ADEQ[n]}">{_esc(n)}</span></td><td>{_esc(p)}</td></tr>' for c, n, p in linhas)
+    return f'<table class="appo-adeq-tab"><thead><tr><th>Tipo de instrumento</th><th>Adequação</th><th>Porquê</th></tr></thead><tbody>{corpo}</tbody></table>'
+
+
+# ---- Base de dados ----
+def obter_ultimo_perfil(conta_id):
+    if not conta_id:
+        return None
+    r = consultar_um("SELECT perfil, portal, pontuacoes, criado_em, NOW() FROM perfil_investidor WHERE conta_id = %s ORDER BY criado_em DESC, id DESC LIMIT 1", (int(conta_id),))
+    if not r:
+        return None
+    try:
+        res = _json_perfil.loads(r[2])
+    except Exception:
+        res = {}
+    return {"perfil": r[0], "portal": r[1], "res": res, "criado_em": r[3], "agora": r[4]}
+
+
+def guardar_perfil(conta_id: int, respostas: dict, res: dict):
+    anterior = consultar_um("SELECT nivel FROM contas WHERE id = %s", (int(conta_id),))
+    with transaccao() as cur:
+        cur.execute("INSERT INTO perfil_investidor (conta_id, versao, respostas, pontuacoes, perfil, portal) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (int(conta_id), VERSAO_PERFIL, _json_perfil.dumps(respostas, ensure_ascii=False), _json_perfil.dumps(res, ensure_ascii=False), res["perfil"], res["portal"]))
+        cur.execute("UPDATE contas SET nivel = %s WHERE id = %s", (res["portal"], int(conta_id)))
+        registar_auditoria("perfil_calculado", "conta", conta_id, antes={"nivel": anterior[0] if anterior else None},
+                           depois={"nivel": res["portal"], "perfil": res["perfil"]}, cur=cur)
+
+
+def definir_nivel_conta(conta_id: int, nivel: str, motivo: str):
+    exigir_admin()
+    if nivel not in NIVEIS:
+        raise ValueError("Nível inválido.")
+    if not (motivo or "").strip():
+        raise ValueError("Indica o motivo do ajuste.")
+    anterior = consultar_um("SELECT nivel FROM contas WHERE id = %s", (int(conta_id),))
+    with transaccao() as cur:
+        cur.execute("UPDATE contas SET nivel = %s WHERE id = %s", (nivel, int(conta_id)))
+        registar_auditoria("nivel_ajustado_admin", "conta", conta_id, antes={"nivel": anterior[0] if anterior else None}, depois={"nivel": nivel}, motivo=motivo.strip(), cur=cur)
+
+
+def obter_perfis_resumo() -> pd.DataFrame:
+    exigir_admin()
+    return consultar_df("SELECT c.email AS email, c.nivel AS portal, p.perfil AS perfil, p.criado_em AS calculado_em FROM contas c "
+                        "LEFT JOIN LATERAL (SELECT perfil, criado_em FROM perfil_investidor WHERE conta_id = c.id ORDER BY criado_em DESC, id DESC LIMIT 1) p ON TRUE "
+                        "ORDER BY c.criado_em DESC")
+
+
+def _carregar_perfil_sessao(conta_id):
+    u = obter_ultimo_perfil(conta_id)
+    st.session_state["perfil"] = u["perfil"] if u else None
+    st.session_state["perfil_data"] = u["criado_em"] if u else None
+
+
+def tem_perfil() -> bool:
+    return bool(st.session_state.get("perfil"))
+
+
+# ---- Interface ----
+CSS_PERFIL = """
+.appo-portal { border-radius: 12px; padding: 16px 18px; color: #FFFFFF; margin: 4px 0 10px 0; }
+.appo-portal-ini { background: #0F766E; }
+.appo-portal-inv { background: var(--appo-vinho, #7C1F3E); }
+.appo-portal-pleno { background: #475569; }
+.appo-portal-rot { font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.85; margin: 0; }
+.appo-portal-nome { font-size: 1.45rem; font-weight: 800; line-height: 1.15; margin: 2px 0; }
+.appo-portal-sub { font-size: 0.82rem; opacity: 0.92; margin: 0; }
+.appo-perfil-topo { border: 1px solid var(--appo-borda, #E2E8F0); border-left: 6px solid var(--appo-vinho, #7C1F3E); background: #FFFFFF; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+.appo-perfil-rotulo { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--appo-suave, #64748B); }
+.appo-perfil-nome { font-size: 2rem; font-weight: 800; color: var(--appo-vinho, #7C1F3E); line-height: 1.15; }
+.appo-perfil-topo p { margin: 6px 0 0 0; color: #334155; }
+.appo-pcard { border-radius: 14px; padding: 22px 24px; border: 2px solid var(--appo-borda, #E2E8F0); background: #FFFFFF; min-height: 170px; }
+.appo-pcard h3 { margin: 0 0 6px 0; font-size: 1.4rem; }
+.appo-pcard p { margin: 0; color: #334155; }
+.appo-pcard-ini.appo-pcard-rec { border-color: #0F766E; background: #F0FDFA; }
+.appo-pcard-inv.appo-pcard-rec { border-color: var(--appo-vinho, #7C1F3E); background: #FDF2F5; }
+.appo-pcard-off { opacity: 0.6; }
+.appo-fita { display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; color: #FFFFFF; padding: 3px 10px; border-radius: 999px; margin-bottom: 8px; }
+.appo-pcard-ini .appo-fita { background: #0F766E; }
+.appo-pcard-inv .appo-fita { background: var(--appo-vinho, #7C1F3E); }
+.appo-adeq-tab { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.appo-adeq-tab th { text-align: left; padding: 8px 10px; color: var(--appo-suave, #64748B); border-bottom: 2px solid var(--appo-borda, #E2E8F0); font-weight: 600; }
+.appo-adeq-tab td { padding: 10px; border-bottom: 1px solid var(--appo-borda, #E2E8F0); vertical-align: top; }
+.appo-adeq { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+.appo-adeq-A { background: #DCFCE7; color: #166534; }
+.appo-adeq-C { background: #FEF3C7; color: #92400E; }
+.appo-adeq-N { background: #FEE2E2; color: #991B1B; }
+.appo-aviso { font-size: 0.58rem !important; line-height: 1.3; color: #A3AEBD; margin: 0.35rem 0 0 0; }
+"""
+st.markdown(f"<style>{CSS_PERFIL}</style>", unsafe_allow_html=True)
+
+
+def _cartao_portal_lateral():
+    """Cartão grande e colorido com o portal da conta. O portal resulta do perfil: não há seletor livre."""
+    if eh_admin() or eh_participante():
+        cls, nome = "appo-portal-pleno", "Acesso completo"
+        sub = "Portal Investidor e área do Clube" if eh_participante() else "Administração"
+    elif eh_investidor():
+        cls, nome = "appo-portal-inv", "Portal Investidor"
+        sub = f"Perfil {st.session_state.get('perfil')}" if tem_perfil() else "Perfil por fazer"
+    else:
+        cls, nome = "appo-portal-ini", "Portal Iniciante"
+        sub = f"Perfil {st.session_state.get('perfil')}" if tem_perfil() else "Perfil por fazer"
+    render_html(f'<div class="appo-portal {cls}"><div class="appo-portal-nome">{_esc(nome)}</div><p class="appo-portal-sub">{_esc(sub)}</p></div>')
+    if not tem_perfil() and not (eh_admin() or eh_participante()):
+        st.button("🧭 Fazer o meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="lat_perfil", use_container_width=True, type="primary")
+
+
+def _cartoes_portais(portal_rec: str):
+    c1, c2 = st.columns(2)
+    for col, chave, titulo, texto in [
+        (c1, "ini", "Portal Iniciante", "Fundamentos, Biblioteca e diagnóstico de capacidade financeira. Constrói a base antes de assumir risco."),
+        (c2, "inv", "Portal Investidor", "Cotações, avaliação de activos, simulador, conversor e Princípio 50/30/20."),
+    ]:
+        recomendado = (("ini" if portal_rec == "iniciante" else "inv") == chave)
+        fita = '<span class="appo-fita">O TEU PORTAL</span><br>' if recomendado else ""
+        extra = "" if recomendado else " appo-pcard-off"
+        nota = "" if recomendado else '<p style="margin-top:8px;font-size:0.85rem;">Abre-se quando o teu perfil o permitir.</p>'
+        col.markdown(f'<div class="appo-pcard appo-pcard-{chave}{" appo-pcard-rec" if recomendado else ""}{extra}">{fita}<h3>{_esc(titulo)}</h3><p>{_esc(texto)}</p>{nota}</div>', unsafe_allow_html=True)
+
+
+def _mostrar_resultado_perfil(u: dict):
+    res = u["res"] or {}
+    perfil = u["perfil"]
+    render_html(f'<div class="appo-perfil-topo"><span class="appo-perfil-rotulo">O teu perfil de risco</span>'
+                f'<div class="appo-perfil-nome">{_esc(perfil)}</div><p>{_esc(DESCRICAO_PERFIL.get(perfil, ""))}</p></div>')
+    _cartoes_portais(u["portal"])
+    st.markdown("")
+    pts, mx = res.get("pontos", {}), res.get("maximos", {})
+    st.markdown("##### Como chegámos aqui")
+    for chave, rotulo in [("capacidade", "Capacidade financeira para suportar perdas"), ("prazo", "Prazo e necessidade de liquidez"),
+                          ("tolerancia", "Tolerância emocional ao risco"), ("conhecimento", "Conhecimento e experiência")]:
+        if chave in pts and mx.get(chave):
+            st.caption(f"{rotulo}: {pts[chave]}/{mx[chave]}")
+            st.progress(min(1.0, max(0.0, pts[chave] / mx[chave])))
+    st.caption("O perfil de risco segue a dimensão mais cautelosa entre capacidade, prazo e tolerância; o portal depende também do conhecimento e dos sinais de alerta.")
+    for a in res.get("alertas", []):
+        st.warning(a)
+    if u["portal"] == "iniciante" and res.get("motivos"):
+        st.info("Estás no portal Iniciante porque " + "; ".join(res["motivos"]) + ". Podes refazer o perfil passados " + f"{DIAS_ENTRE_REPETICOES} dias, depois de estudares a Biblioteca.")
+    h = int(res.get("horizonte_idx", 0))
+    st.markdown(f"##### Adequação por tipo de instrumento · prazo indicado: {HORIZONTES[max(0, min(3, h))]}")
+    render_html(_tabela_adequacao_html(adequacao_instrumentos(h, perfil, bool(res.get("bloq_risco")))))
+    try:
+        st.caption(f"Perfil calculado em {u['criado_em']:%d/%m/%Y}.")
+    except Exception:
+        pass
+    aviso_discreto(AVISO_PERFIL)
+
+
+def _pode_refazer_perfil(u) -> bool:
+    if eh_admin() or not u:
+        return True
+    try:
+        return (u["agora"] - u["criado_em"]).days >= DIAS_ENTRE_REPETICOES
+    except Exception:
+        return True
+
+
+def _formulario_perfil(conta_id: int):
+    st.caption(f"{len(QUESTOES_PERFIL)} perguntas em {len(TITULOS_SEC_PERFIL)} secções, cerca de 3 minutos. Abre cada título para responder.")
+    with st.form("form_perfil_investidor"):
+        respostas = {}
+        for sec in TITULOS_SEC_PERFIL:
+            _qs = [q for q in QUESTOES_PERFIL if q["sec"] == sec]
+            with st.expander(f"{TITULOS_SEC_PERFIL[sec]}  ·  {len(_qs)} perguntas"):
+                for q in _qs:
+                    if q.get("multi"):
+                        respostas[q["id"]] = st.multiselect(q["t"], BENS_OPCOES, key=f"pf_{q['id']}")
+                    else:
+                        respostas[q["id"]] = st.radio(q["t"], [o[0] for o in q["op"]], index=None, key=f"pf_{q['id']}")
+        enviar = st.form_submit_button("Calcular o meu perfil", type="primary")
+    if not enviar:
+        return
+    em_falta = [q for q in QUESTOES_PERFIL if not respostas[q["id"]]]
+    if em_falta:
+        st.error(f"Faltam {len(em_falta)} resposta(s). Primeira por responder, na secção «{TITULOS_SEC_PERFIL[em_falta[0]['sec']]}»: «{em_falta[0]['t']}»")
+        return
+    if BENS_OPCOES[-1] in respostas["bens"] and len(respostas["bens"]) > 1:
+        st.error("Em «Que bens possuis?», «Nenhum dos anteriores» não pode ser escolhido junto com outros bens.")
+        return
+    res = calcular_perfil(respostas)
+    guardar_perfil(conta_id, respostas, res)
+    st.session_state["nivel"] = res["portal"]
+    _carregar_perfil_sessao(conta_id)
+    st.success("Perfil calculado e guardado.")
+    st.rerun()
+
+
+def _verificador_objectivo(u):
+    st.markdown("Diz para que é o dinheiro e quando vais precisar dele. O APPO mostra que tipos de instrumento fazem, ou não, sentido para esse prazo.")
+    if not u:
+        st.info("Faz primeiro o teu perfil, no separador «O meu perfil»: o verificador usa o teu perfil de risco.")
+        return
+    objectivos = ["Viagem ou férias", "Propinas ou educação", "Reserva de emergência", "Comprar casa ou terreno", "Comprar viatura",
+                  "Casamento ou evento familiar", "Abrir ou reforçar um negócio", "Saúde ou imprevistos",
+                  "Reforma ou futuro dos filhos", "Fazer crescer poupança a longo prazo", "Outro (especifica)"]
+    c1, c2 = st.columns(2)
+    objectivo = c1.selectbox("Objectivo do dinheiro", objectivos, key="ver_obj")
+    if objectivo == "Outro (especifica)":
+        _outro = c1.text_input("Qual é o objectivo?", key="ver_outro", max_chars=80)
+        objectivo = (_outro or "").strip() or "Outro objectivo"
+    horizonte = c2.selectbox("Quando vais precisar dele?", HORIZONTES, index=1, key="ver_hor")
+    h = HORIZONTES.index(horizonte)
+    bloq = bool((u["res"] or {}).get("bloq_risco"))
+    if objectivo == "Reserva de emergência":
+        h, bloq = 0, True
+        st.caption("A reserva de emergência deve estar sempre disponível, qualquer que seja o prazo.")
+    st.markdown(f"##### «{objectivo}» · {horizonte} · perfil {u['perfil']}")
+    render_html(_tabela_adequacao_html(adequacao_instrumentos(h, u["perfil"], bloq)))
+    aviso_discreto(AVISO_PERFIL)
+
+
+def pagina_perfil_investidor():
+    conta_id = st.session_state.get("conta_id")
+    u = obter_ultimo_perfil(conta_id)
+    aba_perfil, aba_ver = st.tabs(["🧭 O meu perfil", "🎯 Verificador de objectivo"])
+    with aba_perfil:
+        if u:
+            _mostrar_resultado_perfil(u)
+            st.divider()
+            if _pode_refazer_perfil(u):
+                with st.expander("Refazer o perfil"):
+                    _formulario_perfil(conta_id)
+            else:
+                try:
+                    quando = u["criado_em"] + timedelta(days=DIAS_ENTRE_REPETICOES)
+                    st.info(f"Podes refazer o perfil a partir de {quando:%d/%m/%Y}.")
+                except Exception:
+                    st.info(f"Podes refazer o perfil passados {DIAS_ENTRE_REPETICOES} dias.")
+        else:
+            st.markdown("Responde com sinceridade: não há respostas certas, só respostas úteis. Demora cerca de 4 minutos e ajusta o teu portal ao teu momento.")
+            _formulario_perfil(conta_id)
+            aviso_discreto(AVISO_PERFIL)
+    with aba_ver:
+        _verificador_objectivo(u)
+
+
+
+# =========================================================
+# ÍNDICES: «Índice BODIVA» (cotação média) e «Índice APPO» (variação média desde 19/08/2026, base 100)
+# =========================================================
+DATA_BASE_APPO = pd.Timestamp("2026-08-19")
+
+
+def _tk_norm(t) -> str:
+    """Mesma regra de comparação dos tickers que o resto da app (sem os 'A' finais)."""
+    return str(t or "").strip().upper().rstrip("A")
+
+
+def obter_bases_indice_appo(com_fonte: bool = False):
+    df = consultar_df("SELECT ticker, preco_base, fonte FROM base_indice_appo")
+    if com_fonte:
+        return df
+    return {_tk_norm(r["ticker"]): float(r["preco_base"]) for _, r in df.iterrows()} if not df.empty else {}
+
+
+def guardar_bases_indice_appo(df: pd.DataFrame):
+    exigir_admin()
+    n = 0
+    for _, r in df.iterrows():
+        tk = str(r.get("ticker") or "").strip().upper()
+        pb = r.get("preco_base")
+        if not tk:
+            continue
+        if pb is None or pd.isna(pb) or float(pb) <= 0:
+            executar("DELETE FROM base_indice_appo WHERE ticker = %s", (tk,))
+        else:
+            executar("INSERT INTO base_indice_appo (ticker, preco_base, fonte) VALUES (%s, %s, %s) ON CONFLICT (ticker) DO UPDATE SET "
+                     "preco_base = EXCLUDED.preco_base, fonte = EXCLUDED.fonte, actualizado_em = NOW()", (tk, float(pb), str(r.get("fonte") or "").strip()))
+            n += 1
+    registar_auditoria("bases_indice_appo", "indice", "APPO", depois={"precos_base": n})
+
+
+def obter_painel_precos(tickers_norm: set) -> pd.DataFrame:
+    """Preço diário (linhas = datas, colunas = títulos). Dias sem registo mantêm o último preço conhecido."""
+    df = consultar_df("SELECT DISTINCT ON (dia, RTRIM(ticker, 'A')) dia, RTRIM(ticker, 'A') AS tk, preco FROM historico_cotacoes "
+                      "ORDER BY dia, RTRIM(ticker, 'A'), LENGTH(ticker) DESC")
+    if df.empty:
+        return pd.DataFrame()
+    df = df[df["tk"].isin(tickers_norm)].copy()
+    if df.empty:
+        return pd.DataFrame()
+    df["dia"] = pd.to_datetime(df["dia"])
+    df["preco"] = df["preco"].astype(float)
+    return df.pivot_table(index="dia", columns="tk", values="preco", aggfunc="last").sort_index().ffill()
+
+
+def calcular_indice_bodiva(painel: pd.DataFrame) -> pd.Series:
+    """Cotação média (Kz) das acções cotadas em cada dia."""
+    return painel.mean(axis=1, skipna=True).dropna()
+
+
+def calcular_indice_appo(painel: pd.DataFrame, bases: dict, data_base=DATA_BASE_APPO):
+    """Variação média (peso igual) de todas as acções face ao preço-base de 19/08/2026, base 100.
+    Quando entra uma acção nova, encadeia-se a série, para a entrada não causar um salto artificial."""
+    pb = painel[painel.index >= data_base]
+    if pb.empty:
+        return None, {}
+    rel, sem_base = {}, []
+    for tk in pb.columns:
+        s_tk = pb[tk].dropna()
+        if s_tk.empty:
+            continue
+        base = bases.get(tk)
+        if not base or base <= 0:
+            base = float(s_tk.iloc[0])
+            sem_base.append(tk)
+        rel[tk] = pb[tk] / base
+    R = pd.DataFrame(rel).dropna(how="all")
+    if R.empty:
+        return None, {}
+    valores = {R.index[0]: 100.0 * float(R.iloc[0].mean())}
+    for i in range(1, len(R)):
+        ant, act = R.iloc[i - 1], R.iloc[i]
+        conj = [c for c in R.columns if pd.notna(ant[c]) and pd.notna(act[c])]
+        m_ant = float(ant[conj].mean()) if conj else 0.0
+        razao = (float(act[conj].mean()) / m_ant) if m_ant else 1.0
+        valores[R.index[i]] = valores[R.index[i - 1]] * razao
+    return pd.Series(valores).sort_index(), {"sem_base": sem_base, "inicio": R.index[0]}
+
+
+def janela_periodo(serie: pd.Series, periodo: str):
+    """(janela, variação %, janela completa?) para 1d, 7d, 1m, 3m, 6m, 1a, 5a."""
+    if len(serie) < 2:
+        return serie, None, False
+    fim = serie.index[-1]
+    if periodo == "1d":
+        janela, completa = serie.iloc[-2:], True
+    else:
+        ini = fim - pd.Timedelta(days=_PERIODO_DIAS[periodo])
+        antes = serie[serie.index <= ini]
+        completa = len(antes) > 0
+        janela = serie[serie.index >= antes.index[-1]] if completa else serie
+    base = float(janela.iloc[0])
+    return janela, ((float(serie.iloc[-1]) / base - 1) * 100 if base else None), completa
+
+
+def resumo_indice_appo(df_activos: pd.DataFrame):
+    """(valor, variação 1d %) do Índice APPO, ou None se ainda não há dados suficientes."""
+    try:
+        acoes = df_activos[df_activos["tipo"].apply(_eh_accao)] if not df_activos.empty else df_activos
+        tickers = {_tk_norm(t) for t in acoes["ticker"] if str(t or "").strip()} if not acoes.empty else set()
+        painel = obter_painel_precos(tickers) if tickers else pd.DataFrame()
+        if painel.empty:
+            return None
+        serie, _ = calcular_indice_appo(painel, obter_bases_indice_appo())
+        if serie is None or len(serie) < 2:
+            return None
+        _, var1d, _ = janela_periodo(serie, "1d")
+        return float(serie.iloc[-1]), var1d
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _painel_indices(df_activos: pd.DataFrame):
+    acoes = df_activos[df_activos["tipo"].apply(_eh_accao)] if not df_activos.empty else df_activos
+    nomes = {_tk_norm(r["ticker"]): str(r["nome"]) for _, r in acoes.iterrows() if str(r["ticker"] or "").strip()} if not acoes.empty else {}
+    if not nomes:
+        st.info("Ainda não há acções registadas.")
+        return
+    painel = obter_painel_precos(set(nomes))
+    if painel.empty or len(painel) < 2:
+        st.info("Ainda não há histórico de cotações suficiente. O administrador pode importar a série de cada título em Cotações & Activos.")
+        return
+    periodo = st.radio("Período", PERIODOS_GRAFICO, index=PERIODOS_GRAFICO.index("1m"), horizontal=True, key="per_indices", label_visibility="collapsed")
+    aba_appo, aba_bodiva = st.tabs(["Índice APPO", "Índice BODIVA"])
+    with aba_appo:
+        serie, info = calcular_indice_appo(painel, obter_bases_indice_appo())
+        if serie is None or len(serie) < 2:
+            st.info("O Índice APPO começa em 19/08/2026: ainda não há cotações desde essa data.")
+        else:
+            janela, var, completa = janela_periodo(serie, periodo)
+            c1, c2 = st.columns(2)
+            c1.metric("Índice APPO (100 = 19/08/2026)", f"{serie.iloc[-1]:.2f}", delta=(f"{var:+.2f}% em {periodo}" if var is not None else None))
+            c2.metric("Desde 19/08/2026", f"{serie.iloc[-1] - 100:+.2f}%")
+            grafico_area_simples(janela.to_frame("Índice APPO"), "Índice APPO")
+            st.caption("Variação média de todas as acções cotadas face ao seu preço em 19/08/2026, o dia em que o Clube começou a investir (todas com o mesmo peso).")
+            if not completa:
+                st.caption(f"Histórico disponível só desde {serie.index[0]:%d/%m/%Y}; o período escolhido é mais longo.")
+            if info.get("sem_base"):
+                lista = ", ".join(nomes.get(t, t) for t in info["sem_base"])
+                st.caption(f"Sem preço-base de 19/08/2026 para: {lista}. Para estas usa-se o primeiro preço disponível; o administrador pode completar em Cotações & Activos.")
+    with aba_bodiva:
+        serie_b = calcular_indice_bodiva(painel)
+        janela_b, var_b, completa_b = janela_periodo(serie_b, periodo)
+        st.metric("Índice BODIVA (cotação média)", kz(serie_b.iloc[-1]), delta=(f"{var_b:+.2f}% em {periodo}" if var_b is not None else None))
+        grafico_area_simples(janela_b.to_frame("Cotação média (Kz)"), "Cotação média (Kz)")
+        st.caption(f"Média simples das cotações das {painel.shape[1]} acções cotadas em cada dia. Muda também quando entra uma nova acção; para medir a variação, usa o Índice APPO.")
+        if not completa_b:
+            st.caption(f"Histórico disponível só desde {serie_b.index[0]:%d/%m/%Y}; o período escolhido é mais longo.")
+
+
+# =========================================================
+# MOTOR ANALÍTICO MULTITEMPORAL
+# Rentabilidade (1D · 7D · 3M · 6M · 1A · 5A/acumulado) da carteira e dos índices APPO e BODIVA,
+# Alpha, ajuste à inflação de Angola (homóloga, vigente, projectada) e métricas de risco.
+# =========================================================
+HORIZ_RENT = [("1d", "Intradia (1D)"), ("7d", "Semanal (7D)"), ("3m", "Trimestral (3M)"),
+              ("6m", "Semestral (6M)"), ("1a", "Anual (YoY)"), ("5a", "Longo prazo (5A)")]
+
+
+def serie_valor_encadeada(painel: pd.DataFrame, qtds: dict) -> pd.Series:
+    """Série base 100 do valor de um cabaz (quantidade x preço). Quando um título entra no cabaz, a série é
+    encadeada sobre os títulos comuns, para a entrada não criar um salto artificial."""
+    cols = [c for c in painel.columns if qtds.get(c, 0) and qtds[c] > 0]
+    if not cols:
+        return pd.Series(dtype=float)
+    V = painel[cols].mul(pd.Series({c: float(qtds[c]) for c in cols}), axis=1)
+    valores, anterior, ultimo = {}, None, 100.0
+    for dia, linha in V.iterrows():
+        if linha.notna().sum() == 0:
+            continue
+        if anterior is None:
+            valores[dia], ultimo = 100.0, 100.0
+        else:
+            comuns = linha.notna() & anterior.notna()
+            den = float(anterior[comuns].sum()) if comuns.any() else 0.0
+            razao = float(linha[comuns].sum()) / den if den > 0 else 1.0
+            ultimo = ultimo * razao
+            valores[dia] = ultimo
+        anterior = linha
+    return pd.Series(valores).sort_index()
+
+
+def _ret_pct(serie, periodo: str, inicio_comum=None):
+    """Variação % no horizonte. None se a janela não está completa (excepto 5A em modo acumulado)."""
+    if serie is None or len(serie) < 2:
+        return None
+    if periodo == "5a" and inicio_comum is not None:
+        s = serie[serie.index >= inicio_comum]
+        if len(s) < 2 or not float(s.iloc[0]):
+            return None
+        return (float(s.iloc[-1]) / float(s.iloc[0]) - 1) * 100
+    _, var, completa = janela_periodo(serie, periodo)
+    return var if completa else None
+
+
+def _dias_horizonte(serie_ref, periodo: str, inicio_comum=None) -> float:
+    if periodo == "1d":
+        if serie_ref is not None and len(serie_ref) >= 2:
+            return float(max((serie_ref.index[-1] - serie_ref.index[-2]).days, 1))
+        return 1.0
+    if periodo == "5a" and inicio_comum is not None and serie_ref is not None and len(serie_ref):
+        s = serie_ref[serie_ref.index >= inicio_comum]
+        if len(s) >= 2:
+            return float(max((s.index[-1] - s.index[0]).days, 1))
+    return float(_PERIODO_DIAS[periodo])
+
+
+def inflacao_no_periodo(dias: float, yoy: float, vig_m: float, proj: float) -> dict:
+    """Inflação acumulada (%) em `dias`, a partir da taxa homóloga, da variação mensal vigente e da projectada."""
+    return {"yoy": ((1 + yoy) ** (dias / 365.0) - 1) * 100,
+            "vig": ((1 + vig_m) ** (dias / 30.4375) - 1) * 100,
+            "proj": ((1 + proj) ** (dias / 365.0) - 1) * 100,
+            "dias": dias}
+
+
+def retorno_real(nominal, inflacao_pct):
+    if nominal is None or inflacao_pct is None:
+        return None
+    return ((1 + nominal / 100.0) / (1 + inflacao_pct / 100.0) - 1) * 100
+
+
+def metricas_risco(serie, ref=None, rf_anual=None) -> dict:
+    """σ diário/anualizado, drawdown, VaR 95%, e (face a `ref`) tracking error, information ratio e beta."""
+    import numpy as np
+    if serie is None or len(serie) < 3:
+        return {"n": 0}
+    s = serie.dropna()
+    r = s.pct_change().dropna()
+    n = len(r)
+    out = {"n": n}
+    if n >= 2:
+        out["sigma_d"] = float(r.std(ddof=1)) * 100
+        out["sigma_a"] = out["sigma_d"] * (252 ** 0.5)
+    out["dd_max"] = float((s / s.cummax() - 1).min()) * 100
+    if n >= 20:
+        out["var95"] = float(np.percentile(r, 5)) * 100
+    if ref is not None and len(ref) >= 3:
+        rr = ref.dropna().pct_change().dropna()
+        j = pd.concat([r.rename("a"), rr.rename("b")], axis=1, join="inner").dropna()
+        if len(j) >= 5:
+            dif = j["a"] - j["b"]
+            sd = float(dif.std(ddof=1))
+            if sd > 0:
+                out["te"] = sd * (252 ** 0.5) * 100
+                out["ir"] = float(dif.mean()) * 252 / (sd * (252 ** 0.5))
+            vb = float(j["b"].var(ddof=1))
+            if vb > 0:
+                out["beta"] = float(j["a"].cov(j["b"])) / vb
+    if rf_anual is not None and n >= 30 and out.get("sigma_a"):
+        out["sharpe"] = (float(r.mean()) * 252 - rf_anual) / (out["sigma_a"] / 100)
+    return out
+
+
+def calcular_analise_multitemporal(painel, carteira, tk_accoes, premissas, df_activos=None, bases=None) -> dict:
+    """Devolve um dicionário com tudo o que a página e o PDF precisam. `ok` False + `motivo` quando não há dados."""
+    import numpy as np
+    res = {"ok": False, "motivo": "", "avisos": []}
+    if painel is None or painel.empty or len(painel) < 2:
+        res["motivo"] = "Ainda não há histórico de cotações suficiente (são precisos pelo menos 2 dias)."
+        return res
+    if carteira is None or carteira.empty:
+        res["motivo"] = "A carteira real do Clube está vazia (Painel do Administrador › Carteira Real)."
+        return res
+    precos_activos = {}
+    if df_activos is not None and not df_activos.empty:
+        precos_activos = {_tk_norm(r["ticker"]): _num_seguro(r["preco"]) for _, r in df_activos.iterrows() if str(r["ticker"] or "").strip()}
+    posicoes, qtds = [], {}
+    for _, p in carteira.iterrows():
+        tk, qtd = _tk_norm(p["ticker"]), _num_seguro(p["qtd"])
+        if not tk or qtd <= 0:
+            continue
+        s_tk = painel[tk].dropna() if tk in painel.columns else pd.Series(dtype=float)
+        preco = precos_activos.get(tk) or (float(s_tk.iloc[-1]) if len(s_tk) else 0.0)
+        valor, custo = qtd * preco, _num_seguro(p["valor_aquisicao"])
+        if tk in painel.columns and len(s_tk) >= 2:
+            qtds[tk] = qtds.get(tk, 0) + qtd
+        else:
+            res["avisos"].append(f"{p['nome']}: sem histórico de cotações; fica fora das séries de rentabilidade e risco.")
+        posicoes.append({"tk": tk, "ticker": str(p["ticker"] or "").strip().upper(), "nome": str(p["nome"]), "qtd": qtd, "preco_act": preco,
+                         "valor": valor, "custo": custo, "mais_valia": valor - custo,
+                         "mais_valia_pct": ((valor / custo - 1) * 100) if custo else None, "tem_serie": tk in qtds})
+    total = sum(x["valor"] for x in posicoes)
+    if not posicoes or total <= 0:
+        res["motivo"] = "Não foi possível valorizar a carteira (faltam quantidades ou cotações)."
+        return res
+    for x in posicoes:
+        x["peso"] = x["valor"] / total
+    s_cart = serie_valor_encadeada(painel, qtds)
+    if len(s_cart) < 2:
+        res["motivo"] = "Os títulos em carteira ainda não têm histórico suficiente."
+        return res
+    painel_acc = painel[[c for c in painel.columns if c in tk_accoes]]
+    s_appo = None
+    if not painel_acc.empty:
+        s_appo, _ = calcular_indice_appo(painel_acc, bases or {})
+    s_bod = serie_valor_encadeada(painel_acc, {c: 1.0 for c in painel_acc.columns}) if not painel_acc.empty else pd.Series(dtype=float)
+    base_series = [s for s in (s_cart, s_appo, s_bod) if s is not None and len(s) >= 2]
+    usar_acum = not all(janela_periodo(s, "5a")[2] for s in base_series)
+    inicio_comum = max(s.index[0] for s in base_series) if usar_acum else None
+
+    ps = [p for p, _ in HORIZ_RENT]
+    linha = lambda s: {p: _ret_pct(s, p, inicio_comum) for p in ps}
+    ret_c, ret_a, ret_b = linha(s_cart), linha(s_appo), linha(s_bod)
+    dif = lambda x, y: {p: (x[p] - y[p]) if x[p] is not None and y[p] is not None else None for p in ps}
+
+    yoy, vig, proj = premissas["inflacao_homologa"], premissas["inflacao_vigente_m"], premissas["inflacao_projectada"]
+    infl = {p: inflacao_no_periodo(_dias_horizonte(s_cart, p, inicio_comum), yoy, vig, proj) for p in ps}
+    real = {p: ({k: retorno_real(ret_c[p], infl[p][k]) for k in ("yoy", "vig", "proj")} if ret_c[p] is not None else None) for p in ps}
+
+    for x in posicoes:
+        if x["tem_serie"]:
+            s_t = painel[x["tk"]].dropna()
+            x["ret"] = {p: _ret_pct(s_t, p, inicio_comum) for p in ps}
+            rk = metricas_risco(s_t)
+            x["sigma_a"], x["dd_max"] = rk.get("sigma_a"), rk.get("dd_max")
+        else:
+            x["ret"], x["sigma_a"], x["dd_max"] = {p: None for p in ps}, None, None
+        x["contrib"] = None
+    com_serie = [x for x in posicoes if x["tem_serie"]]
+    try:
+        R = painel[[x["tk"] for x in com_serie]].pct_change().dropna(how="any")
+        if len(com_serie) >= 1 and len(R) >= 10:
+            w = np.array([x["valor"] for x in com_serie], dtype=float)
+            w = w / w.sum()
+            cov = R.cov().values
+            var_p = float(w @ cov @ w)
+            if var_p > 0:
+                mc = w * (cov @ w) / var_p
+                for x, c in zip(com_serie, mc):
+                    x["contrib"] = float(c)
+    except Exception:
+        pass
+    posicoes.sort(key=lambda x: -x["valor"])
+    hhi = sum(x["peso"] ** 2 for x in posicoes)
+    rf = premissas.get("taxa_livre_risco")
+    res.update({
+        "ok": True, "ret_carteira": ret_c, "ret_appo": ret_a, "ret_bodiva": ret_b,
+        "alpha_appo": dif(ret_c, ret_a), "alpha_bodiva": dif(ret_c, ret_b),
+        "inflacao": infl, "real": real, "acumulado": usar_acum, "inicio_comum": inicio_comum,
+        "titulos": posicoes, "premissas": premissas, "valor_total": total, "custo_total": sum(x["custo"] for x in posicoes),
+        "concentracao": {"hhi": hhi, "n_efectivo": (1 / hhi) if hhi else 0.0, "maior": (posicoes[0]["nome"], posicoes[0]["peso"])},
+        "risco": {"carteira": metricas_risco(s_cart, s_appo if s_appo is not None and len(s_appo) >= 3 else None, rf),
+                  "appo": metricas_risco(s_appo) if s_appo is not None else {},
+                  "bodiva": metricas_risco(s_bod)},
+        "datas": {"ini": s_cart.index[0], "fim": s_cart.index[-1], "n_obs": len(s_cart)},
+        "serie_carteira": s_cart, "serie_appo": s_appo, "serie_bodiva": s_bod,
+    })
+    # beta face ao Índice BODIVA (a métrica de risco da carteira só calculou TE/IR face ao APPO)
+    rb = metricas_risco(s_cart, s_bod if len(s_bod) >= 3 else None)
+    if "beta" in rb:
+        res["risco"]["carteira"]["beta"] = rb["beta"]
+    if len(s_cart) < 20:
+        res["avisos"].append(f"Apenas {len(s_cart)} dias de histórico: as métricas de risco são indicativas. Importa o histórico de cotações (Painel do Administrador › Cotações & Activos) para as tornar robustas.")
+    return res
+
+
+def calcular_analise_completa(df_activos: pd.DataFrame) -> dict:
+    """Lê cotações, carteira real e premissas na BD e corre o motor."""
+    carteira = obter_carteira_real()
+    prem = obter_premissas_macro()
+    acoes = df_activos[df_activos["tipo"].apply(_eh_accao)] if not df_activos.empty else df_activos
+    tk_acc = {_tk_norm(x) for x in acoes["ticker"] if str(x or "").strip()} if not acoes.empty else set()
+    tk_cart = {_tk_norm(x) for x in carteira["ticker"] if str(x or "").strip()} if not carteira.empty else set()
+    painel = obter_painel_precos(tk_acc | tk_cart) if (tk_acc | tk_cart) else pd.DataFrame()
+    return calcular_analise_multitemporal(painel, carteira, tk_acc, prem, df_activos, obter_bases_indice_appo())
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _analise_cacheada():
+    return calcular_analise_completa(obter_activos())
+
+
+def obter_analise() -> dict:
+    exigir_participante()
+    try:
+        return _analise_cacheada()
+    except Exception as e:
+        traceback.print_exc()
+        return {"ok": False, "motivo": f"Erro no cálculo analítico: {type(e).__name__}: {e}", "avisos": []}
+
+
+def _melhor_horizonte(a: dict):
+    for p, _ in reversed(HORIZ_RENT):
+        if a["ret_carteira"].get(p) is not None:
+            return p
+    return None
+
+
+def gerar_comentario_executivo(a: dict, resumo: dict, mercado=None) -> list:
+    """Comentário macro e teses de investimento, gerados por regras a partir dos dados (lista de (título, texto))."""
+    out = []
+    pr = a["premissas"]
+    # 1) Mercado
+    txt = ""
+    if mercado is not None and not mercado.empty and "variacao" in mercado.columns:
+        v = pd.to_numeric(mercado["variacao"], errors="coerce").dropna()
+        if len(v):
+            sobem, descem = int((v > 0).sum()), int((v < 0).sum())
+            m = mercado.assign(_v=pd.to_numeric(mercado["variacao"], errors="coerce")).dropna(subset=["_v"])
+            top, bot = m.loc[m["_v"].idxmax()], m.loc[m["_v"].idxmin()]
+            txt = (f"A BODIVA tem {len(mercado)} titulos cotados na tabela de mercado; na ultima sessao registada {sobem} subiram, {descem} desceram "
+                   f"e {len(v) - sobem - descem} ficaram estaveis. Maior subida: {top['ticker']} ({top['_v']:+.2f}%); maior queda: {bot['ticker']} ({bot['_v']:+.2f}%). ")
+    if a["serie_appo"] is not None and len(a["serie_appo"]) >= 2:
+        txt += f"O Indice APPO esta em {float(a['serie_appo'].iloc[-1]):.2f} pontos (base 100 em 19/08/2026)."
+    out.append(("Panorama do mercado (BODIVA)", txt or "Sem dados de mercado suficientes para um panorama; a leitura baseia-se nos titulos acompanhados pelo Clube."))
+    # 2) Desempenho e alpha
+    p = _melhor_horizonte(a)
+    if p:
+        rc, ra, rb = a["ret_carteira"][p], a["ret_appo"].get(p), a["ret_bodiva"].get(p)
+        rot_h = (f"acumulado desde {a['inicio_comum']:%d/%m/%Y}" if (p == "5a" and a.get("acumulado") and a.get("inicio_comum") is not None)
+                 else _rotulo_horiz(a, p, curto=False))
+        t2 = f"No horizonte {rot_h}, a carteira do Clube rendeu {rc:+.2f}%"
+        if ra is not None and rb is not None:
+            al_a, al_b = rc - ra, rc - rb
+            t2 += (f", contra {ra:+.2f}% do Indice APPO e {rb:+.2f}% do Indice BODIVA: alpha de {al_a:+.2f} p.p. face ao APPO e {al_b:+.2f} p.p. face a BODIVA. "
+                   + ("A carteira supera ambos os indices." if al_a > 0 and al_b > 0 else
+                      "A carteira fica abaixo de ambos os indices." if al_a < 0 and al_b < 0 else "O resultado e misto face aos dois indices."))
+        else:
+            t2 += ". Os indices de referencia ainda nao tem historico comparavel neste horizonte."
+        out.append(("Desempenho e Alpha", t2))
+        # 3) Inflação
+        rr = a["real"].get(p)
+        if rr:
+            t3 = (f"Com a inflacao homologa de {pr['inflacao_homologa'] * 100:.2f}%, a rentabilidade real no mesmo horizonte e {rr['yoy']:+.2f}% "
+                  f"({'ganho' if rr['yoy'] > 0 else 'perda'} de poder de compra). Deflacionada pela inflacao vigente ({pr['inflacao_vigente_m'] * 100:.2f}% m/m) e de {rr['vig']:+.2f}%, "
+                  f"e pela projectada ({pr['inflacao_projectada'] * 100:.2f}% a 12 meses) de {rr['proj']:+.2f}%. "
+                  f"Para preservar o capital nos proximos 12 meses a carteira precisa de render pelo menos {pr['inflacao_projectada'] * 100:.1f}% nominais.")
+            out.append(("Ajuste a inflacao e poder de compra", t3))
+    # 4) Risco
+    rk, cc = a["risco"]["carteira"], a["concentracao"]
+    t4 = f"A maior posicao e {cc['maior'][0]} com {cc['maior'][1] * 100:.1f}% da carteira; o numero efectivo de activos e {cc['n_efectivo']:.1f}. "
+    if rk.get("sigma_a") is not None:
+        t4 += f"A volatilidade anualizada estimada e {rk['sigma_a']:.1f}% e o drawdown maximo observado {rk['dd_max']:.1f}%."
+    else:
+        t4 += "Ainda nao ha observacoes suficientes para estimar a volatilidade."
+    out.append(("Risco e concentracao", t4))
+    # 5) Teses
+    teses = []
+    rr = a["real"].get(p) if p else None
+    if rr and rr["proj"] < 0:
+        teses.append("Tese 1 - Preservacao de capital: o retorno actual nao cobre a inflacao projectada; favorecer titulos com rendimento esperado "
+                     f"acima de {pr['inflacao_projectada'] * 100:.1f}% e rever posicoes de baixa liquidez ou sem dividendo.")
+    else:
+        teses.append("Tese 1 - Preservacao de capital: o retorno actual cobre a inflacao projectada; manter a disciplina e testar a carteira com um cenario de inflacao 5 p.p. mais alta.")
+    if cc["maior"][1] > 0.40:
+        teses.append(f"Tese 2 - Diversificacao: {cc['maior'][0]} pesa mais de 40% da carteira; avaliar reforcos noutros sectores respeitando os limites do Clube (10% por activo, 20% por sector no fundo global).")
+    else:
+        teses.append("Tese 2 - Diversificacao: a concentracao esta em nivel aceitavel; manter a monitorizacao dos limites do Clube (10% por activo, 20% por sector no fundo global).")
+    pior = [t_ for t_ in a["titulos"] if p and t_["ret"].get(p) is not None]
+    if pior:
+        pi = min(pior, key=lambda t_: t_["ret"][p])
+        teses.append(f"Tese 3 - Revisao de posicoes: {_pdf_nome_curto(pi['nome'])} e o pior contributo no horizonte ({pi['ret'][p]:+.2f}%); confirmar se a tese registada continua valida (Principio 9).")
+    out.append(("Teses de investimento e posicionamento tatico da APPO", "\n".join(teses)))
+    return out
+
+
+# =========================================================
+# MERCADO BODIVA — TODOS OS TÍTULOS COTADOS (automático de minuto a minuto + resgate manual do administrador)
+# =========================================================
+def _nk(k) -> str:
+    import unicodedata
+    n = "".join(c for c in unicodedata.normalize("NFKD", str(k)) if not unicodedata.combining(c))
+    return "".join(c for c in n.lower() if c.isalnum())
+
+
+_MK_TICKER = ("ticker", "symbol", "simbolo", "sigla", "codigo", "cod", "isin")
+_MK_NOME = ("nome", "name", "designacao", "descricao", "description", "emitente", "titulo", "security")
+_MK_PRECO = ("ultimopreco", "lastprice", "precofecho", "closeprice", "cotacao", "precoultimo", "preco", "price", "ultimo", "last", "fecho", "close", "valor")
+_MK_PRECO_EXCL = ("anterior", "abertura", "open", "max", "min", "prev", "var", "vol", "quant", "media", "avg", "change", "percent", "pct",
+                  "oferta", "procura", "bid", "ask", "compra", "venda", "qtd", "total")
+_MK_VAR = ("variacao", "variation", "var", "change", "chg", "percent", "pct")
+_MK_ANT = ("precoanterior", "fechoanterior", "anterior", "previous", "prev")
+_MK_VOL = ("volume", "quantidade", "qtd", "negociad", "quantity", "qty")
+_MK_TIPO = ("tipo", "type", "categoria", "classe", "class", "segmento", "mercado", "market")
+
+
+def _valor_por_chaves(d: dict, candidatos, excluir=()):
+    chaves = {_nk(k): k for k in d}
+    for c in candidatos:                               # 1) nome exacto
+        if c in chaves and not any(x in c for x in excluir):
+            v = d[chaves[c]]
+            if v not in (None, "") and not isinstance(v, (dict, list)):
+                return v
+    for c in candidatos:                               # 2) nome que contém o candidato
+        for nk, k in chaves.items():
+            if c in nk and not any(x in nk for x in excluir):
+                v = d[k]
+                if v not in (None, "") and not isinstance(v, (dict, list)):
+                    return v
+    return None
+
+
+def _registos_para_df(registos: list) -> pd.DataFrame:
+    """Converte uma lista de dicionários (JSON da BODIVA, linha de HTML ou de ficheiro) na tabela de mercado."""
+    linhas = []
+    for d in registos:
+        if not isinstance(d, dict):
+            continue
+        tk = _valor_por_chaves(d, _MK_TICKER) or d.get("__chave__")
+        preco = _numero_flex(_valor_por_chaves(d, _MK_PRECO, _MK_PRECO_EXCL))
+        if not tk or preco is None or preco <= 0:
+            continue
+        var = _numero_flex(_valor_por_chaves(d, _MK_VAR, ("abs",)))
+        if var is not None and abs(var) > 100:
+            var = None
+        if var is None:
+            ant = _numero_flex(_valor_por_chaves(d, _MK_ANT))
+            if ant and ant > 0:
+                var = (preco / ant - 1) * 100
+        vol = _numero_flex(_valor_por_chaves(d, _MK_VOL, ("valor",)))
+        linhas.append({"ticker": str(tk).strip().upper(), "nome": str(_valor_por_chaves(d, _MK_NOME) or "").strip(),
+                       "tipo": str(_valor_por_chaves(d, _MK_TIPO) or "").strip(), "preco": preco, "variacao": var, "volume": vol})
+    if not linhas:
+        return pd.DataFrame(columns=["ticker", "nome", "tipo", "preco", "variacao", "volume"])
+    return pd.DataFrame(linhas).drop_duplicates("ticker", keep="last").reset_index(drop=True)
+
+
+def _listas_de_registos(dados, _prof: int = 0):
+    if _prof > 6:
+        return
+    if isinstance(dados, list):
+        if dados and all(isinstance(x, dict) for x in dados[:5]):
+            yield dados
+        for x in dados[:50]:
+            if isinstance(x, (dict, list)):
+                yield from _listas_de_registos(x, _prof + 1)
+    elif isinstance(dados, dict):
+        if len(dados) >= 3 and all(isinstance(v, dict) for v in dados.values()):
+            yield [dict(v, __chave__=k) for k, v in dados.items()]
+        for v in dados.values():
+            if isinstance(v, (dict, list)):
+                yield from _listas_de_registos(v, _prof + 1)
+
+
+def _parsear_resposta_bodiva(resp) -> pd.DataFrame:
+    melhor = pd.DataFrame()
+    try:
+        dados = resp.json()
+    except ValueError:
+        dados = None
+    if dados is not None:
+        for lista in _listas_de_registos(dados):
+            df = _registos_para_df(lista)
+            if len(df) > len(melhor):
+                melhor = df
+    if melhor.empty:   # recurso: tabela HTML
+        try:
+            import io
+            for tab in pd.read_html(io.StringIO(resp.text)):
+                df = _registos_para_df(tab.to_dict("records"))
+                if len(df) > len(melhor):
+                    melhor = df
+        except Exception:
+            pass
+    return melhor
+
+
+def _pedido_bodiva():
+    cabecalhos = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*", "Referer": "https://www.bodiva.ao/",
+    }
+    try:
+        resp = requests.get(URL_BODIVA_RESUMO, headers=cabecalhos, timeout=20)
+    except requests.exceptions.SSLError:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        resp = requests.get(URL_BODIVA_RESUMO, headers=cabecalhos, timeout=20, verify=False)   # dados públicos, só de leitura
+    if resp.status_code != 200:
+        raise ValueError(f"A BODIVA respondeu com o código HTTP {resp.status_code}.")
+    return resp
+
+
+def cfg_mercado_get(chave: str, padrao: str = "") -> str:
+    _garantir_tabelas_extra()
+    linha = consultar_um("SELECT valor FROM config_mercado WHERE chave = %s", (chave,))
+    return linha[0] if linha and linha[0] is not None else padrao
+
+
+def cfg_mercado_set(chave: str, valor: str):
+    exigir_admin()
+    _garantir_tabelas_extra()
+    executar("INSERT INTO config_mercado (chave, valor) VALUES (%s, %s) ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor", (chave, valor))
+
+
+def _guardar_mercado(df: pd.DataFrame, fonte: str):
+    _garantir_tabelas_extra()
+    nn = lambda v: None if v is None or (isinstance(v, float) and v != v) else float(v)
+    linhas = [(r["ticker"], r["nome"], r["tipo"], nn(r["preco"]), nn(r["variacao"]), nn(r["volume"]), fonte) for _, r in df.iterrows()]
+    sql = ("INSERT INTO mercado_bodiva (ticker, nome, tipo, preco, variacao, volume, fonte, actualizado_em) VALUES (%s,%s,%s,%s,%s,%s,%s,NOW()) "
+           "ON CONFLICT (ticker) DO UPDATE SET nome = COALESCE(NULLIF(EXCLUDED.nome, ''), mercado_bodiva.nome), "
+           "tipo = COALESCE(NULLIF(EXCLUDED.tipo, ''), mercado_bodiva.tipo), preco = EXCLUDED.preco, variacao = EXCLUDED.variacao, "
+           "volume = EXCLUDED.volume, fonte = EXCLUDED.fonte, actualizado_em = NOW()")
+
+    def _run(conn):
+        with conn.cursor() as cur:
+            psycopg2.extras.execute_batch(cur, sql, linhas)
+    _com_reconexao(_run)
+
+
+def ler_mercado_guardado() -> pd.DataFrame:
+    _garantir_tabelas_extra()
+    df = consultar_df("SELECT ticker, nome, tipo, preco, variacao, volume, fonte, actualizado_em FROM mercado_bodiva ORDER BY nome, ticker")
+    for c in ("preco", "variacao", "volume"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+
+def _gravar_historico_clube(df: pd.DataFrame):
+    """Opcional (ligado pelo administrador): regista no histórico o último preço do dia dos títulos do Clube."""
+    if cfg_mercado_get("auto_historico", "0") != "1":
+        return
+    activos = obter_activos()
+    mapa = {_tk_norm(r["ticker"]): float(r["preco"]) for _, r in activos.iterrows() if str(r["ticker"] or "").strip()}
+    hoje = datetime.now().date()
+    for _, r in df.iterrows():
+        atual = mapa.get(_tk_norm(r["ticker"]))
+        if atual is None or r["preco"] is None or r["preco"] <= 0:
+            continue
+        if atual > 0 and abs(r["preco"] / atual - 1) > 0.5:      # mesma salvaguarda de ±50% do fluxo manual
+            continue
+        executar("INSERT INTO historico_cotacoes (dia, ticker, preco) VALUES (%s, %s, %s) ON CONFLICT (ticker, dia) DO UPDATE SET preco = EXCLUDED.preco",
+                 (hoje, str(r["ticker"]).strip().upper(), float(r["preco"])))
+
+
+@st.cache_data(ttl=55, show_spinner=False)
+def _mercado_bodiva_remoto() -> dict:
+    """Vai à BODIVA no máximo uma vez por minuto (cache partilhada) e guarda o resultado na base de dados."""
+    ts = datetime.now()
+    try:
+        df = _parsear_resposta_bodiva(_pedido_bodiva())
+        if df.empty:
+            return {"ok": False, "erro": "A resposta da BODIVA não contém títulos reconhecíveis (o formato pode ter mudado).", "ts": ts, "n": 0}
+        _guardar_mercado(df, "Automática (BODIVA)")
+        try:
+            _gravar_historico_clube(df)
+        except Exception:
+            traceback.print_exc()
+        return {"ok": True, "erro": None, "ts": ts, "n": len(df)}
+    except Exception as e:
+        return {"ok": False, "erro": f"{type(e).__name__}: {e}", "ts": ts, "n": 0}
+
+
+def importar_mercado_manual(df_ficheiro: pd.DataFrame) -> tuple:
+    """Resgate manual: grava a tabela de mercado a partir de um CSV/Excel do administrador. (importadas, ignoradas)"""
+    exigir_admin()
+    df = _registos_para_df(df_ficheiro.to_dict("records"))
+    if df.empty:
+        return 0, len(df_ficheiro)
+    _guardar_mercado(df, f"Manual (ficheiro) · {utilizador_actual()}")
+    try:
+        _gravar_historico_clube(df)
+    except Exception:
+        pass
+    registar_auditoria("mercado_manual", "mercado", "BODIVA", depois={"linhas": len(df)})
+    return len(df), max(len(df_ficheiro) - len(df), 0)
+
+
+def gerar_xlsx_mercado(df: pd.DataFrame) -> bytes:
+    linhas = [[r["ticker"], r["nome"], r["tipo"], r["preco"], r["variacao"], r["volume"], r["fonte"],
+               r["actualizado_em"].strftime("%d/%m/%Y %H:%M") if pd.notna(r["actualizado_em"]) else ""] for _, r in df.iterrows()]
+    return gerar_xlsx_tabela("Mercado BODIVA - todos os títulos cotados", f"Gerado em {agora()}",
+                             ["Ticker", "Título", "Tipo", "Preço (Kz)", "Var. %", "Volume", "Fonte", "Actualizado"], linhas,
+                             [14, 38, 16, 16, 10, 14, 26, 18], [None, None, None, "#,##0.00", '+0.00;-0.00;0.00', "#,##0", None, None],
+                             folha="Mercado BODIVA", nota="Dados públicos da BODIVA; confirma sempre no site oficial antes de decidir.", cor_cond=(5,))
+
+
+def _mercado_corpo():
+    estado = _mercado_bodiva_remoto()
+    df = ler_mercado_guardado()
+    admin = eh_admin()
+    if estado["ok"]:
+        render_html(f'<span class="fx-estado ok">🟢 Ligado à BODIVA · actualizado às {estado["ts"]:%H:%M:%S} · {estado["n"]} títulos · nova leitura automática a cada minuto</span>')
+    elif not df.empty:
+        ult = df["actualizado_em"].max()
+        render_html(f'<span class="fx-estado aviso">🟠 Ligação automática indisponível · a mostrar os últimos valores guardados '
+                    f'({ult:%d/%m/%Y %H:%M}, {_esc(str(df.sort_values("actualizado_em").iloc[-1]["fonte"]))})</span>')
+    else:
+        render_html('<span class="fx-estado erro">🔴 Sem dados de mercado de momento. O administrador pode carregar a tabela manualmente.</span>')
+    if admin and estado["erro"]:
+        st.caption(f"Detalhe técnico (só administradores): {estado['erro']}")
+    render_html('<div class="fx-aviso-membros"><b>Nota para os membros:</b> as cotações vêm da BODIVA e são lidas automaticamente de minuto a minuto. '
+                'Se a leitura falhar, mostramos o último valor validado, com a respectiva fonte, data e hora, para que nunca vejas dados sem origem. '
+                'Confirma sempre no site oficial antes de decidir.</div>')
+    if df.empty:
+        st.info("Ainda não há títulos na tabela de mercado.")
+        return
+    v = df["variacao"]
+    sobem, descem = int((v > 0).sum()), int((v < 0).sum())
+    estaveis = len(df) - sobem - descem
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Títulos cotados", len(df))
+    c2.metric("🟢 A subir", sobem)
+    c3.metric("🔴 A descer", descem)
+    c4.metric("⚪ Estáveis / s.d.", estaveis)
+    f1, f2 = st.columns([2, 1])
+    q = f1.text_input("🔎 Procurar título ou ticker", key="mkt_q", placeholder="Ex.: BAI, Unitel…")
+    tipos = ["Todos"] + sorted([t_ for t_ in df["tipo"].dropna().unique().tolist() if str(t_).strip()])
+    tipo_f = f2.selectbox("Tipo", tipos, key="mkt_tipo")
+    vis = df.copy()
+    if q.strip():
+        m = q.strip().lower()
+        vis = vis[vis["ticker"].str.lower().str.contains(m, na=False) | vis["nome"].str.lower().str.contains(m, na=False)]
+    if tipo_f != "Todos":
+        vis = vis[vis["tipo"] == tipo_f]
+    tabela = vis.rename(columns={"ticker": "Ticker", "nome": "Título", "tipo": "Tipo", "preco": "Preço (Kz)", "variacao": "Var. %",
+                                 "volume": "Volume", "fonte": "Fonte", "actualizado_em": "Actualizado"})
+    tabela.insert(0, "Logo", [logo_data_uri(t_) for t_ in vis["ticker"]])
+    sty = (tabela.style.format({"Preço (Kz)": kz2, "Var. %": lambda x: "—" if pd.isna(x) else pct_bruto(x),
+                                "Volume": lambda x: "—" if pd.isna(x) else f"{x:,.0f}".replace(",", " "),
+                                "Actualizado": lambda x: x.strftime("%d/%m %H:%M") if pd.notna(x) else "—"})
+           .map(cor_variacao, subset=["Var. %"]))
+    tabela_activos_clicavel(sty, vis, "tb_mercado", via_rerun=True)
+    with st.expander("🍩 Amplitude e composição do mercado", expanded=True):
+        g1, g2 = st.columns(2)
+        with g1:
+            grafico_anel(pd.DataFrame({"Estado": ["A subir", "A descer", "Estáveis / s.d."], "Títulos": [sobem, descem, estaveis]}),
+                         "Estado", "Títulos", "Amplitude do mercado", centro_valor=str(len(df)), paleta=["#0D9488", "#E11D48", "#94A3B8"], formato="num", chave="anel_amplitude")
+        with g2:
+            tp = df.assign(Tipo=df["tipo"].replace("", "Sem tipo")).groupby("Tipo").size().reset_index(name="Títulos")
+            grafico_anel(tp, "Tipo", "Títulos", "Títulos por tipo", centro_valor=str(len(df)), formato="num", chave="anel_tipos")
+    d1, d2 = st.columns(2)
+    xl = _xlsx_seguro(lambda: gerar_xlsx_mercado(tabela.rename(columns={"Ticker": "ticker", "Título": "nome", "Tipo": "tipo", "Preço (Kz)": "preco",
+                                                                         "Var. %": "variacao", "Volume": "volume", "Fonte": "fonte", "Actualizado": "actualizado_em"})))
+    if xl:
+        d1.download_button("⬇️ Descarregar Excel (mercado)", data=xl, file_name=f"mercado_bodiva_{datetime.now():%Y%m%d}.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_mkt_xlsx")
+    d2.download_button("⬇️ Descarregar CSV (mercado)", data=vis.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                       file_name=f"mercado_bodiva_{datetime.now():%Y%m%d}.csv", mime="text/csv", key="dl_mkt_csv")
+
+
+# Actualização automática: o fragmento volta a correr de 60 em 60 segundos sem recarregar a página toda.
+_mercado_fragmento = st.fragment(run_every=60)(_mercado_corpo) if hasattr(st, "fragment") else _mercado_corpo
+
+
+def _admin_mercado():
+    st.markdown("#### 🛟 Área do administrador · resgate manual e diagnóstico")
+    st.caption("Se a leitura automática falhar, carrega aqui a tabela do teu computador. Os dados ficam guardados e visíveis para todos os membros, com a indicação de fonte manual.")
+    with st.expander("📥 Carregar tabela de mercado (CSV ou Excel)"):
+        st.caption("Colunas aceites (cabeçalhos flexíveis): **ticker**, **nome**, **tipo**, **preço** (ou cotação/último), **variação** e **volume**.")
+        modelo = "ticker;nome;tipo;preco;variacao;volume\nBAIAAAAA;BAI;ACÇÃO;94600;1,25;350\n"
+        st.download_button("Modelo de ficheiro (CSV)", data=modelo.encode("utf-8-sig"), file_name="modelo_mercado_bodiva.csv", mime="text/csv", key="mkt_modelo")
+        f = st.file_uploader("Ficheiro de mercado", type=["csv", "xlsx"], key="mkt_up")
+        if f is not None and st.button("Importar tabela de mercado", key="mkt_imp"):
+            try:
+                dfi = pd.read_csv(f, sep=None, engine="python", encoding="utf-8-sig") if f.name.lower().endswith(".csv") else pd.read_excel(f)
+                if len(dfi) > 5000:
+                    st.error("O ficheiro tem demasiadas linhas (máximo 5 000).")
+                else:
+                    ok, mau = importar_mercado_manual(dfi)
+                    (st.success if ok else st.error)(f"Importados {ok} títulos" + (f"; {mau} linhas ignoradas (ticker ou preço inválidos)." if mau else ".") if ok else
+                                                     "Nenhuma linha válida: confirma os cabeçalhos (ticker, preço…).")
+            except Exception as e:
+                st.error(f"Não foi possível importar: {e}")
+    with st.expander("⚙️ Opções de automatização"):
+        auto_h = st.toggle("Gravar automaticamente no histórico o preço dos títulos do Clube (último preço do dia)",
+                           value=cfg_mercado_get("auto_historico", "0") == "1", key="mkt_auto_hist")
+        if auto_h != (cfg_mercado_get("auto_historico", "0") == "1"):
+            cfg_mercado_set("auto_historico", "1" if auto_h else "0")
+            st.rerun()
+        _mk0 = ler_mercado_guardado()
+        _idade_min = (datetime.now() - _mk0["actualizado_em"].max()).total_seconds() / 60 if not _mk0.empty else None
+        _forcar = False
+        if _idade_min is not None and _idade_min > 30:
+            st.warning(f"Os preços guardados têm {_idade_min / 60:.1f} h. Não os apliques sem confirmar que são de hoje: era assim que se repunham preços de ontem.")
+            _forcar = st.checkbox("Aplicar mesmo assim", key="mkt_forcar")
+        if st.button("✅ Aplicar estes preços aos activos do Clube (salvaguarda ±50%)", key="mkt_aplicar", disabled=(_idade_min is None or (_idade_min > 30 and not _forcar))):
+            mk = _mk0
+            mapa = {_tk_norm(r["ticker"]): float(r["preco"]) for _, r in mk.iterrows()}
+            novo = obter_activos()[["ticker", "nome", "tipo", "preco"]].copy()
+            n = 0
+            for i in novo.index:
+                p_nov = mapa.get(_tk_norm(novo.at[i, "ticker"]))
+                p_at = float(novo.at[i, "preco"])
+                if p_nov and not (p_at > 0 and abs(p_nov / p_at - 1) > 0.5):
+                    novo.at[i, "preco"] = p_nov
+                    n += 1
+            substituir_activos(novo)
+            st.success(f"{n} activos actualizados. Índice APPO e variações recalculados.")
+            st.rerun()
+    with st.expander("🧪 Diagnóstico da ligação à BODIVA"):
+        if st.button("Testar ligação agora", key="mkt_diag"):
+            try:
+                resp = _pedido_bodiva()
+                st.write(f"HTTP {resp.status_code} · {resp.headers.get('Content-Type', '?')} · {len(resp.content)} bytes")
+                df = _parsear_resposta_bodiva(resp)
+                st.write(f"Títulos reconhecidos: **{len(df)}**")
+                try:
+                    amostra = next(iter(_listas_de_registos(resp.json())), [])
+                    if amostra:
+                        st.caption("Campos do primeiro registo (para adaptar o leitor, se preciso):")
+                        st.code(", ".join(map(str, amostra[0].keys())))
+                except Exception:
+                    st.caption("A resposta não é JSON.")
+                if not df.empty:
+                    st.dataframe(df.head(15), hide_index=True)
+                else:
+                    st.code(resp.text[:1500])
+            except Exception as e:
+                st.error(f"Falhou: {e}")
+
+
+def painel_mercado_bodiva():
+    """Tabela de mercado completa (todos os títulos cotados), com actualização automática e resgate manual."""
+    _garantir_tabelas_extra()
+    _mercado_fragmento()
+    abrir_janela_pendente()
+    if eh_admin():
+        st.divider()
+        _admin_mercado()
+
+
+# =========================================================
+# COMPONENTES VISUAIS: gráficos de anel, biblioteca por níveis, Histórico & Relatórios avançado
+# =========================================================
+_PALETA_FX = ["#7C3AED", "#B0124A", "#F97316", "#E11D48", "#2563EB", "#F59E0B", "#A855F7", "#0EA5A4", "#D946EF", "#9D174D"]   # vivas; o vinho (#B0124A) é carregado, não acastanhado
+
+
+def grafico_anel(df: pd.DataFrame, cat: str, val: str, titulo: str = "", centro_titulo: str = "Total", centro_valor: str = "",
+                 altura: int = 320, formato: str = "kz", paleta=None, chave: str = None):
+    """Gráfico de anel rico: etiquetas de peso nas fatias, legenda, tooltip (valor, peso) e total ao centro."""
+    d = df[[cat, val]].copy()
+    d[val] = pd.to_numeric(d[val], errors="coerce")
+    d = d[d[val] > 0].reset_index(drop=True)
+    if titulo:
+        st.markdown(f"**{titulo}**")
+    if d.empty:
+        st.caption("Sem dados para este gráfico.")
+        return
+    total = float(d[val].sum())
+    d["Peso"] = d[val] / total
+    d["Valor"] = d[val].apply(kz if formato == "kz" else (lambda v: f"{v:,.0f}".replace(",", " ")))
+    try:
+        import altair as alt
+        cores = alt.Scale(domain=d[cat].tolist(), range=(paleta or _PALETA_FX)[:max(len(d), 1)] if paleta else (_PALETA_FX * 3)[:len(d)])
+        base = alt.Chart(d).encode(theta=alt.Theta(f"{val}:Q", stack=True),
+                                   color=alt.Color(f"{cat}:N", scale=cores, legend=alt.Legend(orient="right", direction="vertical", title=None, labelLimit=170, labelFontSize=12, symbolType="circle", symbolSize=110, padding=8)),
+                                   tooltip=[alt.Tooltip(f"{cat}:N", title="Item"), alt.Tooltip("Valor:N", title="Valor"), alt.Tooltip("Peso:Q", format=".1%", title="Peso")])
+        arco = base.mark_arc(innerRadius=78, outerRadius=128, cornerRadius=5, padAngle=0.02, stroke="#FFFFFF", strokeWidth=2)
+        rotulos = base.transform_filter(alt.datum.Peso >= 0.06).mark_text(radius=103, size=11, fontWeight="bold", color="#FFFFFF").encode(text=alt.Text("Peso:Q", format=".0%"))
+        L = 300
+        centro = alt.Chart(pd.DataFrame({"t": [centro_valor or (kz(total) if formato == "kz" else f"{total:,.0f}".replace(",", " "))], "s": [centro_titulo]}))
+        c1 = centro.mark_text(size=20, fontWeight="bold", color="#1B1033", dy=-6).encode(text="t:N", x=alt.value(L / 2), y=alt.value(L / 2))
+        c2 = centro.mark_text(size=11, color="#64748B", dy=14).encode(text="s:N", x=alt.value(L / 2), y=alt.value(L / 2))
+        graf = alt.layer(arco, rotulos, c1, c2).properties(width=L, height=altura - 20, padding={"left": 6, "right": 12, "top": 6, "bottom": 6}).configure_view(strokeWidth=0)
+        st.altair_chart(graf, use_container_width=True)
+    except Exception:
+        st.dataframe(d[[cat, "Valor", "Peso"]].assign(Peso=d["Peso"].map("{:.1%}".format)), hide_index=True)
+
+
+# ---------------------------------------------------------
+# Biblioteca: "Para iniciantes" / "Para investidores" com destaque imediato
+# ---------------------------------------------------------
+def _css_niveis_biblioteca():
+    render_html("""<style>
+    div[data-baseweb="tab-list"] { gap: 12px; border-bottom: 0; padding: 4px 0 10px 0; }
+    button[data-baseweb="tab"] { height: auto; padding: 8px 18px; border-radius: 12px; background: #FFFFFF; border: 2px solid #EDE7F6;
+      box-shadow: 0 6px 18px rgba(76, 29, 149, 0.08); transition: transform .12s ease, box-shadow .12s ease; }
+    button[data-baseweb="tab"]:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(76, 29, 149, 0.16); }
+    button[data-baseweb="tab"] p { font-size: 0.95rem; font-weight: 800; letter-spacing: -0.01em; }
+    button[data-baseweb="tab"]:nth-of-type(1)[aria-selected="true"] { background: linear-gradient(120deg, #1D4ED8, #6D28D9); border-color: transparent; }
+    button[data-baseweb="tab"]:nth-of-type(2)[aria-selected="true"] { background: var(--fx-grad); border-color: transparent; }
+    button[data-baseweb="tab"][aria-selected="true"] p { color: #FFFFFF; }
+    div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] { display: none; }
+    </style>""")
+
+
+def biblioteca_por_nivel(df_f: pd.DataFrame, tx: dict):
+    n_ini = int((df_f["nivel_efectivo"] == "iniciante").sum())
+    n_inv = int((df_f["nivel_efectivo"] == "investidor").sum())
+    render_html(
+        '<div class="fx-nivel">'
+        '<div class="fx-nivel-card fx-nivel-ini"><div class="fx-nivel-kicker">Começa aqui</div><div class="fx-nivel-titulo">🌱 Para iniciantes</div>'
+        '<p>Conceitos explicados passo a passo, sem jargão. O melhor ponto de partida para quem está a conhecer o mercado.</p>'
+        f'<span class="fx-nivel-n">{n_ini} artigos</span></div>'
+        '<div class="fx-nivel-card fx-nivel-inv"><div class="fx-nivel-kicker">Nível avançado</div><div class="fx-nivel-titulo">🚀 Para investidores</div>'
+        '<p>Análises de OPV, regras de negociação e leitura de mercado para quem já investe ou está pronto para o fazer.</p>'
+        f'<span class="fx-nivel-n">{n_inv} artigos</span></div></div>')
+    if eh_investidor():
+        _css_niveis_biblioteca()
+        t_ini, t_inv = st.tabs(["🌱 PARA INICIANTES", "🚀 SE ÉS INVESTIDOR, CLICA AQUI →"])
+        with t_ini:
+            _mostrar_artigos(df_f[df_f["nivel_efectivo"] == "iniciante"], tx)
+        with t_inv:
+            _mostrar_artigos(df_f[df_f["nivel_efectivo"] == "investidor"], tx)
+    else:
+        render_html('<div class="fx-titulo-secao">🌱 Para iniciantes</div>')
+        _mostrar_artigos(df_f[df_f["nivel_efectivo"] == "iniciante"], tx)
+        if n_inv:
+            render_html('<div class="fx-cta"><div class="fx-kicker">Já investes?</div><b>🚀 Se és investidor, clica aqui</b><br>'
+                        f'Há {n_inv} artigos avançados no portal Investidor. Faz o teu perfil para desbloquear o acesso.</div>')
+            st.button("🚀 Se és investidor, clica aqui", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="bib_cta_inv", type="primary")
+
+
+# ---------------------------------------------------------
+# Excel multi-folha da análise
+# ---------------------------------------------------------
+def _xlsx_preencher_folha(ws, titulo, subtitulo, colunas, linhas, larguras, formatos, nota="", cor_cond=()):
+    from openpyxl.utils import get_column_letter
+    e = _xlsx_estilos()
+    n = len(colunas)
+    for i, w in enumerate(larguras, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    cab = _xlsx_banner(ws, n, titulo, subtitulo)
+    for j, nome in enumerate(colunas, start=1):
+        c = ws.cell(row=cab, column=j, value=nome)
+        c.font = e["Font"](name="Calibri", size=10, bold=True, color="FFFFFF")
+        c.fill, c.border = e["f_bord"], e["borda"]
+        c.alignment = e["Alignment"](horizontal="center", vertical="center", wrap_text=True)
+    ws.row_dimensions[cab].height = 30
+    for i, linha in enumerate(linhas):
+        r = cab + 1 + i
+        fundo = e["f_creme"] if i % 2 else e["f_branco"]
+        for j, valor in enumerate(linha, start=1):
+            c = ws.cell(row=r, column=j, value=("n/d" if valor is None or (isinstance(valor, float) and valor != valor) else valor))
+            c.fill, c.border = fundo, e["borda"]
+            c.font = e["Font"](name="Calibri", size=10, color="1A1A2E")
+            eh_num = isinstance(valor, (int, float)) and not isinstance(valor, bool) and valor == valor
+            if formatos[j - 1] and eh_num:
+                c.number_format = formatos[j - 1]
+            c.alignment = e["Alignment"](horizontal="right" if eh_num else ("center" if c.value == "n/d" else "left"), vertical="center", indent=0 if eh_num else 1)
+        ws.row_dimensions[r].height = 20
+    ultima = cab + len(linhas)
+    ws.freeze_panes = ws.cell(row=cab + 1, column=2)
+    if linhas:
+        _xlsx_cor_sinal(ws, [f"{get_column_letter(j)}{cab + 1}:{get_column_letter(j)}{ultima}" for j in cor_cond])
+    _xlsx_rodape(ws, ultima + 2, n, nota)
+
+
+def gerar_xlsx_analise(a: dict) -> bytes:
+    import io
+    from openpyxl import Workbook
+    ps = [p for p, _ in HORIZ_RENT]
+    rot = [_rotulo_horiz(a, p, curto=False) for p in ps]
+    fpp = '+0.00;-0.00;0.00'
+    wb = Workbook()
+    sub = f"Gerado em {agora()} · dados até {a['datas']['fim']:%d/%m/%Y}"
+    inf, real = a["inflacao"], a["real"]
+    L1 = [["Carteira do Clube (nominal, %)"] + [a["ret_carteira"][p] for p in ps],
+          ["Índice APPO (%)"] + [a["ret_appo"][p] for p in ps], ["Índice BODIVA (%)"] + [a["ret_bodiva"][p] for p in ps],
+          ["Alpha vs Índice APPO (p.p.)"] + [a["alpha_appo"][p] for p in ps], ["Alpha vs Índice BODIVA (p.p.)"] + [a["alpha_bodiva"][p] for p in ps],
+          ["Inflação homóloga (YoY) no período (%)"] + [inf[p]["yoy"] for p in ps], ["Inflação vigente no período (%)"] + [inf[p]["vig"] for p in ps],
+          ["Inflação projectada no período (%)"] + [inf[p]["proj"] for p in ps],
+          ["Rentabilidade real (YoY) (%)"] + [real[p]["yoy"] if real.get(p) else None for p in ps],
+          ["Rentabilidade real (vigente) (%)"] + [real[p]["vig"] if real.get(p) else None for p in ps],
+          ["Rentabilidade real (projectada) (%)"] + [real[p]["proj"] if real.get(p) else None for p in ps]]
+    _xlsx_preencher_folha(wb.active, "Matriz comparativa de desempenho", sub, ["Indicador"] + rot, L1, [40] + [17] * 6, [None] + [fpp] * 6,
+                          "Rentabilidade de preço (sem dividendos nem custos). Alpha = excesso de retorno face ao índice, na mesma janela.", cor_cond=tuple(range(2, 8)))
+    wb.active.title = "Matriz comparativa"
+    L2 = [[t_["nome"], t_["peso"], t_["valor"], t_["custo"], t_["mais_valia"]] + [t_["ret"][p] for p in ps] + [t_["sigma_a"], t_["dd_max"], (t_["contrib"] * 100) if t_["contrib"] is not None else None] for t_ in a["titulos"]]
+    _xlsx_preencher_folha(wb.create_sheet("Por título"), "Rentabilidade multitemporal por título", sub,
+                          ["Título", "Peso", "Valor actual (Kz)", "Custo (Kz)", "Mais-valia (Kz)"] + rot + ["Volat. anual. (%)", "Drawdown máx. (%)", "Contrib. risco (%)"], L2,
+                          [30, 9, 18, 18, 18] + [15] * 6 + [15, 15, 15], [None, "0.0%", "#,##0", "#,##0", "#,##0"] + [fpp] * 6 + ["0.00", "0.00", "0.0"],
+                          cor_cond=(5,) + tuple(range(6, 12)))
+    pr = a["premissas"]
+    L3 = [["Inflação homóloga (YoY)", pr["inflacao_homologa"] * 100, "Ganho/perda real de poder de compra (12 meses)"],
+          ["Inflação vigente (variação mensal)", pr["inflacao_vigente_m"] * 100, "Pulso conjuntural imediato"],
+          ["Inflação projectada (12 meses)", pr["inflacao_projectada"] * 100, "Stress e preservação de capital"]]
+    _xlsx_preencher_folha(wb.create_sheet("Inflação"), "Inflação de Angola (premissas)", sub, ["Dimensão", "Valor (%)", "Leitura"], L3, [38, 14, 55], [None, "0.00", None],
+                          nota=f"Fonte/data: {pr.get('inflacao_ref') or 'valores por defeito - por confirmar com o INE'}")
+    rk = a["risco"]
+    g = lambda ch: [rk[x].get(ch) if rk.get(x) else None for x in ("carteira", "appo", "bodiva")]
+    L4 = [["Observações"] + g("n"), ["Desvio padrão diário (%)"] + g("sigma_d"), ["Volatilidade anualizada (%)"] + g("sigma_a"), ["Drawdown máximo (%)"] + g("dd_max"),
+          ["VaR histórico 95% (1 dia, %)"] + g("var95"), ["Tracking error vs APPO (%)", rk["carteira"].get("te"), None, None],
+          ["Information ratio vs APPO", rk["carteira"].get("ir"), None, None], ["Beta vs Índice BODIVA", rk["carteira"].get("beta"), None, None],
+          ["Sharpe", rk["carteira"].get("sharpe"), None, None]]
+    _xlsx_preencher_folha(wb.create_sheet("Risco"), "Análise de risco e desvio padrão", sub, ["Métrica", "Carteira", "Índice APPO", "Índice BODIVA"], L4,
+                          [40, 16, 16, 16], [None, "0.00", "0.00", "0.00"], nota="Com poucas observações (<30) as métricas são indicativas.")
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------
+# Página Histórico & Relatórios
+# ---------------------------------------------------------
+def _df_matriz(a: dict) -> pd.DataFrame:
+    ps = [p for p, _ in HORIZ_RENT]
+    cols = [_rotulo_horiz(a, p, curto=False) for p in ps]
+    inf, real = a["inflacao"], a["real"]
+    linhas = {
+        "Carteira do Clube (nominal)": a["ret_carteira"], "Índice APPO": a["ret_appo"], "Índice BODIVA": a["ret_bodiva"],
+        "Alpha vs Índice APPO (p.p.)": a["alpha_appo"], "Alpha vs Índice BODIVA (p.p.)": a["alpha_bodiva"],
+        "Inflação homóloga (YoY)": {p: inf[p]["yoy"] for p in ps}, "Inflação vigente": {p: inf[p]["vig"] for p in ps},
+        "Inflação projectada": {p: inf[p]["proj"] for p in ps},
+        "Rentabilidade real (YoY)": {p: real[p]["yoy"] if real.get(p) else None for p in ps},
+        "Rentabilidade real (vigente)": {p: real[p]["vig"] if real.get(p) else None for p in ps},
+        "Rentabilidade real (projectada)": {p: real[p]["proj"] if real.get(p) else None for p in ps}}
+    return pd.DataFrame({k: [v.get(p) for p in ps] for k, v in linhas.items()}, index=cols).T.astype(float)
+
+
+def _fmt_pct_nd(v):
+    return "n/d" if pd.isna(v) else f"{v:+.2f}%"
+
+
+def _aba_rentabilidade(a: dict, tx):
+    ps = [p for p, _ in HORIZ_RENT]
+    p = _melhor_horizonte(a)
+    c1, c2, c3, c4 = st.columns(4)
+    if p:
+        rot = _rotulo_horiz(a, p, curto=False)
+        c1.metric(f"Carteira · {rot}", _fmt_pct_nd(a["ret_carteira"][p]))
+        aa, ab = a["alpha_appo"].get(p), a["alpha_bodiva"].get(p)
+        c2.metric("Alpha vs APPO", "n/d" if aa is None else f"{aa:+.2f} p.p.", delta=None if aa is None else ("acima" if aa > 0 else "abaixo"))
+        c3.metric("Alpha vs BODIVA", "n/d" if ab is None else f"{ab:+.2f} p.p.", delta=None if ab is None else ("acima" if ab > 0 else "abaixo"))
+        rr = a["real"].get(p)
+        c4.metric("Rentab. real (YoY)", "n/d" if not rr else f"{rr['yoy']:+.2f}%", delta=None if not rr else ("ganho de poder de compra" if rr["yoy"] > 0 else "perda de poder de compra"))
+    st.markdown("##### Matriz comparativa multitemporal")
+    m = _df_matriz(a)
+    linhas_cor = [i for i in m.index if not i.startswith("Inflação")]
+    sty = m.style.format(_fmt_pct_nd).map(cor_variacao, subset=pd.IndexSlice[linhas_cor, :])
+    st.dataframe(sty)
+    st.caption("Alpha = retorno da carteira − retorno do índice na mesma janela (p.p.). Janelas sem histórico completo aparecem como n/d. "
+               + (f"A coluna de longo prazo é acumulada desde {a['inicio_comum']:%d/%m/%Y} (data comum às três séries). " if a.get("acumulado") else "")
+               + "Rentabilidade de preço: não inclui dividendos nem custos. Índice BODIVA = cotação média encadeada.")
+    st.markdown("##### Rentabilidade multitemporal por título")
+    tab = pd.DataFrame([{"Título": _pdf_nome_curto(t_["nome"]), "Peso": t_["peso"] * 100, **{_rotulo_horiz(a, p_, curto=False): t_["ret"].get(p_) for p_ in ps}} for t_ in a["titulos"]])
+    cols_ret = [c for c in tab.columns if c not in ("Título", "Peso")]
+    st.dataframe(tab.style.format({"Peso": "{:.1f}%", **{c: _fmt_pct_nd for c in cols_ret}}).map(cor_variacao, subset=cols_ret), hide_index=True)
+    if a["serie_appo"] is not None and len(a["serie_appo"]) >= 2:
+        st.markdown("##### Carteira vs índices (base 100 na data comum)")
+        ini = max(a["serie_carteira"].index[0], a["serie_appo"].index[0], a["serie_bodiva"].index[0])
+        comp = pd.concat([a["serie_carteira"].rename("Carteira"), a["serie_appo"].rename("Índice APPO"), a["serie_bodiva"].rename("Índice BODIVA")], axis=1).ffill()
+        comp = comp[comp.index >= ini].dropna()
+        if len(comp) >= 2:
+            fx_linhas(comp / comp.iloc[0] * 100)
+
+
+def _aba_inflacao(a: dict):
+    pr = a["premissas"]
+    if not pr.get("inflacao_ref"):
+        st.warning("As três medidas de inflação estão com valores por defeito. O administrador deve inserir os dados do INE em "
+                   "Painel do Administrador › Avaliação › Inflação de Angola.")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Inflação homóloga (YoY)", f"{pr['inflacao_homologa'] * 100:.2f}%", help="Ganho ou perda real de poder de compra nos últimos 12 meses.")
+    c2.metric("Inflação vigente (mensal)", f"{pr['inflacao_vigente_m'] * 100:.2f}% m/m", delta=f"≈ {((1 + pr['inflacao_vigente_m']) ** 12 - 1) * 100:.1f}% anualizada", delta_color="off", help="Pulso conjuntural imediato.")
+    c3.metric("Inflação projectada (12M)", f"{pr['inflacao_projectada'] * 100:.2f}%", help="Teste de stress e preservação de capital.")
+    st.caption(f"Fonte/data: {pr.get('inflacao_ref') or 'por confirmar'}")
+    ps = [p for p, _ in HORIZ_RENT]
+    cols = [_rotulo_horiz(a, p, curto=False) for p in ps]
+    real = a["real"]
+    tab = pd.DataFrame({"Carteira (nominal)": [a["ret_carteira"][p] for p in ps],
+                        "Real · inflação YoY": [real[p]["yoy"] if real.get(p) else None for p in ps],
+                        "Real · inflação vigente": [real[p]["vig"] if real.get(p) else None for p in ps],
+                        "Real · inflação projectada": [real[p]["proj"] if real.get(p) else None for p in ps]}, index=cols).astype(float)
+    st.markdown("##### Rentabilidade real por horizonte")
+    st.dataframe(tab.T.style.format(_fmt_pct_nd).map(cor_variacao))
+    st.markdown("##### Teste de stress · poder de compra de 100 000 Kz sem rendimento")
+    ip = pr["inflacao_projectada"]
+    linhas = []
+    for nome, i_ in (("Inflação projectada", ip), ("Projectada + 5 p.p. (stress)", ip + 0.05)):
+        linhas.append({"Cenário": nome, **{f"{n} ano(s)": f"{100000 / (1 + i_) ** n:,.0f} Kz".replace(",", " ") for n in (1, 3, 5)}})
+        linhas.append({"Cenário": f"Retorno nominal necessário · {nome}", **{f"{n} ano(s)": f"{((1 + i_) ** n - 1) * 100:.1f}%" for n in (1, 3, 5)}})
+    st.dataframe(pd.DataFrame(linhas), hide_index=True)
+
+
+def _aba_risco(a: dict):
+    rk = a["risco"]
+    cart = rk["carteira"]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Volatilidade anualizada", "n/d" if cart.get("sigma_a") is None else f"{cart['sigma_a']:.2f}%", help="Desvio padrão diário × √252.")
+    c2.metric("Desvio padrão diário", "n/d" if cart.get("sigma_d") is None else f"{cart['sigma_d']:.2f}%")
+    c3.metric("Drawdown máximo", "n/d" if cart.get("dd_max") is None else f"{cart['dd_max']:.2f}%")
+    c4.metric("VaR 95% (1 dia)", "n/d" if cart.get("var95") is None else f"{cart['var95']:.2f}%", help="Precisa de pelo menos 20 observações.")
+    nd = lambda v, c=2, s="": "n/d" if v is None else f"{v:.{c}f}{s}"
+    tab = pd.DataFrame([
+        ["Observações"] + [str(rk[x].get("n", 0)) if rk.get(x) else "n/d" for x in ("carteira", "appo", "bodiva")],
+        ["Volatilidade anualizada"] + [nd(rk[x].get("sigma_a"), 2, "%") if rk.get(x) else "n/d" for x in ("carteira", "appo", "bodiva")],
+        ["Drawdown máximo"] + [nd(rk[x].get("dd_max"), 2, "%") if rk.get(x) else "n/d" for x in ("carteira", "appo", "bodiva")],
+        ["Tracking error vs APPO", nd(cart.get("te"), 2, "%"), "—", "—"], ["Information ratio vs APPO", nd(cart.get("ir")), "—", "—"],
+        ["Beta vs Índice BODIVA", nd(cart.get("beta")), "—", "—"], ["Sharpe (Rf das premissas)", nd(cart.get("sharpe")), "—", "—"]],
+        columns=["Métrica", "Carteira", "Índice APPO", "Índice BODIVA"])
+    st.dataframe(tab, hide_index=True)
+    st.markdown("##### Risco por título")
+    rt = pd.DataFrame([{"Título": _pdf_nome_curto(t_["nome"]), "Peso (%)": t_["peso"] * 100, "Volat. anual. (%)": t_["sigma_a"], "Drawdown máx. (%)": t_["dd_max"],
+                        "Contrib. risco (%)": (t_["contrib"] * 100) if t_["contrib"] is not None else None} for t_ in a["titulos"]])
+    st.dataframe(rt.style.format({c: (lambda v: "n/d" if pd.isna(v) else f"{v:.2f}") for c in rt.columns if c != "Título"}), hide_index=True)
+    cc = a["concentracao"]
+    st.caption(f"Número efectivo de activos (1/HHI): {cc['n_efectivo']:.1f} · maior posição: {cc['maior'][0]} ({cc['maior'][1] * 100:.1f}%). "
+               "Contribuição para o risco = peso × covariância com a carteira ÷ variância total.")
+    if cart.get("n", 0) < 30:
+        st.info("Poucas observações: as métricas de risco são indicativas até haver mais histórico de cotações.")
+
+
+def _aba_composicao(a: dict, resumo: dict):
+    tit = pd.DataFrame([{"Activo": _pdf_nome_curto(t_["nome"]), "Valor": t_["valor"], "Qtd": t_["qtd"],
+                         "Sector": _pdf_sector({"ticker": t_["ticker"], "nome": t_["nome"]})} for t_ in a["titulos"]])
+    c1, c2 = st.columns(2)
+    with c1:
+        grafico_anel(tit, "Activo", "Valor", "Carteira por activo (valor actual)", centro_titulo="Valor da carteira", chave="anel_ativo")
+    with c2:
+        grafico_anel(tit, "Activo", "Qtd", "Carteira por activo (quantidade de títulos)", centro_titulo="Títulos", formato="num", chave="anel_qtd")
+    c3, c4 = st.columns(2)
+    with c3:
+        grafico_anel(tit.groupby("Sector", as_index=False)["Valor"].sum(), "Sector", "Valor", "Carteira por sector", centro_titulo="Valor da carteira", chave="anel_sector")
+    with c4:
+        res_liq = float(resumo.get("reservas", 0) or 0)
+        por_real = max(float(resumo.get("capital_subscrito", 0) or 0) - float(resumo.get("capital_realizado", 0) or 0), 0)
+        fundo = pd.DataFrame({"Componente": ["Carteira de acções", "Reservas de liquidez", "Capital por realizar"], "Valor": [a["valor_total"], res_liq, por_real]})
+        grafico_anel(fundo, "Componente", "Valor", "Estrutura do fundo global", centro_titulo="Fundo global", chave="anel_fundo")
+    mv = pd.DataFrame({"Item": ["Custo de aquisição", "Mais-valia"], "Valor": [min(a["custo_total"], a["valor_total"]), max(a["valor_total"] - a["custo_total"], 0)]})
+    if a["valor_total"] > a["custo_total"] > 0:
+        grafico_anel(mv, "Item", "Valor", "Valor actual: custo vs mais-valia", centro_titulo="Valor actual", paleta=["#6D28D9", "#0D9488"], chave="anel_mv")
+
+
+def _aba_historico_movimentos(tx, df_movimentos):
+    df_historico = obter_historico_patrimonio()
+    if df_historico.empty or len(df_historico) < 2:
+        st.info(tx["hist_poucos_pontos"])
+    else:
+        st.caption(tx["hist_caption"])
+        grafico_area_simples(df_historico.set_index("registado_em")[["total"]], tx["hist_patrimonio_label"])
+    st.divider()
+    st.subheader(tx["hist_movimentos"])
+    if df_movimentos.empty:
+        st.info(tx["hist_sem_movimentos"])
+        return
+    df_exibir = df_movimentos.copy()
+    df_exibir["montante_fmt"] = df_exibir["montante"].apply(kz)
+    st.dataframe(df_exibir[["tipo", "descricao", "montante_fmt", "data_movimento", "criado_em"]].rename(columns=tx["hist_cols"]), hide_index=True)
+    c1, c2 = st.columns(2)
+    xl = _xlsx_seguro(lambda: gerar_xlsx_tabela(
+        "Movimentos do Clube", f"Gerado em {agora()}", ["Data", "Tipo", "Descrição", "Montante (Kz)"],
+        [[r["data_movimento"], r["tipo"], r["descricao"], float(r["montante"])] for _, r in df_movimentos.iterrows()],
+        [14, 26, 46, 20], ["dd/mm/yyyy", None, None, "#,##0"], folha="Movimentos", cor_cond=(4,)))
+    if xl:
+        c1.download_button("⬇️ Descarregar Excel (movimentos)", data=xl, file_name="movimentos_appo.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_mov_xlsx")
+    c2.download_button(tx["hist_descarregar_mov"], data=df_movimentos.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                       file_name="movimentos_appo.csv", mime="text/csv", key="dl_mov_csv")
+
+
+def _aba_relatorios(tx, a: dict, df_movimentos):
+    st.subheader(tx["hist_exportar"])
+    st.caption("O relatório PDF institucional inclui: sumário executivo e teses, matriz comparativa multitemporal com Alpha, "
+               "ajuste à inflação (homóloga, vigente e projectada), risco e desvio padrão, e gráficos de anel.")
+    if st.button("📄 " + tx["hist_gerar_pdf"], type="primary", key="btn_gerar_pdf"):
+        with st.spinner("A gerar o relatório…"):
+            try:
+                pdf_bytes = gerar_relatorio_pdf(obter_resumo_patrimonial(), obter_activos(), df_movimentos)
+                st.session_state["pdf_relatorio"] = (pdf_bytes, tx["pdf_nome_ficheiro"].format(data=datetime.now().strftime("%Y%m%d")), agora())
+            except Exception as e:
+                st.session_state.pop("pdf_relatorio", None)
+                traceback.print_exc()
+                st.error(f"Não foi possível gerar o PDF: {type(e).__name__}: {e}")
+    # o botão de descarga fica FORA do `if st.button`, senão desaparece no rerun que o próprio clique provoca
+    if st.session_state.get("pdf_relatorio"):
+        dados, nome, quando = st.session_state["pdf_relatorio"]
+        st.download_button(f"⬇️ {tx['hist_descarregar_pdf']} (gerado às {quando[-5:]})", data=dados, file_name=nome, mime="application/pdf", key="dl_relatorio_pdf")
+    st.divider()
+    if a.get("ok"):
+        xl = _xlsx_seguro(lambda: gerar_xlsx_analise(a))
+        if xl:
+            st.download_button("⬇️ Descarregar Excel · análise multitemporal (4 folhas)", data=xl, file_name=f"analise_appo_{datetime.now():%Y%m%d}.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_analise_xlsx")
+        m = _df_matriz(a)
+        st.download_button("⬇️ Descarregar CSV · matriz comparativa", data=m.to_csv(sep=";", decimal=",").encode("utf-8-sig"), file_name="matriz_comparativa_appo.csv", mime="text/csv", key="dl_matriz_csv")
+    else:
+        st.caption("As exportações analíticas ficam disponíveis assim que houver histórico de cotações e carteira registada.")
+
+
+# ---------------- Contabilidade: balanço, demonstração de resultados e fluxos de caixa ----------------
+RUBRICAS_CONTAB = {   # rubrica -> (grupo, descrição de ajuda)
+    "Dividendos recebidos":    ("rendimento", "Dividendos efectivamente recebidos."),
+    "Mais-valias realizadas":  ("rendimento", "Ganho em vendas já concretizadas."),
+    "Outros rendimentos":      ("rendimento", "Juros e outros rendimentos."),
+    "Comissões e corretagem":  ("gasto", "Comissões de corretoras, BODIVA e entidades de supervisão."),
+    "Impostos e taxas":        ("gasto", "Impostos e taxas incidentes sobre rendimentos e operações."),
+    "Menos-valias realizadas": ("gasto", "Perda em vendas já concretizadas."),
+    "Outros gastos":           ("gasto", "Outros gastos de funcionamento não registados noutro lado."),
+}
+
+
+def _soma_sql(sql, params=()):
+    r = consultar_um(sql, params)
+    return dec(r[0]) if r and r[0] is not None else D(0)
+
+
+def registar_lancamento_contab(data, rubrica: str, descricao: str, valor):
+    exigir_admin()
+    if rubrica not in RUBRICAS_CONTAB:
+        raise ValueError("Rubrica inválida.")
+    v = dec(valor)
+    if v <= 0:
+        raise ValueError("O valor deve ser maior que zero.")
+    with transaccao() as cur:
+        cur.execute("INSERT INTO lancamentos_contab (data, rubrica, descricao, valor, criado_por) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                    (data, rubrica, (descricao or "").strip() or None, v, utilizador_actual()))
+        novo = cur.fetchone()[0]
+        registar_auditoria("lancamento_contab", "lancamentos_contab", novo, depois={"rubrica": rubrica, "valor": str(v)}, cur=cur)
+
+
+def calcular_demonstracoes(ano: int) -> dict:
+    """Junta os dados que a app já tem (movimentos, carteira real, balanço, despesas) e os lançamentos contabilísticos do exercício."""
+    exigir_participante()
+    lanc = consultar_df("SELECT rubrica, COALESCE(SUM(valor), 0) AS v FROM lancamentos_contab WHERE EXTRACT(YEAR FROM data) = %s GROUP BY rubrica", (int(ano),))
+    por_rub = {r["rubrica"]: dec(r["v"]) for _, r in lanc.iterrows()}
+    g = lambda nome: por_rub.get(nome, D(0))
+    mov = lambda tipo: _soma_sql("SELECT COALESCE(SUM(montante), 0) FROM movimentos WHERE tipo = %s AND EXTRACT(YEAR FROM data_movimento) = %s", (tipo, int(ano)))
+    desp_grupo = _soma_sql("SELECT COALESCE(SUM(valor), 0) FROM despesas_admin WHERE estado = 'Aprovada' AND EXTRACT(YEAR FROM data) = %s", (int(ano),))
+    saidas = mov("Saída/Despesa")
+    compras, vendas, entradas = mov("Compra de Activo"), mov("Venda de Activo"), mov("Entrada de Capital")
+    # livro de transacções: mais/menos-valias realizadas, comissões e fluxos de investimento do exercício
+    mv_livro, menos_livro, com_livro, usa_livro = D(0), D(0), D(0), False
+    try:
+        tdf = obter_transaccoes_df()
+        _, vend_l = processar_transaccoes(tdf)
+        for v in vend_l:
+            if v["data"].year == int(ano):
+                if v["ganho"] >= 0:
+                    mv_livro += v["ganho"]
+                else:
+                    menos_livro += -v["ganho"]
+        if not tdf.empty:
+            tano = tdf[pd.to_datetime(tdf["data"]).dt.year == int(ano)]
+            if not tano.empty:
+                usa_livro = True
+                com_livro = sum((dec(x) for x in tano["comissao"]), D(0))
+                compras = sum((dec(r.qtd) * dec(r.preco_unit) for r in tano.itertuples() if r.tipo == "Compra"), D(0))
+                vendas = sum((dec(r.qtd) * dec(r.preco_unit) for r in tano.itertuples() if r.tipo == "Venda"), D(0))
+    except Exception:
+        pass
+    av = avaliar_carteira_real()
+    resumo = obter_resumo_patrimonial()
+    bal = obter_ultimo_balanco()
+    reservas_caixa = dec(resumo["reservas"])
+    # As reservas do Clube são o dinheiro em caixa. Usa-se o caixa do balanço registado, se existir e for positivo; senão, as reservas.
+    if bal and bal[2] is not None and dec(bal[2]) > 0:
+        caixa, caixa_origem = dec(bal[2]), "balanço registado"
+    else:
+        caixa, caixa_origem = reservas_caixa, "reservas do Clube"
+    outros = dec(bal[3]) if bal and bal[3] is not None else D(0)
+    passivos = dec(bal[4]) if bal and bal[4] is not None else D(0)
+
+    rendimentos = [("Dividendos recebidos", g("Dividendos recebidos")), ("Mais-valias realizadas", g("Mais-valias realizadas") + mv_livro), ("Outros rendimentos", g("Outros rendimentos"))]
+    gastos = [("Comissões e corretagem", g("Comissões e corretagem") + com_livro), ("Impostos e taxas", g("Impostos e taxas")), ("Menos-valias realizadas", g("Menos-valias realizadas") + menos_livro),
+              ("Despesas do grupo (aprovadas)", desp_grupo), ("Outras saídas/despesas (movimentos)", saidas), ("Outros gastos", g("Outros gastos"))]
+    t_rend, t_gast = sum((v for _, v in rendimentos), D(0)), sum((v for _, v in gastos), D(0))
+    realizado = t_rend - t_gast
+    latente = av["valor"] - av["custo"]
+    integral = realizado + latente
+
+    activo = [("Caixa e equivalentes", caixa), ("Carteira de investimentos (valor de mercado)", av["valor"]), ("Outros activos", outros)]
+    t_activo = sum((v for _, v in activo), D(0))
+    cap_realizado = dec(resumo["capital_realizado"])
+    t_cp = cap_realizado + integral
+    t_pass_cp = passivos + t_cp
+    return {
+        "ano": int(ano), "rendimentos": rendimentos, "gastos": gastos, "t_rend": t_rend, "t_gast": t_gast, "realizado": realizado,
+        "latente": latente, "integral": integral, "activo": activo, "t_activo": t_activo, "passivos": passivos, "cap_realizado": cap_realizado,
+        "reservas": dec(resumo["reservas"]), "t_cp": t_cp, "t_pass_cp": t_pass_cp, "diferenca": t_activo - t_pass_cp,
+        "tem_balanco": bal is not None, "sem_preco": av["sem_preco"], "caixa_origem": caixa_origem, "investimentos_custo": dec(resumo["investimentos"]),
+        "op": [("Dividendos recebidos", g("Dividendos recebidos")), ("Outros rendimentos", g("Outros rendimentos")),
+               ("Comissões e corretagem", -(g("Comissões e corretagem") + com_livro)), ("Impostos e taxas", -g("Impostos e taxas")),
+               ("Despesas do grupo (aprovadas)", -desp_grupo), ("Outras saídas/despesas", -saidas), ("Outros gastos", -g("Outros gastos"))],
+        "inv": [("Compra de activos", -compras), ("Venda de activos (produto da venda)", vendas)],
+        "fin": [("Entradas de capital dos sócios", entradas)], "usa_livro": usa_livro,
+    }
+
+
+def _tabela_contab(linhas, total_rot: str = None, total_val=None):
+    d = [{"Rubrica": r, "Valor": kz(float(v))} for r, v in linhas]
+    if total_rot is not None:
+        d.append({"Rubrica": total_rot, "Valor": kz(float(total_val))})
+    st.dataframe(pd.DataFrame(d), hide_index=True)
+
+
+# ---------------- Livro de transacções (custo médio ponderado) ----------------
+def obter_transaccoes_df(incluir_anuladas: bool = False) -> pd.DataFrame:
+    exigir_participante()
+    filtro = "" if incluir_anuladas else "WHERE anulada = FALSE "
+    return consultar_df("SELECT id, data, ticker, nome, tipo, qtd, preco_unit, comissao, nota, anulada, motivo_anulacao FROM transaccoes " + filtro + "ORDER BY data, id")
+
+
+def processar_transaccoes(df: pd.DataFrame):
+    """Custo médio ponderado. Devolve (posições por activo, vendas realizadas). As comissões NÃO entram no custo: são gasto do período.
+    Levanta ValueError se alguma venda exceder a posição detida nessa data."""
+    pos, vendas = {}, []
+    if df is None or df.empty:
+        return pos, vendas
+    for r in df.sort_values(["data", "id"]).itertuples():
+        k = _chave_ticker(r.ticker)
+        p = pos.setdefault(k, {"ticker": r.ticker, "nome": r.nome, "qtd": D(0), "custo": D(0)})
+        q, pr = dec(r.qtd), dec(r.preco_unit)
+        if r.tipo == "Compra":
+            p["qtd"] += q
+            p["custo"] += q * pr
+        else:
+            if q > p["qtd"]:
+                raise ValueError(f"A venda de {q} de {r.nome} em {pd.Timestamp(r.data):%d/%m/%Y} excede a posição detida nessa data ({p['qtd']}).")
+            cm = p["custo"] / p["qtd"]
+            vendas.append({"data": pd.Timestamp(r.data).date(), "ticker": r.ticker, "nome": r.nome, "qtd": q, "preco": pr, "custo_medio": cm,
+                           "ganho": q * (pr - cm), "comissao": dec(r.comissao)})
+            p["custo"] -= q * cm
+            p["qtd"] -= q
+    return pos, vendas
+
+
+def registar_transaccao(data, ticker: str, nome: str, tipo: str, qtd, preco, comissao, nota: str):
+    exigir_admin()
+    if tipo not in ("Compra", "Venda"):
+        raise ValueError("Tipo inválido.")
+    q, pr, cm = dec(qtd), dec(preco), dec(comissao or 0)
+    if not (ticker or "").strip():
+        raise ValueError("Escolha um activo com ticker.")
+    if q <= 0 or pr <= 0 or cm < 0:
+        raise ValueError("Quantidade e preço devem ser positivos e a comissão não pode ser negativa.")
+    novo = pd.DataFrame([{"id": 10**9, "data": data, "ticker": ticker, "nome": nome, "tipo": tipo, "qtd": q, "preco_unit": pr, "comissao": cm}])
+    processar_transaccoes(pd.concat([obter_transaccoes_df(), novo], ignore_index=True))   # valida antes de gravar
+    with transaccao() as cur:
+        cur.execute("INSERT INTO transaccoes (data, ticker, nome, tipo, qtd, preco_unit, comissao, nota, criado_por) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                    (data, ticker.strip().upper(), nome, tipo, q, pr, cm, (nota or "").strip()[:300] or None, utilizador_actual()))
+        nid = cur.fetchone()[0]
+        registar_auditoria("transaccao_registada", "transaccoes", nid, depois={"tipo": tipo, "ticker": ticker, "qtd": str(q), "preco": str(pr), "comissao": str(cm)}, cur=cur)
+
+
+def anular_transaccao(tid: int, motivo: str):
+    exigir_admin()
+    if not (motivo or "").strip():
+        raise ValueError("Indique o motivo da anulação.")
+    resto = obter_transaccoes_df()
+    processar_transaccoes(resto[resto["id"] != int(tid)])   # a anulação não pode invalidar vendas posteriores
+    with transaccao() as cur:
+        cur.execute("UPDATE transaccoes SET anulada = TRUE, motivo_anulacao = %s WHERE id = %s AND anulada = FALSE", (motivo.strip()[:300], int(tid)))
+        registar_auditoria("transaccao_anulada", "transaccoes", tid, motivo=motivo.strip()[:300], cur=cur)
+
+
+def rentabilidade_clube_periodos() -> tuple:
+    """Rentabilidade do Clube (variação do valor da unidade) por período. Devolve (linhas, info do VUP)."""
+    info = obter_vup_info()
+    if info["estado"] == "Não calculado" or info["vup"] <= 0:
+        return [], info
+    hist = consultar_df("SELECT dia, vup FROM historico_vup ORDER BY dia")
+    hoje = datetime.now().date()
+    from datetime import timedelta
+    marcos = [(f"Desde 1 de Janeiro de {hoje.year}", datetime(hoje.year, 1, 1).date()), ("Últimos 3 meses", hoje - timedelta(days=91)),
+              ("Últimos 12 meses", hoje - timedelta(days=365))]
+    linhas = []
+    for rot, ini in marcos:
+        h = hist[hist["dia"] >= ini] if not hist.empty else hist
+        if h is None or h.empty:
+            linhas.append((rot, None, None))
+            continue
+        v0 = float(h.iloc[0]["vup"])
+        linhas.append((rot, v0, info["vup"] / v0 - 1 if v0 > 0 else None))
+    if info["vup_base"] > 0:
+        linhas.append(("Desde a origem (valor-base da unidade)", info["vup_base"], info["vup"] / info["vup_base"] - 1))
+    return linhas, info
+
+
+def rentabilidade_por_socio(vup: float) -> pd.DataFrame:
+    """Ganho = valor actual das unidades + resgates recebidos - subscrições. Rentabilidade acumulada simples (não anualizada)."""
+    mv = obter_unidades_movimentos(incluir_anulados=False)
+    if mv.empty:
+        return pd.DataFrame()
+    mv = mv[mv["estado"] == "Validado"]
+    linhas = []
+    for socio, g_ in mv.groupby("socio"):
+        subs = float(g_.loc[g_["montante"].astype(float) > 0, "montante"].astype(float).sum())
+        resg = -float(g_.loc[g_["montante"].astype(float) < 0, "montante"].astype(float).sum())
+        un = float(g_["unidades"].astype(float).sum())
+        valor = un * vup
+        ganho = valor + resg - subs
+        linhas.append({"Sócio": socio, "Subscrições": kz(subs), "Resgates": kz(resg), "Unidades": f"{un:,.4f}".replace(",", " "),
+                       "Valor actual": kz(valor), "Ganho": kz(ganho), "Rentabilidade": _pct_sinal(ganho / subs) if subs > 0 else "—"})
+    return pd.DataFrame(linhas)
+
+
+def render_livro_transaccoes():
+    try:
+        df = obter_transaccoes_df()
+        pos, vendas = processar_transaccoes(df)
+    except Exception as e:
+        st.error(f"O livro de transacções tem uma inconsistência: {e}")
+        return
+    act = obter_activos()
+    preco_por = {_chave_ticker(r["ticker"]): float(r["preco"]) for _, r in act.iterrows() if str(r["ticker"]).strip()}
+    st.markdown("#### Posições (custo médio ponderado)")
+    linhas = []
+    for k, p in pos.items():
+        if p["qtd"] <= 0:
+            continue
+        cm = p["custo"] / p["qtd"]
+        pr = preco_por.get(k)
+        vm = float(p["qtd"]) * pr if pr else None
+        linhas.append({"Logo": logo_data_uri(p["ticker"]), "Activo": p["nome"], "Quantidade": f"{float(p['qtd']):,.0f}".replace(",", " "), "Custo médio": kz(float(cm)),
+                       "Custo total": kz(float(p["custo"])), "Preço actual": kz(pr) if pr else "—", "Valor de mercado": kz(vm) if vm else "—",
+                       "Mais-valia latente": _pct_sinal(vm / float(p["custo"]) - 1) if vm and p["custo"] > 0 else "—"})
+    if linhas:
+        st.dataframe(pd.DataFrame(linhas), hide_index=True, column_config=cfg_logo())
+    else:
+        st.info("Ainda não há transacções registadas." if df.empty else "Não há posições abertas.")
+    st.caption("Custo médio ponderado; as comissões não entram no custo, são gasto do período (Demonstração de Resultados).")
+
+    if vendas:
+        st.markdown("#### Vendas realizadas")
+        st.dataframe(pd.DataFrame([{"Data": v["data"].strftime("%d/%m/%Y"), "Activo": v["nome"], "Quantidade": f"{float(v['qtd']):,.0f}".replace(",", " "),
+                                    "Preço de venda": kz(float(v["preco"])), "Custo médio": kz(float(v["custo_medio"])), "Ganho/Perda": kz(float(v["ganho"])),
+                                    "Comissão": kz(float(v["comissao"]))} for v in vendas[::-1]]), hide_index=True)
+        por_ano = {}
+        for v in vendas:
+            a = por_ano.setdefault(v["data"].year, [D(0), D(0)])
+            a[0] += v["ganho"]; a[1] += v["comissao"]
+        for tr in df.itertuples():
+            if tr.tipo == "Compra":
+                por_ano.setdefault(pd.Timestamp(tr.data).year, [D(0), D(0)])[1] += dec(tr.comissao)
+        st.dataframe(pd.DataFrame([{"Ano": a, "Mais/menos-valias realizadas": kz(float(v[0])), "Comissões pagas": kz(float(v[1]))} for a, v in sorted(por_ano.items(), reverse=True)]), hide_index=True)
+
+    try:   # comparação com a carteira real registada à mão
+        cart = obter_carteira_real()
+        dif = []
+        for _, l in cart.iterrows():
+            k = _chave_ticker(l["ticker"])
+            q_l = float(pos[k]["qtd"]) if k in pos else 0.0
+            if abs(q_l - float(l["qtd"] or 0)) > 1e-9:
+                dif.append({"Activo": l["nome"], "Quantidade na carteira real": f"{float(l['qtd'] or 0):,.0f}".replace(",", " "), "Quantidade no livro": f"{q_l:,.0f}".replace(",", " ")})
+        if pos and dif:
+            st.warning("O livro de transacções e a carteira real não coincidem nestes activos:")
+            st.dataframe(pd.DataFrame(dif), hide_index=True)
+        elif pos:
+            st.success("✅ As quantidades do livro coincidem com a carteira real.")
+    except Exception:
+        pass
+
+    with st.expander("📜 Todas as transacções"):
+        todas = obter_transaccoes_df(incluir_anuladas=True)
+        if todas.empty:
+            st.caption("Sem registos.")
+        else:
+            v = todas.copy()
+            v["preco_unit"] = v["preco_unit"].apply(lambda x: kz(float(x)))
+            v["comissao"] = v["comissao"].apply(lambda x: kz(float(x)))
+            st.dataframe(v, hide_index=True)
+
+    if eh_admin():
+        with st.expander("➕ Registar transacção (administrador)"):
+            st.info("Notas para o administrador: (1) as comissões não entram no custo de aquisição; são gasto do período e aparecem à parte na Demonstração de Resultados "
+                    "(se o contabilista preferir incluí-las no custo, é uma alteração pequena); (2) não lance a mesma comissão aqui e nos lançamentos contabilísticos, "
+                    "para não a contar duas vezes.")
+            ac = act[act["ticker"].astype(str).str.strip() != ""]
+            if ac.empty:
+                st.warning("Registe primeiro os activos com ticker em «Cotações & Activos».")
+            else:
+                with st.form("form_transaccao", clear_on_submit=True):
+                    t1, t2 = st.columns(2)
+                    tk = t1.selectbox("Activo", ac["ticker"].tolist(), format_func=lambda x: f"{ac.loc[ac['ticker'] == x, 'nome'].iloc[0]} ({x})")
+                    tp = t2.radio("Operação", ["Compra", "Venda"], horizontal=True)
+                    dt = st.date_input("Data da operação", format="DD/MM/YYYY")
+                    u1, u2, u3 = st.columns(3)
+                    qt = u1.number_input("Quantidade", min_value=0.0, step=1.0)
+                    pu = u2.number_input("Preço unitário (Kz)", min_value=0.0, step=100.0)
+                    cmz = u3.number_input("Comissão total (Kz)", min_value=0.0, step=100.0)
+                    nt = st.text_input("Nota (opcional)", max_chars=300)
+                    gr = st.form_submit_button("Registar transacção")
+                if gr:
+                    try:
+                        registar_transaccao(dt, tk, str(ac.loc[ac["ticker"] == tk, "nome"].iloc[0]), tp, qt, pu, cmz, nt)
+                        st.success("Transacção registada.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+        with st.expander("🚫 Anular transacção (administrador)"):
+            if df.empty:
+                st.caption("Sem transacções para anular.")
+            else:
+                ids = df["id"].astype(int).tolist()[::-1]
+                tid = st.selectbox("Transacção", ids, format_func=lambda i: f"#{i} · {df.loc[df['id'] == i, 'tipo'].iloc[0]} · {df.loc[df['id'] == i, 'nome'].iloc[0]} · {pd.Timestamp(df.loc[df['id'] == i, 'data'].iloc[0]):%d/%m/%Y}")
+                mot = st.text_input("Motivo da anulação", max_chars=300, key="mot_anul_tx")
+                if st.button("Anular transacção", key="btn_anul_tx"):
+                    try:
+                        anular_transaccao(tid, mot)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+
+
+def render_rentabilidade():
+    try:
+        linhas, info = rentabilidade_clube_periodos()
+    except Exception as e:
+        st.error(f"Não foi possível calcular a rentabilidade: {e}")
+        return
+    if eh_admin():
+        st.info("Nota para o administrador: o valor da unidade (VUP) usa o balanço registado no Painel do Administrador, não as reservas. "
+                "Se esse balanço não tiver o dinheiro em caixa, o VUP pode aparecer como «Não calculado» ou calculado sem esse dinheiro. Registe lá o caixa.")
+    st.markdown("#### Rentabilidade do Clube por período")
+    if not linhas:
+        st.info("O valor da unidade ainda não é calculável. " + " ".join(info.get("motivos", [])))
+    else:
+        st.dataframe(pd.DataFrame([{"Período": r, "Valor da unidade no início": kz(v0) if v0 else "sem histórico", "Valor da unidade actual": kz(info["vup"]), "Rentabilidade": _pct_sinal(x)} for r, v0, x in linhas]), hide_index=True)
+        st.caption(f"Estado do valor da unidade: {info['estado']}. Rentabilidade acumulada no período, não anualizada.")
+        st.markdown("#### Rentabilidade por sócio" if eh_admin() else "#### A minha rentabilidade")
+        d = rentabilidade_por_socio(info["vup"])
+        if d.empty:
+            st.info("Ainda não há movimentos de unidades validados" + ("." if eh_admin() else " associados à sua conta."))
+        else:
+            st.dataframe(d, hide_index=True)
+            st.caption("Ganho = valor actual das unidades + resgates recebidos − subscrições. É uma rentabilidade acumulada simples, que não pondera o tempo de cada entrada.")
+
+
+def pagina_contabilidade(tx: dict):
+    import datetime as _dt
+    hoje = _dt.date.today()
+    ano = st.selectbox("Exercício (ano) das demonstrações", list(range(hoje.year, 2023, -1)), key="cont_ano")
+    aba_res, aba_bal, aba_dr, aba_fc, aba_liv, aba_rent = st.tabs(["📋 Resumo", "⚖️ Balanço", "📉 Demonstração de Resultados", "💧 Fluxos de Caixa", "📒 Livro de Transacções", "📈 Rentabilidade"])
+    with aba_res:
+            resumo   = obter_resumo_patrimonial()
+            cols_df  = tx["cont_df_cols"]
+            rows_df  = tx["cont_df_rows"]
+            montantes= [kz(resumo["capital_subscrito"]), kz(resumo["capital_realizado"]), kz(resumo["investimentos"]), kz(resumo["reservas"])]
+            df_resumo = pd.DataFrame([{cols_df[0]: r[0], cols_df[1]: r[1], cols_df[2]: m, cols_df[3]: r[2]}
+                                       for r, m in zip(rows_df, montantes)])
+            st.dataframe(df_resumo, hide_index=True)
+            total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são subdivisões do realizado
+            st.metric(tx["cont_patrimonio_metric"], kz(total_patrimonio))
+            st.caption(f"{tx['cont_ultima_actualizacao']} {resumo['actualizado_em']}")
+
+    try:
+        dm = calcular_demonstracoes(int(ano))
+    except Exception as e:
+        st.error(f"Não foi possível calcular as demonstrações: {e}")
+        return
+    nota = ("Estrutura inspirada no plano de contas angolano; é um mapa de gestão do Clube e deve ser validado por um contabilista antes de qualquer uso oficial. "
+            "Os valores vêm dos movimentos, da carteira real, do balanço e das despesas já registados; as rubricas sem lançamentos ficam a zero, à espera de registo.")
+
+    with aba_bal:
+        st.markdown(f"#### Balanço do Clube — situação actual (resultado do exercício {dm['ano']})")
+        ce, cd = st.columns(2)
+        with ce:
+            st.markdown("**ACTIVO**")
+            _tabela_contab(dm["activo"], "TOTAL DO ACTIVO", dm["t_activo"])
+        with cd:
+            st.markdown("**PASSIVO E CAPITAL PRÓPRIO**")
+            _tabela_contab([("Passivos", dm["passivos"]), ("Capital realizado", dm["cap_realizado"]),
+                            ("Resultado do exercício (inclui mais-valias latentes)", dm["integral"])],
+                           "TOTAL DO PASSIVO E CAPITAL PRÓPRIO", dm["t_pass_cp"])
+            st.caption(f"O capital realizado compõe-se de investimentos ao custo ({kz(float(dm['investimentos_custo']))}) e reservas, isto é, dinheiro em caixa ({kz(float(dm['reservas']))}).")
+        if abs(dm["diferenca"]) <= D("1"):
+            st.success("✅ O balanço fecha: Activo = Passivo + Capital próprio.")
+        else:
+            st.warning(f"⚠️ O balanço não fecha: diferença de {kz(float(dm['diferenca']))} (Activo − Passivo − Capital próprio). "
+                       "Isto indica dados por reconciliar (por exemplo, o custo dos investimentos, as reservas, outros activos ou passivos no Painel do Administrador › Resumo Patrimonial).")
+        st.caption(f"Caixa e equivalentes: origem — {dm['caixa_origem']}.")
+        if not dm["tem_balanco"]:
+            st.info("Ainda não há balanço de outros activos e passivos registado: essas linhas aparecem a zero.")
+        if dm["sem_preco"]:
+            st.caption("Posições sem preço de mercado (valorizadas a zero): " + ", ".join(dm["sem_preco"]))
+        st.caption(nota)
+
+    with aba_dr:
+        st.markdown(f"#### Demonstração de Resultados — exercício {dm['ano']}")
+        _tabela_contab(dm["rendimentos"], "Total de rendimentos", dm["t_rend"])
+        _tabela_contab([(r, -v) for r, v in dm["gastos"]], "Total de gastos", -dm["t_gast"])
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Resultado realizado", kz(float(dm["realizado"])))
+        c2.metric("Mais-valias latentes (acumuladas)", kz(float(dm["latente"])))
+        c3.metric("Resultado do exercício", kz(float(dm["integral"])))
+        st.caption("As mais-valias latentes são a diferença entre o valor de mercado da carteira e o custo de aquisição, desde a compra; só se realizam com a venda. " + nota)
+
+    with aba_fc:
+        st.markdown(f"#### Mapa de Fluxos de Caixa — exercício {dm['ano']} (método directo)")
+        t_op, t_inv, t_fin = (sum((v for _, v in dm[k]), D(0)) for k in ("op", "inv", "fin"))
+        st.markdown("**Actividades operacionais**"); _tabela_contab(dm["op"], "Fluxo das actividades operacionais", t_op)
+        st.markdown("**Actividades de investimento**"); _tabela_contab(dm["inv"], "Fluxo das actividades de investimento", t_inv)
+        st.markdown("**Actividades de financiamento**"); _tabela_contab(dm["fin"], "Fluxo das actividades de financiamento", t_fin)
+        st.metric("Variação líquida de caixa no exercício", kz(float(t_op + t_inv + t_fin)))
+        st.caption(("As compras e vendas vêm do Livro de Transacções (os movimentos «Compra/Venda de Activo» deste ano são ignorados). " if dm.get("usa_livro") else "As compras e vendas vêm dos movimentos; registe-as no Livro de Transacções para obter custo médio e mais-valias realizadas. ")
+                   + "Evite lançar a mesma despesa em «Movimentos» e em «Despesas do grupo», porque aqui são somadas as duas. " + nota)
+
+    with aba_liv:
+        render_livro_transaccoes()
+    with aba_rent:
+        render_rentabilidade()
+
+    if eh_admin():
+        with st.expander("➕ Registar lançamento contabilístico (administrador)"):
+            with st.form("form_lanc_contab", clear_on_submit=True):
+                f1, f2 = st.columns(2)
+                rub = f1.selectbox("Rubrica", list(RUBRICAS_CONTAB))
+                dt_l = f2.date_input("Data", value=hoje)
+                desc_l = st.text_input("Descrição", max_chars=200)
+                val_l = st.number_input("Valor (Kz)", min_value=0.0, step=1000.0)
+                ok_l = st.form_submit_button("Registar lançamento")
+            if ok_l:
+                try:
+                    registar_lancamento_contab(dt_l, rub, desc_l, val_l)
+                    st.success("Lançamento registado.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+            st.caption(RUBRICAS_CONTAB[rub][1] + " Os valores entram sempre em positivo; a rubrica decide se é rendimento ou gasto.")
+            _dl = consultar_df("SELECT id, data, rubrica, descricao, valor FROM lancamentos_contab ORDER BY data DESC, id DESC LIMIT 200")
+            if not _dl.empty:
+                _dl = _dl.copy(); _dl["valor"] = _dl["valor"].apply(kz)
+                st.dataframe(_dl, hide_index=True)
+
+
+
+# ---------------- Terminal de Decisão ----------------
+DECISOES_CLUBE = ["Em observação", "Comprar", "Reforçar", "Manter", "Reduzir", "Vender"]
+LIMITE_ACTIVO_CLUBE = 0.10   # regra do Clube: máximo 10% do fundo global por activo
+
+
+def _chave_ticker(t) -> str:
+    return str(t or "").strip().upper().rstrip("A")
+
+
+def obter_teses() -> pd.DataFrame:
+    return consultar_df("SELECT ticker, tese, fair_value, decisao, actualizado_em, actualizado_por FROM teses_activos")
+
+
+def guardar_tese(ticker: str, tese: str, fair_value, decisao: str):
+    exigir_admin()
+    if not (ticker or "").strip():
+        raise ValueError("Escolha um activo com ticker.")
+    if decisao not in DECISOES_CLUBE:
+        raise ValueError("Decisão inválida.")
+    fv = dec(fair_value) if fair_value else None
+    with transaccao() as cur:
+        cur.execute("""INSERT INTO teses_activos (ticker, tese, fair_value, decisao, actualizado_em, actualizado_por)
+                       VALUES (%s, %s, %s, %s, NOW(), %s)
+                       ON CONFLICT (ticker) DO UPDATE SET tese = EXCLUDED.tese, fair_value = EXCLUDED.fair_value,
+                       decisao = EXCLUDED.decisao, actualizado_em = NOW(), actualizado_por = EXCLUDED.actualizado_por""",
+                    (ticker.strip().upper(), (tese or "").strip()[:4000] or None, fv, decisao, utilizador_actual()))
+        registar_auditoria("tese_activo", "teses_activos", ticker.strip().upper(), depois={"decisao": decisao, "fair_value": str(fv) if fv else ""}, cur=cur)
+
+
+def _sinal_valor(preco: float, fv):
+    """Sinal calculado (não escrito à mão): compara o preço com o fair value."""
+    if not fv or float(fv) <= 0 or not preco:
+        return "Sem fair value", None
+    pot = float(fv) / float(preco) - 1
+    if pot > 0.15:
+        return "Subvalorizado", pot
+    if pot < -0.10:
+        return "Sobrevalorizado", pot
+    return "Perto do valor justo", pot
+
+
+def _pct_sinal(x) -> str:
+    return "—" if x is None else f"{x * 100:+.1f}%".replace(".", ",")
+
+
+def pagina_terminal_decisao():
+    socio = eh_participante()
+    hero("🎯 Terminal de Decisão",
+         "As decisões do Clube sobre a carteira real, com teses e fair value." if socio else "Lista de acompanhamento do mercado BODIVA: preço, fair value e sinal de valorização.",
+         "🇦🇴 BODIVA")
+    act = obter_activos()
+    act = act[act["ticker"].astype(str).str.strip() != ""] if not act.empty else act
+    if act.empty:
+        st.info("Ainda não há activos com ticker registados. O administrador regista-os em Painel do Administrador › Cotações & Activos.")
+        return
+    teses = obter_teses()
+    por_tk = {_chave_ticker(r["ticker"]): r for _, r in teses.iterrows()} if not teses.empty else {}
+
+    pos = {}
+    total = 0.0
+    if socio:
+        try:
+            cart = obter_carteira_real()
+            preco_por = {_chave_ticker(r["ticker"]): float(r["preco"]) for _, r in act.iterrows()}
+            for _, l in cart.iterrows():
+                k = _chave_ticker(l["ticker"])
+                valor = float(l["qtd"] or 0) * preco_por.get(k, 0.0)
+                pos[k] = {"qtd": float(l["qtd"] or 0), "valor": valor, "custo": float(l["valor_aquisicao"] or 0)}
+                total += valor
+        except Exception:
+            pos, total = {}, 0.0
+
+    linhas = []
+    for _, a in act.iterrows():
+        k = _chave_ticker(a["ticker"])
+        t_ = por_tk.get(k)
+        fv = float(t_["fair_value"]) if t_ is not None and t_["fair_value"] is not None and pd.notna(t_["fair_value"]) else None
+        sinal, pot = _sinal_valor(float(a["preco"]), fv)
+        linha = {"Logo": logo_data_uri(a["ticker"]), "Ticker": str(a["ticker"]), "Activo": str(a["nome"]), "Preço": kz(float(a["preco"])),
+                 "Variação": pct_bruto(a["variacao"]), "Fair value": kz(fv) if fv else "—", "Potencial": _pct_sinal(pot), "Sinal": sinal}
+        if socio:
+            p = pos.get(k)
+            peso = (p["valor"] / total) if p and total > 0 else None
+            linha["Peso na carteira"] = _pct_sinal(peso).replace("+", "") if peso is not None else "—"
+            linha["Limite de 10%"] = "—" if peso is None else ("⚠️ Excedido" if peso > LIMITE_ACTIVO_CLUBE else "Dentro do limite")
+            linha["Mais-valia"] = (_pct_sinal(p["valor"] / p["custo"] - 1) if p and p["custo"] > 0 else "—")
+            linha["Decisão do Clube"] = (t_["decisao"] if t_ is not None and t_["decisao"] else "Em observação")
+        linhas.append(linha)
+    df = pd.DataFrame(linhas)
+    if socio:
+        df["_p"] = df["Peso na carteira"].map(lambda v: -1.0 if v == "—" else -float(v.replace("%", "").replace(",", ".")))
+        df = df.sort_values("_p").drop(columns="_p")
+    st.dataframe(df, hide_index=True, column_config=cfg_logo())
+    if socio:
+        st.caption("O peso e o limite são calculados com a carteira real e os preços actuais; o limite de 10% por activo é a regra do Clube. O sinal compara o preço com o fair value (subvalorizado acima de +15%, sobrevalorizado abaixo de −10%).")
+        st.markdown("#### Teses do Clube")
+        com_tese = [(r["Activo"], r["Ticker"]) for _, r in df.iterrows() if por_tk.get(_chave_ticker(r["Ticker"])) is not None and por_tk[_chave_ticker(r["Ticker"])]["tese"]]
+        if not com_tese:
+            st.info("Ainda não há teses registadas. O administrador escreve-as em Painel do Administrador › Teses & Fair Value.")
+        for nome, tk in com_tese:
+            t_ = por_tk[_chave_ticker(tk)]
+            with st.expander(f"{nome} ({tk}) — {t_['decisao'] or 'Em observação'}"):
+                st.write(t_["tese"])
+                st.caption(f"Última revisão: {t_['actualizado_em']:%d/%m/%Y}" if pd.notna(t_["actualizado_em"]) else "")
+    else:
+        st.caption("Lista de acompanhamento de mercado, sem as posições nem as decisões do Clube.")
+    aviso_discreto("Informação educativa, sem recomendação personalizada. O fair value é uma estimativa e pode estar errado; confirme sempre os preços no site oficial da BODIVA.")
+
+
+def pagina_historico_relatorios(tx):
+    df_movimentos = obter_movimentos()
+    resumo = obter_resumo_patrimonial()
+    a = obter_analise()
+    abas = st.tabs(["📈 Rentabilidade & Alpha", "🌡️ Inflação real", "⚖️ Risco", "🍩 Composição", "🗂️ Histórico & Movimentos", "📄 Relatórios & Excel"])
+    funcoes = [lambda: _aba_rentabilidade(a, tx), lambda: _aba_inflacao(a), lambda: _aba_risco(a), lambda: _aba_composicao(a, resumo)]
+    for i, funcao in enumerate(funcoes):
+        with abas[i]:
+            if not a.get("ok"):
+                st.info(a.get("motivo") or "Análise indisponível de momento.")
+                continue
+            funcao()
+            if i == 0:
+                for av in a.get("avisos", []):
+                    st.caption("⚠️ " + av)
+    with abas[4]:
+        _aba_historico_movimentos(tx, df_movimentos)
+    with abas[5]:
+        _aba_relatorios(tx, a, df_movimentos)
+
+
+
+# =========================================================
+# FASE 1 — componentes: cartões KPI, gráficos na paleta do Clube, conteúdo institucional editável
+# =========================================================
+_PALETA_SERIES = ["#7C3AED", "#FB923C", "#F43F5E", "#A78BFA", "#FDBA74", "#FB7185", "#C084FC", "#FCA5A5"]
+COR_PRECO = "#7C1F3E"          # linha dos preços (o resto do gráfico usa o gradiente roxo → vinho → vermelho → laranja)
+_COR_BARRA = "#5B9BE6"   # azul claro e limpo (barras de uma série, sem gradiente)
+_PALETA_BARRAS = ["#5B9BE6", "#F58A3B", "#3FB68B", "#9B7BE6", "#EE6C8A", "#8CC63F"]
+_GRAD_SUAVE = [("#A78BFA", 0.0), ("#C65D86", 0.36), ("#F2707E", 0.70), ("#FDBA74", 1.0)]   # as cores do Clube, em tons mais claros
+
+
+def kpi_card(icone: str, titulo: str, valor: str, sub: str = None, progresso: float = None, tom: str = None, destaque: bool = False) -> str:
+    barra = ""
+    if progresso is not None:
+        barra = f'<div class="fx-bar"><i style="width:{max(0.0, min(float(progresso), 1.0)) * 100:.0f}%"></i></div>'
+    s = f'<div class="fx-kpi-s {tom or ""}">{_esc(sub)}</div>' if sub else ""
+    return (f'<div class="fx-kpi{" destaque" if destaque else ""}"><div class="fx-kpi-topo"><span class="fx-kpi-ico">{icone}</span>'
+            f'<span class="fx-kpi-t">{_esc(titulo)}</span></div><div class="fx-kpi-v">{_esc(valor)}</div>{s}{barra}</div>')
+
+
+def kpi_linha(cartoes: list):
+    render_html('<div class="fx-kpis">' + "".join(cartoes) + "</div>")
+
+
+def _padding_barras(n: int):
+    return (0.55, 0.30) if n <= 4 else (0.42, 0.20) if n <= 8 else (0.25, 0.10)
+
+
+def fx_barras(df: pd.DataFrame, height: int = 300, **_):
+    """Barras largas e arejadas, em tons claros e limpos. Uma série = cor única; várias = agrupadas."""
+    try:
+        import altair as alt
+        d = df.copy()
+        d.index = d.index.astype(str)
+        d.index.name = "Item"
+        L = d.reset_index().melt("Item", var_name="Série", value_name="Valor")
+        n = len(d)
+        pin, pout = _padding_barras(n)
+        x = alt.X("Item:N", sort=None, title=None, scale=alt.Scale(paddingInner=pin, paddingOuter=pout),
+                  axis=alt.Axis(labelAngle=0, labelLimit=170, labelColor="#475569", domain=False, ticks=False))
+        y = alt.Y("Valor:Q", title=None, axis=alt.Axis(format="~s", gridColor="#F0EBFA", labelColor="#94A3B8", domain=False, ticks=False))
+        tip = [alt.Tooltip("Item:N", title="Item"), alt.Tooltip("Série:N", title="Série"), alt.Tooltip("Valor:Q", format=",.2f", title="Valor")]
+        if d.shape[1] == 1:
+            ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6, color=_COR_BARRA).encode(x=x, y=y, tooltip=tip)
+            if n <= 8:
+                ch = ch + alt.Chart(L).mark_text(dy=-9, fontSize=11, fontWeight="bold", color="#1F2937").encode(x=x, y=alt.Y("Valor:Q"), text=alt.Text("Valor:Q", format="~s"))
+        else:
+            ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=8, cornerRadiusTopRight=8).encode(
+                x=x, xOffset="Série:N", y=y, tooltip=tip,
+                color=alt.Color("Série:N", scale=alt.Scale(range=_PALETA_BARRAS), legend=alt.Legend(orient="bottom", title=None)))
+        st.altair_chart(ch.properties(height=height).configure_view(strokeWidth=0), use_container_width=True)
+    except Exception:
+        traceback.print_exc()
+        getattr(st, "bar_chart")(df, height=height)
+
+
+def fx_barras_div(df: pd.DataFrame, height: int = 280, formato: str = "+.1f"):
+    """Barras que podem ser negativas (ex.: potencial de valorização): roxo claro acima de zero, coral abaixo."""
+    try:
+        import altair as alt
+        d = df.copy()
+        d.index = d.index.astype(str)
+        d.index.name = "Item"
+        L = d.reset_index().melt("Item", var_name="Série", value_name="Valor")
+        pin, pout = _padding_barras(len(d))
+        x = alt.X("Item:N", sort=None, title=None, scale=alt.Scale(paddingInner=pin, paddingOuter=pout), axis=alt.Axis(labelAngle=0, labelColor="#475569", domain=False, ticks=False))
+        y = alt.Y("Valor:Q", title=None, axis=alt.Axis(gridColor="#F0EBFA", labelColor="#94A3B8", domain=False, ticks=False))
+        cor = alt.condition(alt.datum.Valor >= 0, alt.value("#5B9BE6"), alt.value("#EE6C8A"))
+        ch = alt.Chart(L).mark_bar(cornerRadius=8).encode(x=x, y=y, color=cor, tooltip=[alt.Tooltip("Item:N"), alt.Tooltip("Valor:Q", format=formato)])
+        ch = ch + alt.Chart(L).mark_text(dy=-9, fontSize=12, fontWeight="bold", color="#1F2937").encode(x=x, y=alt.Y("Valor:Q"), text=alt.Text("Valor:Q", format=formato))
+        st.altair_chart(ch.properties(height=height).configure_view(strokeWidth=0), use_container_width=True)
+    except Exception:
+        traceback.print_exc()
+        getattr(st, "bar_chart")(df, height=height)
+
+
+def fx_linhas(df: pd.DataFrame, height: int = 260, **_):
+    """Linhas suaves; ao encostar o cursor aparece a guia vertical com os valores de TODAS as linhas; legenda por baixo."""
+    try:
+        import altair as alt
+        d = df.copy()
+        temporal = isinstance(d.index, pd.DatetimeIndex)
+        d.index.name = "Data"
+        nomes = [str(c) for c in d.columns]
+        d.columns = [f"s{i}" for i in range(len(nomes))]
+        L = d.reset_index().melt("Data", var_name="Cod", value_name="Valor").dropna()
+        L["Série"] = L["Cod"].map({f"s{i}": n for i, n in enumerate(nomes)})
+        x = (alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y", grid=False, labelColor="#64748B")) if temporal
+             else alt.X("Data:N", sort=None, title=None, axis=alt.Axis(labelAngle=0, labelColor="#64748B")))
+        cor = alt.Color("Série:N", scale=alt.Scale(domain=nomes, range=_PALETA_SERIES[:len(nomes)]), legend=alt.Legend(orient="bottom", title=None))
+        y = alt.Y("Valor:Q", title=None, scale=alt.Scale(zero=False), axis=alt.Axis(gridColor="#F0EBFA", labelColor="#94A3B8", domain=False, ticks=False))
+        try:
+            nearest = alt.selection_point(fields=["Data"], nearest=True, on="mouseover", empty=False)
+            juntar = lambda ch: ch.add_params(nearest)
+        except AttributeError:
+            nearest = alt.selection(type="single", fields=["Data"], nearest=True, on="mouseover", empty="none")
+            juntar = lambda ch: ch.add_selection(nearest)
+        linhas = alt.Chart(L).mark_line(strokeWidth=2.2, interpolate="monotone").encode(x=x, y=y, color=cor)
+        sel = juntar(alt.Chart(L).mark_point().encode(x=x, opacity=alt.value(0)))
+        pontos = linhas.mark_point(size=52, filled=True).encode(opacity=alt.condition(nearest, alt.value(1), alt.value(0)))
+        dica = ([alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y")] if temporal else [alt.Tooltip("Data:N", title="Data")]) + \
+               [alt.Tooltip(f"s{i}:Q", title=n, format=",.2f") for i, n in enumerate(nomes)]
+        W = d.reset_index()
+        regua = alt.Chart(W).mark_rule(color="#CBD5E1", strokeWidth=1).encode(x=x, tooltip=dica).transform_filter(nearest)
+        grafico = alt.layer(linhas, sel, pontos, regua).properties(height=height).configure_view(strokeWidth=0)
+        try:
+            grafico.to_dict()
+        except Exception:
+            traceback.print_exc()
+            grafico = linhas.properties(height=height).configure_view(strokeWidth=0)
+        st.altair_chart(grafico, use_container_width=True)
+    except Exception:
+        traceback.print_exc()
+        getattr(st, "line_chart")(df, height=height)
+
+
+ORC_GRUPOS = [
+    ("Consumo (50%)", "🏠", 0.50, "Necessidades e estilo de vida: renda ou prestação da casa, alimentação, transporte, saúde, educação, água/luz/internet, telefone, lazer…"),
+    ("Investimento (30%)", "📈", 0.30, "O que pões a render: acções, BT/OT, fundos, cotas do Clube, formação que aumenta o teu rendimento…"),
+    ("Entesouramento (20%)", "🛡️", 0.20, "A tua rede de segurança: reserva de emergência, depósito a prazo, poupança para objectivos…"),
+]
+
+
+# ---------------------------------------------------------
+# Conteúdo institucional editável (Sobre Nós, FAQ, avisos) — o administrador gere no Painel › Site & Sobre Nós
+# ---------------------------------------------------------
+_SITE_SEMENTES = [
+    ("cartao", "Missão", "Promover a literacia financeira e o acesso disciplinado ao mercado de capitais angolano, permitindo que os sócios construam património de forma colectiva, informada e sustentável.", 10),
+    ("cartao", "Visão", "Ser uma referência angolana de educação e prática de investimento em grupo, com decisões transparentes e fundamentadas. (Texto-base: edita-o no Painel do Administrador.)", 20),
+    ("cartao", "Valores", "Disciplina, transparência, prestação de contas, diversificação prudente e decisões colectivas.", 30),
+    ("faq", "O APPO é uma corretora ou dá conselhos personalizados?", "Não. O APPO é uma iniciativa independente de educação financeira e de investimento em grupo, sem vínculo com a BODIVA, a CMC ou corretoras. O conteúdo é educativo e não constitui recomendação personalizada.", 40),
+    ("faq", "Como posso tornar-me sócio?", "Através da página **Adesão de Sócios**. A admissão está sujeita a aprovação da Comissão de Gestão.", 50),
+    ("faq", "O que significa investir no mercado de capitais?", "Comprar títulos (acções, obrigações, etc.) esperando valorização ou rendimento. Há risco de perda do capital; por isso começamos pela formação.", 60),
+    ("aviso", "Aviso de risco", "Investir envolve risco, incluindo a perda total ou parcial do capital. Rentabilidades passadas não garantem resultados futuros. A informação desta plataforma é educativa.", 90),
+]
+
+
+@st.cache_resource
+def _garantir_tabela_site() -> bool:
+    executar("""CREATE TABLE IF NOT EXISTS conteudo_site (id SERIAL PRIMARY KEY, secao TEXT NOT NULL DEFAULT 'sobre', tipo TEXT NOT NULL DEFAULT 'cartao',
+                titulo TEXT NOT NULL, texto TEXT NOT NULL DEFAULT '', ordem INTEGER NOT NULL DEFAULT 100, visivel BOOLEAN NOT NULL DEFAULT TRUE)""")
+    if consultar_um("SELECT COUNT(*) FROM conteudo_site")[0] == 0:
+        for tp, ti, tx_, od in _SITE_SEMENTES:
+            executar("INSERT INTO conteudo_site (secao, tipo, titulo, texto, ordem) VALUES ('sobre', %s, %s, %s, %s)", (tp, ti, tx_, od))
+    return True
+
+
+def obter_conteudo_site(todos: bool = False) -> pd.DataFrame:
+    _garantir_tabela_site()
+    return consultar_df("SELECT id, tipo, titulo, texto, ordem, visivel FROM conteudo_site " + ("" if todos else "WHERE visivel ") + "ORDER BY ordem, id")
+
+
+def guardar_conteudo_site(df: pd.DataFrame):
+    exigir_admin()
+    _garantir_tabela_site()
+    n = 0
+    executar("DELETE FROM conteudo_site")
+    for _, r in df.iterrows():
+        titulo = str(r.get("titulo") or "").strip()
+        if not titulo:
+            continue
+        tipo = str(r.get("tipo") or "cartao").strip()
+        executar("INSERT INTO conteudo_site (secao, tipo, titulo, texto, ordem, visivel) VALUES ('sobre', %s, %s, %s, %s, %s)",
+                 (tipo if tipo in ("cartao", "faq", "aviso") else "cartao", titulo, str(r.get("texto") or ""),
+                  int(_num_seguro(r.get("ordem"), 100)), bool(r.get("visivel", True)) if pd.notna(r.get("visivel")) else True))
+        n += 1
+    registar_auditoria("conteudo_site", "site", "sobre", depois={"blocos": n})
+
+
+def painel_site_admin():
+    st.subheader("Site & Sobre Nós")
+    st.caption("Gere os blocos da página «Sobre Nós». **Cartão** = aparece na grelha (texto simples); **FAQ** = pergunta clicável (aceita markdown); "
+               "**Aviso** = faixa de alerta. A ordem é numérica (menor primeiro).")
+    df = obter_conteudo_site(todos=True)[["tipo", "titulo", "texto", "ordem", "visivel"]]
+    ed = st.data_editor(df, num_rows="dynamic", hide_index=True, key="ed_site", column_config={
+        "tipo": st.column_config.SelectboxColumn("Tipo", options=["cartao", "faq", "aviso"], required=True, width="small"),
+        "titulo": st.column_config.TextColumn("Título", width="medium"), "texto": st.column_config.TextColumn("Texto", width="large"),
+        "ordem": st.column_config.NumberColumn("Ordem", step=10, width="small"), "visivel": st.column_config.CheckboxColumn("Visível", width="small")})
+    if st.button("💾 Guardar blocos", type="primary", key="site_guardar"):
+        guardar_conteudo_site(ed)
+        st.success("Conteúdo actualizado.")
+        st.rerun()
+
+
+def pagina_sobre_nos(tx: dict):
+    render_html(f'<div class="fx-quem"><div class="fx-kicker">Quem somos</div><div class="fx-quem-texto">{_esc(tx["sobre_quem_texto"].replace("**", ""))}</div></div>')
+    try:
+        blocos = obter_conteudo_site()
+    except Exception:
+        blocos = pd.DataFrame(columns=["tipo", "titulo", "texto"])
+    cart = blocos[blocos["tipo"] == "cartao"]
+    if not cart.empty:
+        render_html('<div class="fx-bloco-grelha">' + "".join(
+            f'<div class="fx-bloco"><div class="fx-kicker">APPO</div><div class="fx-bloco-titulo">{_esc(r["titulo"])}</div>'
+            f'<div class="fx-bloco-texto">{_esc(r["texto"]).replace(chr(10), "<br>")}</div></div>' for _, r in cart.iterrows()) + "</div>")
+    with st.expander("🧭 " + tx["sobre_principios"]):
+        st.markdown(TEXTO_PRINCIPIOS)
+    with st.expander("📜 " + tx["sobre_estatutos"]):
+        st.markdown(tx["sobre_estatutos_texto"])
+        _df_est = obter_documentos("estatuto") if eh_participante() else pd.DataFrame()
+        if not _df_est.empty:
+            _est = _df_est.iloc[0]
+            st.markdown(f"**📜 {_est['titulo']}**")
+            st.caption(f"{_est['criado_em']} · {_est['tamanho'] / 1048576:.1f} MB")
+            bloco_documento_pdf(int(_est["id"]), _est["nome_ficheiro"], f"estatuto_{int(_est['id'])}", altura=820)
+    faqs = blocos[blocos["tipo"] == "faq"]
+    if not faqs.empty:
+        render_html('<div class="appo-faq-cab"><div class="t">💬 Perguntas frequentes</div>'
+                    '<div class="s">Respostas rápidas sobre o Clube. Escreve uma palavra para filtrar as perguntas.</div></div>')
+        _busca = st.text_input("Procurar nas perguntas", key="faq_busca", placeholder="🔎  ex.: quotas, risco, adesão…", label_visibility="collapsed")
+        _q = (_busca or "").strip().lower()
+        _sel = faqs[faqs.apply(lambda r: _q in (str(r["titulo"]) + " " + str(r["texto"])).lower(), axis=1)] if _q else faqs
+        try:
+            _faq_box = st.container(key="appo_faq")
+        except TypeError:
+            _faq_box = st.container()
+        with _faq_box:
+            if _sel.empty:
+                st.info("Nenhuma pergunta encontrada. Tenta outra palavra ou escreve-nos.")
+            for _n, (_, r) in enumerate(_sel.iterrows(), 1):
+                with st.expander(f"{_n}. {r['titulo']}", expanded=bool(_q) and len(_sel) == 1):
+                    st.markdown(r["texto"])
+    for _, r in blocos[blocos["tipo"] == "aviso"].iterrows():
+        render_html(f'<div class="fx-aviso-risco"><b>⚠️ {_esc(r["titulo"])}.</b> {_esc(r["texto"])}</div>')
+    nota_interna(tx["sobre_nota"])
+
+
+# =========================================================
+# CONVERSOR DE MOEDA com taxa OFICIAL do BNA (introduzida pelo administrador) + taxa de mercado indicativa
+# =========================================================
+_MOEDAS_BNA = ["USD", "EUR", "GBP", "ZAR", "CNY", "BRL"]
+
+
+def obter_taxas_bna() -> pd.DataFrame:
+    """Última taxa oficial registada por moeda (compra e venda, Kz por 1 unidade)."""
+    _garantir_tabelas_extra()
+    df = consultar_df("SELECT DISTINCT ON (moeda) moeda, data, compra, venda FROM taxas_bna ORDER BY moeda, data DESC, id DESC")
+    for c in ("compra", "venda"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+
+def guardar_taxas_bna(data, linhas: list):
+    """linhas = [(moeda, compra, venda)]. Só o administrador; grava/actualiza por (data, moeda)."""
+    exigir_admin()
+    _garantir_tabelas_extra()
+    n = 0
+    for moeda, compra, venda in linhas:
+        if compra and venda and compra > 0 and venda > 0:
+            executar("INSERT INTO taxas_bna (data, moeda, compra, venda, registado_por) VALUES (%s, %s, %s, %s, %s) "
+                     "ON CONFLICT (data, moeda) DO UPDATE SET compra = EXCLUDED.compra, venda = EXCLUDED.venda, registado_por = EXCLUDED.registado_por, registado_em = NOW()",
+                     (data, moeda, float(compra), float(venda), utilizador_actual()))
+            n += 1
+    registar_auditoria("taxas_bna", "cambio", str(data), depois={"moedas": n})
+    return n
+
+
+def _taxa_bna_valor(bna: pd.DataFrame, moeda: str, modo: str):
+    r = bna[bna["moeda"] == moeda]
+    if r.empty:
+        return None
+    r = r.iloc[0]
+    return float(r["compra"] if modo == "Compra" else r["venda"] if modo == "Venda" else (r["compra"] + r["venda"]) / 2)
+
+
+def taxa_bna_par(bna: pd.DataFrame, de: str, para: str, modo: str):
+    """Kz por unidade convertido pelo BNA; None se o par não tiver taxa oficial."""
+    if bna is None or bna.empty or de == para:
+        return None
+    a = 1.0 if de == "AOA" else _taxa_bna_valor(bna, de, modo)
+    b = 1.0 if para == "AOA" else _taxa_bna_valor(bna, para, modo)
+    return (a / b) if a and b else None
+
+
+def pagina_conversor(tx: dict):
+    MOEDAS = ["AOA", "USD", "EUR", "GBP", "ZAR", "CNY", "BRL"]
+    try:
+        bna = obter_taxas_bna()
+    except Exception:
+        traceback.print_exc()
+        bna = pd.DataFrame(columns=["moeda", "data", "compra", "venda"])
+    col1, col2, col3 = st.columns(3)
+    moeda_de = col1.selectbox(tx["conv_de"], MOEDAS, index=0)
+    moeda_para = col2.selectbox(tx["conv_para"], MOEDAS, index=1)
+    valor = col3.number_input(tx["conv_valor"], min_value=0.0, value=1000.0, step=100.0)
+    tem_bna = taxa_bna_par(bna, moeda_de, moeda_para, "Média") is not None
+    f1, f2 = st.columns([2, 1])
+    fonte = f1.radio("Taxa a usar", ["BNA (oficial)", "Mercado (indicativa)"], index=0 if tem_bna else 1, horizontal=True, key="conv_fonte",
+                     help="O BNA publica a taxa de câmbio de referência. A taxa de mercado é uma média internacional e costuma diferir.")
+    modo = f2.selectbox("Referência BNA", ["Média", "Compra", "Venda"], key="conv_modo_bna", disabled=not tem_bna)
+    try:
+        dados_cambio = obter_taxas_cambio(moeda_de)
+        if moeda_de == "AOA":
+            registar_historico_cambio(dados_cambio["rates"])
+        t_mercado = dados_cambio["rates"].get(moeda_para)
+    except Exception:
+        t_mercado = None
+        dados_cambio = {"actualizado": ""}
+    t_bna = taxa_bna_par(bna, moeda_de, moeda_para, modo) if tem_bna else None
+    usar_bna = fonte.startswith("BNA") and t_bna is not None
+    taxa = t_bna if usar_bna else t_mercado
+    if fonte.startswith("BNA") and t_bna is None:
+        st.warning("Ainda não há taxa oficial do BNA para este par. A mostrar a taxa de mercado (indicativa).")
+    if taxa is None:
+        st.error(tx["conv_erro"])
+    else:
+        resultado = valor * taxa
+        st.metric(f"{valor:,.2f} {moeda_de} {tx['conv_equivale']}", f"{resultado:,.2f} {moeda_para}")
+        if usar_bna:
+            d_ref = max(bna.loc[bna["moeda"].isin([m for m in (moeda_de, moeda_para) if m != "AOA"]), "data"])
+            idade = (datetime.now().date() - d_ref).days
+            st.caption(f"{tx['conv_taxa']} 1 {moeda_de} = {taxa:,.6f} {moeda_para} · **taxa oficial do BNA ({modo.lower()})** de {d_ref:%d/%m/%Y}.")
+            if idade > 5:
+                st.warning(f"A taxa do BNA tem {idade} dias. O administrador deve actualizá-la.")
+            if t_mercado:
+                dif = (t_mercado / taxa - 1) * 100
+                st.caption(f"Taxa de mercado (indicativa): 1 {moeda_de} = {t_mercado:,.6f} {moeda_para} · diferença face ao BNA: {dif:+.2f}%.")
+        else:
+            st.caption(f"{tx['conv_taxa']} 1 {moeda_de} = {taxa:.6f} {moeda_para}. Taxa de mercado indicativa; {tx['conv_actualizado']} {dados_cambio['actualizado']}. "
+                       "Pode diferir da taxa oficial do BNA e das praticadas pelos bancos e casas de câmbio.")
+        botoes_partilha(tx["conv_partilha"].format(v=f"{valor:,.2f}", de=moeda_de, r=f"{resultado:,.2f}", para=moeda_para), topo=40)
+        render_html('<div style="height:34px"></div>')
+
+    if eh_admin():
+        with st.expander("🏦 Taxas oficiais do BNA (administrador)"):
+            st.caption("Copia do portal do BNA a taxa de câmbio de referência do dia (Kz por 1 unidade). A app usa estes valores como taxa oficial.")
+            d_ref = st.date_input("Data da publicação", value=datetime.now().date(), key="bna_data")
+            atual = {r["moeda"]: (float(r["compra"]), float(r["venda"])) for _, r in bna.iterrows()}
+            base = pd.DataFrame([{"Moeda": m, "Compra": atual.get(m, (0.0, 0.0))[0], "Venda": atual.get(m, (0.0, 0.0))[1]} for m in _MOEDAS_BNA])
+            ed = st.data_editor(base, hide_index=True, disabled=["Moeda"], key="bna_editor", column_config={
+                "Compra": st.column_config.NumberColumn("Compra (Kz)", min_value=0.0, format="%.3f"), "Venda": st.column_config.NumberColumn("Venda (Kz)", min_value=0.0, format="%.3f")})
+            if st.button("💾 Guardar taxas do BNA", key="bna_guardar", type="primary"):
+                n = guardar_taxas_bna(d_ref, [(r["Moeda"], r["Compra"], r["Venda"]) for _, r in ed.iterrows()])
+                st.success(f"{n} taxa(s) guardada(s).")
+                st.rerun()
+
+    st.divider()
+    st.subheader(tx["conv_tabela_titulo"])
+    try:
+        dados_kz = obter_taxas_cambio("AOA")
+        registar_historico_cambio(dados_kz["rates"])
+        linhas = []
+        for m in MOEDAS:
+            if m == "AOA":
+                continue
+            mk = (1 / dados_kz["rates"][m]) if dados_kz["rates"].get(m) else None
+            r = bna[bna["moeda"] == m]
+            linhas.append({"Moeda": m, "BNA compra (Kz)": float(r.iloc[0]["compra"]) if not r.empty else None, "BNA venda (Kz)": float(r.iloc[0]["venda"]) if not r.empty else None,
+                           "Mercado indicativa (Kz)": mk})
+        fmt = lambda v: "—" if v is None or pd.isna(v) else f"{v:,.3f}".replace(",", " ")
+        st.dataframe(pd.DataFrame(linhas).style.format({c: fmt for c in ("BNA compra (Kz)", "BNA venda (Kz)", "Mercado indicativa (Kz)")}), hide_index=True)
+        st.caption("Kz por 1 unidade da moeda. A taxa do BNA é a oficial de referência; a de mercado é indicativa.")
+    except Exception:
+        st.caption(tx["conv_tabela_indisponivel"])
+
+    st.divider()
+    st.subheader("📈 Evolução do câmbio do Kwanza")
+    cg_a, cg_b = st.columns([1, 3])
+    moeda_graf = cg_a.selectbox("Moeda", ["USD", "EUR", "GBP", "ZAR", "CNY", "BRL"], key="conv_graf_moeda")
+    periodo_cambio = cg_b.radio("Período", PERIODOS_GRAFICO, index=2, horizontal=True, key="conv_graf_periodo")
+    try:
+        serie_cambio = obter_serie_cambio_aoa(moeda_graf, periodo_cambio)
+    except Exception:
+        serie_cambio = pd.DataFrame(columns=["Data", "Valor"])
+    painel_grafico(f"{moeda_graf} / AOA", f"Kz por 1 {moeda_graf}", serie_cambio, "Kz", periodo_cambio,
+                   nota=("Taxas indicativas de mercado (fonte aberta: fawazahmed0/exchange-api), uma por dia; "
+                         f"os dados existem desde {CAMBIO_DADOS_DESDE[8:]}/{CAMBIO_DADOS_DESDE[5:7]}/{CAMBIO_DADOS_DESDE[:4]}. "
+                         "Não há valores dentro do dia. Podem diferir da taxa oficial do BNA e das praticadas pelos bancos."))
+
+
+# =========================================================
+# AVALIAÇÃO DE ACTIVOS — cartões, medidor de valor, veredicto e análise avançada
+# =========================================================
+def html_medidor_valor(preco: float, justo: float) -> str:
+    if not justo or justo <= 0 or not preco or preco <= 0:
+        return ""
+    mx = max(preco, justo) * 1.25
+    margem = (justo / preco - 1) * 100
+    return (f'<div class="fx-medidor"><div class="fx-med-trilho"><i class="fx-med-pj" style="left:{justo / mx * 100:.1f}%"></i><i class="fx-med-pp" style="left:{preco / mx * 100:.1f}%"></i></div>'
+            f'<div class="fx-med-leg"><span><b>●</b> Preço {kz(preco)}</span><span><b>◆</b> Valor justo {kz(justo)}</span><span>Margem de segurança {margem:+.1f}%</span></div></div>')
+
+
+def _tom(v, bom, mau):
+    return "up" if bom(v) else "down" if mau(v) else None
+
+
+def pagina_avaliacao_activos(tx: dict):
+    premissas = obter_premissas_macro()
+    df_aval = obter_avaliacoes()
+    if df_aval.empty:
+        st.info(tx["aval_sem_dados"])
+        return
+    empresa_sel = st.selectbox(tx["aval_empresa"], df_aval["empresa"].tolist())
+    l = df_aval[df_aval["empresa"] == empresa_sel].iloc[0]
+    av = {"sector": l["sector"], "preco": float(l["preco"]), "acoes_circulacao": float(l["acoes_circulacao"]), "lucro_liquido": float(l["lucro_liquido"]),
+          "ganho_pontual": float(l["ganho_pontual"]), "capital_proprio": float(l["capital_proprio"]), "dividendo_total": float(l["dividendo_total"]), "crescimento_g": float(l["crescimento_g"])}
+    m = calcular_metricas_avaliacao(av, premissas)
+    tk = ticker_por_nome(empresa_sel)
+    uri = logo_data_uri(tk) if tk else None
+    logo = f'<img src="{uri}" alt="">' if uri else ""
+    render_html(f'<div class="fx-emp">{logo}<div><div class="fx-emp-nome">{_esc(empresa_sel)}</div>'
+                f'<div class="fx-emp-sub">{_esc(tx["aval_sector"])}: {_esc(av["sector"])} · {_esc(tx["aval_cap_mercado"])} {_esc(kz(m["cap_mercado"]))}</div></div></div>')
+    infl = float(premissas["inflacao"])
+    pe, pbv, dy = m["pe"], m["pbv"], m["dy_nominal"]
+    kpi_linha([
+        kpi_card("💰", tx["aval_preco"], kz(av["preco"]), "Preço de mercado", destaque=True),
+        kpi_card("🔢", tx["aval_pe"], multiplo(pe), "barato (<8x)" if pe is not None and pe < 8 else "caro (>15x)" if pe is not None and pe > 15 else "zona justa (8–15x)",
+                 tom=_tom(pe, lambda v: v is not None and v < 8, lambda v: v is not None and v > 15)),
+        kpi_card("📚", tx["aval_pbv"], multiplo(pbv), "abaixo do valor contabilístico" if pbv is not None and pbv < 1 else "acima de 2x: exige ROE alto" if pbv is not None and pbv > 2 else "razoável (1–2x)",
+                 tom=_tom(pbv, lambda v: v is not None and 1 <= v <= 2, lambda v: v is not None and v > 2)),
+        kpi_card("💸", tx["aval_dy"], pct(dy), f"inflação {infl * 100:.1f}%: " + ("bate a inflação" if dy >= infl else "abaixo da inflação"), tom="up" if dy >= infl else "down"),
+    ])
+    vj, up = m["valor_justo"], m["upside"]
+    kpi_linha([
+        kpi_card("🎯", tx["aval_vj"], kz(vj) if vj is not None else "n/d", "modelo de dividendos (DDM)"),
+        kpi_card("📈", tx["aval_upside"], pct(up) if up is not None else "n/d", ("potencial de valorização" if up and up > 0 else "potencial de desvalorização" if up is not None else None),
+                 tom=("up" if up and up > 0 else "down" if up is not None and up < 0 else None)),
+        kpi_card("🏦", tx["aval_ke"], pct(m["ke"]), "custo de capital exigido"),
+    ])
+    if vj is None:
+        st.warning("Premissas inválidas para o modelo: o crescimento assumido (g) tem de ser inferior ao custo de capital (Ke). Ajusta as premissas no painel do administrador.")
+    else:
+        render_html(html_medidor_valor(av["preco"], vj))
+        if up > 0.15:
+            cls, txt = "up", tx["aval_subvalorizado"]
+        elif up < -0.15:
+            cls, txt = "down", tx["aval_sobrevalorizado"]
+        else:
+            cls, txt = "mid", tx["aval_justo"]
+        render_html(f'<div class="fx-veredicto {cls}">{_esc(txt.replace("**", ""))}</div>')
+    with st.expander("📖 Como ler estes indicadores"):
+        nota_indicador(tx["aval_nota1"])
+        nota_indicador(tx["aval_nota2"])
+        st.caption(tx["aval_ddm_caption"])
+    st.markdown("#### " + tx["aval_premium_titulo"])
+    if not st.session_state["is_premium"]:
+        render_html(tx["aval_premium_lock"])
+        return
+    kpi_linha([kpi_card("🏅", tx["aval_roe"], pct(m["roe"]) if m["roe"] is not None else "n/d", "retorno do capital próprio"),
+               kpi_card("🧾", tx["aval_payout"], pct(m["payout"]) if m["payout"] is not None else "n/d", "parte do lucro distribuída"),
+               kpi_card("🛡️", tx["aval_dy_real"], pct(m["dy_real"]), "dividendo menos inflação", tom=("up" if m["dy_real"] > 0 else "down"))])
+    with st.expander("🧮 " + tx["aval_sensibilidade"].replace("#", "").replace("*", "").strip(), expanded=True):
+        ke_base, g_base = m["ke"], av["crescimento_g"]
+        gs = [max(0.0, g_base - 0.02), g_base, g_base + 0.02]
+        kes = [ke_base - 0.02, ke_base, ke_base + 0.02]
+        num = pd.DataFrame([[((m["dps"] * (1 + g_c)) / (ke_c - g_c)) if ke_c > g_c else None for g_c in gs] for ke_c in kes],
+                           index=[f"Ke={k * 100:.1f}%" for k in kes], columns=[f"g={g * 100:.1f}%" for g in gs])
+        cor = lambda v: "" if v is None or pd.isna(v) else ("color:#6D28D9;font-weight:700" if v >= av["preco"] else "color:#BE123C;font-weight:700")
+        _zebra_bg = lambda i: "background-color:#F5F3FF" if i % 2 == 0 else "background-color:#FFFFFF"
+        num = num.rename_axis("Ke \\ g").reset_index()
+        _cols_v = [c for c in num.columns if c != "Ke \\ g"]
+        sty_sens = (num.style.format({c: (lambda v: "—" if v is None or pd.isna(v) else kz(v)) for c in _cols_v})
+                    .apply(lambda d_: pd.DataFrame([[_zebra_bg(i)] * d_.shape[1] for i in range(d_.shape[0])], index=d_.index, columns=d_.columns), axis=None)
+                    .map(cor, subset=_cols_v))
+        st.dataframe(sty_sens, hide_index=True)
+        st.caption("Roxo: valor justo igual ou acima do preço actual. Vinho: abaixo do preço actual.")
+        st.caption("Roxo: valor justo acima do preço actual · rosa: abaixo. Mostra como o valor justo muda se o crescimento (g) ou o custo de capital (Ke) variarem ±2 p.p.")
+    rows, xl_rows, nomes, precos, justos, ups = [], [], [], [], [], []
+    for _, r in df_aval.iterrows():
+        a = {"sector": r["sector"], "preco": float(r["preco"]), "acoes_circulacao": float(r["acoes_circulacao"]), "lucro_liquido": float(r["lucro_liquido"]),
+             "ganho_pontual": float(r["ganho_pontual"]), "capital_proprio": float(r["capital_proprio"]), "dividendo_total": float(r["dividendo_total"]), "crescimento_g": float(r["crescimento_g"])}
+        ml = calcular_metricas_avaliacao(a, premissas)
+        rows.append({"Empresa": r["empresa"], "Sector": r["sector"], "P/E": ml["pe"], "P/BV": ml["pbv"], "ROE": (ml["roe"] * 100) if ml["roe"] is not None else None,
+                     "DY": ml["dy_nominal"] * 100, "Upside DDM": (ml["upside"] * 100) if ml["upside"] is not None else None})
+        xl_rows.append([r["empresa"], r["sector"], ml["pe"], ml["pbv"], ml["roe"], ml["dy_nominal"], ml["upside"]])
+        nomes.append(str(r["empresa"]))
+        precos.append(a["preco"])
+        justos.append(ml["valor_justo"])
+        ups.append((ml["upside"] * 100) if ml["upside"] is not None else None)
+    num = pd.DataFrame(rows)
+    with st.expander("🏁 " + tx["aval_comparacao"].replace("#", "").replace("*", "").strip(), expanded=True):
+        f = lambda s: (lambda v: "n/d" if v is None or pd.isna(v) else s.format(v))
+        sty = num.style.format({"P/E": f("{:.1f}x"), "P/BV": f("{:.2f}x"), "ROE": f("{:.1f}%"), "DY": f("{:.1f}%"), "Upside DDM": f("{:+.1f}%")}).map(cor_variacao, subset=["Upside DDM"])
+        st.dataframe(sty, hide_index=True)
+        g1, g2 = st.columns(2)
+        with g1:
+            st.markdown("**Preço vs valor justo (Kz)**")
+            fx_barras(pd.DataFrame({"Preço": precos, "Valor justo": [v if v is not None else 0 for v in justos]}, index=nomes), height=260)
+        with g2:
+            st.markdown("**Potencial de valorização (%)**")
+            fx_barras_div(pd.DataFrame({"Upside": [u if u is not None else 0 for u in ups]}, index=nomes), height=260)
+    with st.expander("💡 Como interpretar esta tabela?"):
+        st.markdown("""
+**P/E (Price-to-Earnings):** quantos anos de lucro estás a pagar pelo preço actual.
+- P/E < 8x → potencialmente barato para o contexto angolano · 8–15x → zona justa · > 15x → caro, exige crescimento elevado
+
+**P/BV (Price-to-Book Value):** preço face ao valor contabilístico dos activos.
+- < 1x → activos abaixo do valor de balanço (atenção: pode indicar problema estrutural) · 1–2x → razoável para a banca angolana · > 2x → só com ROE elevado e consistente
+
+**ROE (Return on Equity):** rentabilidade do capital próprio.
+- ROE > 15% → cria valor acima do custo de capital estimado (Ke ≈ 18%) · ROE < Ke → destrói valor a longo prazo
+
+**Dividend Yield (DY):** retorno em dividendos ao preço actual.
+- Com a inflação em vigor, um DY abaixo da inflação significa retorno real negativo em dividendos
+
+**Upside DDM:** diferença entre o valor justo do modelo de dividendos e o preço de mercado.
+- Positivo → possível subvalorização; negativo → possível sobrevalorização. ⚠️ O DDM é muito sensível a g e Ke: usa-o como referência, não como verdade absoluta.
+        """)
+    d1, d2 = st.columns(2)
+    xl = _xlsx_seguro(lambda: gerar_xlsx_comparacao(xl_rows))
+    if xl:
+        d1.download_button("⬇️ Descarregar Excel (formatado)", data=xl, file_name="comparacao_sectorial_appo.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_comp_xlsx")
+    d2.download_button(tx["aval_descarregar_comp"], data=num.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"), file_name="comparacao_sectorial_appo.csv", mime="text/csv")
+
+
+PROVINCIAS_AO = ["Bengo", "Benguela", "Bié", "Cabinda", "Cuando", "Cubango", "Cuanza Norte", "Cuanza Sul", "Cunene", "Huambo", "Huíla", "Icolo e Bengo", "Luanda",
+                 "Lunda Norte", "Lunda Sul", "Malanje", "Moxico", "Moxico Leste", "Namibe", "Uíge", "Zaire", "Fora de Angola"]
+INTERESSES = ["Aprender sobre investimento", "Investir em grupo no Clube", "Formação e workshops", "Acompanhar o mercado BODIVA"]
+CONTRIBUICOES = ["Prefiro não dizer", "Até 10 000 Kz por mês", "10 000 a 50 000 Kz por mês", "50 000 a 150 000 Kz por mês", "Mais de 150 000 Kz por mês"]
+COMO_SOUBE = ["Amigo ou sócio do Clube", "Redes sociais", "WhatsApp", "Evento ou workshop", "Pesquisa na internet", "Outro"]
+
+
+
+# =========================================================
+# JANELA INTERACTIVA DO ACTIVO: clica numa linha de qualquer tabela de cotações
+# =========================================================
+def _conteudo_activo(info: dict):
+    tk, nome = str(info.get("ticker") or ""), str(info.get("nome") or info.get("ticker") or "")
+    preco, var, vol = info.get("preco"), info.get("variacao"), info.get("volume")
+    uri = logo_data_uri(tk)
+    img = f'<img src="{uri}" alt="">' if uri else ""
+    tipo = str(info.get("tipo") or "").strip()
+    render_html(f'<div class="fx-emp">{img}<div><div class="fx-emp-nome">{_esc(nome)}</div>'
+                f'<div class="fx-emp-sub">{_esc(tk)}' + (f' · {_esc(tipo)}' if tipo else '') + ' · BODIVA</div></div></div>')
+    cartoes = [kpi_card("💰", "Último preço", kz(preco) if preco is not None and pd.notna(preco) else "n/d", destaque=True),
+               kpi_card("📊", "Variação do dia", pct_bruto(var) if var is not None and pd.notna(var) else "n/d", None, None,
+                        ("up" if var and var > 0 else "down" if var and var < 0 else None))]
+    if vol is not None and pd.notna(vol):
+        cartoes.append(kpi_card("🔁", "Volume", f"{vol:,.0f}".replace(",", " ")))
+    if info.get("actualizado"):
+        cartoes.append(kpi_card("🕒", "Actualizado", str(info["actualizado"])[:16], info.get("fonte") or None))
+    kpi_linha(cartoes)
+    # gráfico de preços do título
+    try:
+        per = st.radio("Período", PERIODOS_GRAFICO, index=min(2, len(PERIODOS_GRAFICO) - 1), horizontal=True, key=f"jan_per_{tk}")
+        serie = obter_serie_cotacao(tk, per)
+        painel_grafico(nome, tk, serie, "Kz", per, nota="Histórico registado pelo APPO após cada sessão de mercado.")
+    except Exception:
+        traceback.print_exc()
+        st.caption("O histórico de preços deste título ainda não está disponível.")
+    # indicadores de avaliação (se o título estiver avaliado)
+    try:
+        df_aval = obter_avaliacoes()
+        alvo = None
+        for _, r in df_aval.iterrows():
+            t_ = ticker_por_nome(r["empresa"])
+            if t_ and _tk_norm(t_) == _tk_norm(tk):
+                alvo = r
+                break
+        if alvo is not None:
+            av = {"sector": alvo["sector"], "preco": float(alvo["preco"]), "acoes_circulacao": float(alvo["acoes_circulacao"]), "lucro_liquido": float(alvo["lucro_liquido"]),
+                  "ganho_pontual": float(alvo["ganho_pontual"]), "capital_proprio": float(alvo["capital_proprio"]), "dividendo_total": float(alvo["dividendo_total"]), "crescimento_g": float(alvo["crescimento_g"])}
+            m = calcular_metricas_avaliacao(av, obter_premissas_macro())
+            st.markdown("##### Indicadores de avaliação")
+            kpi_linha([kpi_card("🔢", "P/E", multiplo(m["pe"])), kpi_card("📚", "P/BV", multiplo(m["pbv"])), kpi_card("💸", "Dividend yield", pct(m["dy_nominal"])),
+                       kpi_card("🎯", "Valor justo (DDM)", kz(m["valor_justo"]) if m["valor_justo"] is not None else "n/d",
+                                (f"{m['upside'] * 100:+.1f}% face ao preço" if m["upside"] is not None else None), None,
+                                ("up" if m["upside"] and m["upside"] > 0 else "down" if m["upside"] is not None and m["upside"] < 0 else None))])
+            if m["valor_justo"]:
+                render_html(html_medidor_valor(av["preco"], m["valor_justo"]))
+    except Exception:
+        traceback.print_exc()
+    # posição do Clube neste título (só para sócios)
+    try:
+        if eh_participante():
+            cart = obter_carteira_real()
+            pos = cart[cart["ticker"].apply(lambda x: _tk_norm(x) == _tk_norm(tk))] if not cart.empty else cart
+            if not pos.empty and preco:
+                qtd = float(sum(_num_seguro(q) for q in pos["qtd"]))
+                custo = float(sum(_num_seguro(c) for c in pos["valor_aquisicao"]))
+                valor = qtd * float(preco)
+                st.markdown("##### A posição do Clube")
+                kpi_linha([kpi_card("🧺", "Quantidade", f"{qtd:,.0f}".replace(",", " ")), kpi_card("💼", "Valor actual", kz(valor)),
+                           kpi_card("📈", "Mais-valia", kz(valor - custo), (f"{(valor / custo - 1) * 100:+.1f}%" if custo else None), None,
+                                    ("up" if valor > custo else "down" if valor < custo else None))])
+    except Exception:
+        traceback.print_exc()
+    if eh_investidor():
+        st.button("📐 Abrir a avaliação completa", key=f"jan_aval_{tk}", on_click=_ir_para, args=("📐 Avaliação de Activos",))
+
+
+_abrir_janela_activo = None
+if hasattr(st, "dialog"):
+    try:
+        _abrir_janela_activo = st.dialog("Detalhe do activo", width="large")(_conteudo_activo)
+    except TypeError:
+        _abrir_janela_activo = st.dialog("Detalhe do activo")(_conteudo_activo)
+
+
+def tabela_activos_clicavel(estilo, df_base: pd.DataFrame, chave: str, col_cfg: dict = None, via_rerun: bool = False):
+    """Mostra a tabela e, ao clicar numa linha, abre a janela do activo. `df_base` tem de ter as linhas pela mesma ordem da tabela."""
+    st.caption("💡 Clica numa linha para ver o gráfico e os indicadores do título.")
+    cfg = col_cfg if col_cfg is not None else cfg_logo()
+    try:
+        ev = st.dataframe(estilo, hide_index=True, column_config=cfg, on_select="rerun", selection_mode="single-row", key=chave)
+        linhas = list(ev.selection.rows) if ev is not None and hasattr(ev, "selection") else []
+    except TypeError:                       # Streamlit antigo, sem selecção de linhas
+        st.dataframe(estilo, hide_index=True, column_config=cfg)
+        return
+    marca = f"_jan_{chave}"
+    if not linhas:
+        st.session_state.pop(marca, None)     # linha desmarcada: um novo clique volta a abrir
+        return
+    pos = linhas[0]
+    if pos >= len(df_base) or st.session_state.get(marca) == pos:
+        return                                # já aberta (a janela fechada não deve reabrir sozinha)
+    st.session_state[marca] = pos
+    r = df_base.iloc[pos]
+    info = {k: (r[k] if k in r.index else None) for k in ("ticker", "nome", "tipo", "preco", "variacao", "volume", "fonte", "actualizado_em")}
+    info["actualizado"] = info.pop("actualizado_em")
+    if via_rerun:                         # tabela dentro de um fragmento com actualização automática: abre-se fora dele
+        st.session_state["_jan_pendente"] = info
+        st.rerun()
+    _mostrar_janela(info)
+
+
+def _mostrar_janela(info: dict):
+    if _abrir_janela_activo is not None:
+        _abrir_janela_activo(info)
+    else:
+        with st.container(border=True):
+            _conteudo_activo(info)
+
+
+def abrir_janela_pendente():
+    """Chamar fora de qualquer fragmento: abre a janela pedida por uma tabela que está dentro de um fragmento."""
+    info = st.session_state.pop("_jan_pendente", None)
+    if info is not None:
+        _mostrar_janela(info)
+
+
+
+def _painel_inicio_aluno():
+    """Início simples: um único próximo passo, atalhos essenciais e o mercado só quando é pedido."""
+    nome = str(st.session_state.get("conta_nome") or "").split(" ")[0]
+    st.markdown(f"### Bem-vindo, {_html_pub.escape(nome)}" if nome else "### Bem-vindo")
+    try:
+        dfd = obter_diagnosticos_cf()
+    except Exception:
+        dfd = pd.DataFrame()
+    if not tem_perfil():
+        render_html('<div class="appo-perfil-topo"><span class="appo-perfil-rotulo">Primeiro passo</span><div class="appo-perfil-nome" style="font-size:1.4rem;">Faz o teu perfil de investidor</div>'
+                    '<p>Em cerca de 4 minutos, o APPO ajusta o teu portal ao teu perfil de risco e à tua experiência.</p></div>')
+        st.button("🧭 Fazer o meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="ini_perfil", type="primary")
+    elif dfd.empty:
+        render_html('<div class="appo-perfil-topo"><span class="appo-perfil-rotulo">Próximo passo</span><div class="appo-perfil-nome" style="font-size:1.4rem;">Mede a tua capacidade financeira</div>'
+                    '<p>Um diagnóstico curto mostra onde estás e que treino te ajuda mais.</p></div>')
+        st.button("🔎 Fazer o diagnóstico", on_click=_ir_para, args=("🧠 Capacidade Financeira",), key="ini_cf", type="primary")
+    else:
+        import json as _json
+        ult = dfd.iloc[-1]["resultados"]
+        ult = _json.loads(ult) if isinstance(ult, str) else ult
+        st.metric("A tua capacidade financeira", f"{ult.get('geral', 0):.0f}/100")
+        st.button("🧠 Continuar a treinar", on_click=_ir_para, args=("🧠 Capacidade Financeira",), key="ini_cf", type="primary")
+    st.markdown("##### Atalhos")
+    b1, b2, b3 = st.columns(3)
+    b1.button("📚 Biblioteca", on_click=_ir_para, args=("📚 Biblioteca Educativa",), key="ini_bib")
+    if eh_investidor():
+        b2.button("🧮 Princípio 50/30/20", on_click=_ir_para, args=("🧮 Princípio 50/30/20",), key="ini_r50")
+        b3.button("🧪 Simulador", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key="ini_sim")
+    else:
+        b2.button("🧭 O meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="ini_rev")
+        b3.button("🎓 Educação & Serviços", on_click=_ir_para, args=("🎓 Educação & Serviços",), key="ini_edu")
+    with st.expander("📈 Cotações de referência"):
+        if not _df_activos_ticker.empty:
+            tabela_activos_clicavel(tabela_cotacoes_estilizada(_df_activos_ticker), _df_activos_ticker, "tb_clic_a")
+        aviso_discreto("Dados de mercado de referência, não em tempo real. Os fechos e volumes são carregados pelo APPO depois de cada sessão de mercado.")
+
+
+
+# =========================================================
+# CONTA GRATUITA (auto-registo com aprovação do administrador) + SUBSCRIÇÃO DE NOVIDADES
+# =========================================================
+def validar_password_nova(pw: str, email: str = "") -> str:
+    """Devolve a mensagem de erro, ou '' se a palavra-passe for aceitável."""
+    pw = pw or ""
+    if len(pw) < 8:
+        return "A palavra-passe deve ter pelo menos 8 caracteres."
+    if len(pw) > 128:
+        return "A palavra-passe é demasiado longa (máximo 128 caracteres)."
+    if not any(c.isalpha() for c in pw) or not any(c.isdigit() for c in pw):
+        return "A palavra-passe deve ter letras e números."
+    if email and pw.lower() == email.strip().lower():
+        return "A palavra-passe não pode ser igual ao e-mail."
+    return ""
+
+
+def registar_conta_gratuita(nome: str, email: str, password: str, telefone: str = "") -> None:
+    """Cria uma conta PENDENTE (não entra até um administrador aprovar). Sem privilégios: não é admin, premium nem participante.
+    Se o e-mail já existir, não faz nada (a interface responde sempre da mesma forma, para não revelar quem tem conta)."""
+    email = email.strip().lower()
+    if consultar_um("SELECT 1 FROM contas WHERE email = %s", (email,)):
+        return
+    executar("INSERT INTO contas (nome, email, password_hash, is_admin, estado, origem, telefone) VALUES (%s, %s, %s, FALSE, 'pendente', 'auto', %s) ON CONFLICT (email) DO NOTHING",
+             (nome.strip(), email, hash_password(password), (telefone or "").strip()[:30] or None))
+
+
+def contas_auto_ultimas_24h() -> int:
+    return int(consultar_um("SELECT COUNT(*) FROM contas WHERE origem = 'auto' AND criado_em > NOW() - INTERVAL '24 hours'")[0])
+
+
+def listar_contas_pendentes() -> pd.DataFrame:
+    exigir_admin()
+    return consultar_df("SELECT id, nome, email, telefone, criado_em FROM contas WHERE estado = 'pendente' ORDER BY criado_em")
+
+
+def decidir_conta_pendente(conta_id: int, aprovar: bool):
+    """Aprova ou rejeita um pedido de conta. Devolve (nome, email)."""
+    exigir_admin()
+    c = consultar_um("SELECT nome, email, estado FROM contas WHERE id = %s", (int(conta_id),))
+    if not c or c[2] != "pendente":
+        raise ValueError("Este pedido já foi tratado ou não existe.")
+    executar("UPDATE contas SET estado = %s WHERE id = %s AND estado = 'pendente'", ("activa" if aprovar else "rejeitada", int(conta_id)))
+    registar_auditoria("conta_gratuita_" + ("aprovada" if aprovar else "rejeitada"), "contas", str(conta_id), depois={"email": c[1]})
+    return c[0], c[1]
+
+
+def guardar_subscritor(email: str) -> None:
+    executar("INSERT INTO subscritores (email) VALUES (%s) ON CONFLICT (email) DO NOTHING", (email.strip().lower(),))
+
+
+def formulario_conta_gratuita():
+    st.markdown("**Cria a tua conta gratuita** e começa a aprender e a praticar com o APPO.")
+    st.markdown("- 🧭 Descobre o teu **perfil de investidor**\n- 🧠 Faz o diagnóstico de **capacidade financeira** e o treino\n"
+                "- 📚 Acede à **biblioteca educativa**\n- 🚀 Se o teu perfil for de investidor, abres o portal com **cotações, simulador e ferramentas**")
+    if "cap_a" not in st.session_state:
+        import random
+        st.session_state["cap_a"], st.session_state["cap_b"] = random.randint(2, 9), random.randint(2, 9)
+    with st.form("form_conta_gratuita", clear_on_submit=False):
+        n1, n2 = st.columns(2)
+        nome_p = n1.text_input("Nome próprio", max_chars=60, key="cg_nome")
+        apelido = n2.text_input("Apelido(s)", max_chars=60, key="cg_apelido")
+        e1, e2 = st.columns(2)
+        email = e1.text_input("E-mail (será o teu utilizador)", max_chars=200, key="cg_email")
+        tel = e2.text_input("Telemóvel / WhatsApp (opcional)", max_chars=30, key="cg_tel")
+        p1, p2 = st.columns(2)
+        pw1 = p1.text_input("Palavra-passe", type="password", max_chars=128, key="cg_pw1", help="Mínimo 8 caracteres, com letras e números.")
+        pw2 = p2.text_input("Repete a palavra-passe", type="password", max_chars=128, key="cg_pw2")
+        cap = st.number_input(f"Para confirmar que és uma pessoa: quanto é {st.session_state['cap_a']} + {st.session_state['cap_b']}?", min_value=0, max_value=99, value=0, step=1, key="cg_cap")
+        maior = st.checkbox("Tenho 18 anos ou mais.", key="cg_maior")
+        ok = st.checkbox("Aceito que o APPO use estes dados para gerir a minha conta e me contactar sobre ela. Podes pedir a eliminação quando quiseres.", key="cg_ok")
+        enviar = st.form_submit_button("Criar conta gratuita", type="primary")
+    if not enviar:
+        st.caption("A conta é analisada por um administrador antes de ficar activa. Recebes um e-mail quando for aprovada.")
+        return
+    nome = f"{nome_p.strip()} {apelido.strip()}".strip()
+    erro = None
+    if not (nome_p.strip() and apelido.strip()):
+        erro = "Indica o nome próprio e o apelido."
+    elif not _REGEX_EMAIL.match((email or "").strip()):
+        erro = "O e-mail indicado não parece válido."
+    elif validar_password_nova(pw1, email):
+        erro = validar_password_nova(pw1, email)
+    elif pw1 != pw2:
+        erro = "As duas palavras-passe não coincidem."
+    elif int(cap) != st.session_state["cap_a"] + st.session_state["cap_b"]:
+        erro = "A resposta à soma não está certa."
+    elif not maior:
+        erro = "É necessário confirmar que tens 18 anos ou mais."
+    elif not ok:
+        erro = "É necessário aceitar o tratamento dos dados para criar a conta."
+    if erro:
+        st.error(erro)
+        return
+    if not _pode_enviar("ultimo_signup", 45):
+        st.warning("Aguarda alguns segundos antes de tentar outra vez.")
+        return
+    try:
+        if contas_auto_ultimas_24h() >= 40:
+            st.warning("Recebemos muitos pedidos hoje e as novas contas estão temporariamente fechadas. Tenta amanhã ou escreve-nos.")
+            return
+        registar_conta_gratuita(nome, email, pw1, tel)
+        for k in ("cap_a", "cap_b"):
+            st.session_state.pop(k, None)
+        try:
+            enviar_email(SMTP_USER, "APPO · novo pedido de conta gratuita", f"{nome} ({email.strip().lower()}) pediu uma conta gratuita. Aprova-a em Painel do Administrador › Contas.")
+        except Exception:
+            pass
+        st.success("Pedido recebido. Um administrador vai analisar a tua conta e recebes um e-mail quando estiver aprovada. Se já tinhas conta, entra no separador «Entrar».")
+    except Exception:
+        traceback.print_exc()
+        st.error("Não foi possível registar o pedido neste momento. Tenta novamente daqui a pouco.")
+
+
+def formulario_subscricao(key_prefix: str = "sub"):
+    with st.expander("🔔 Receber novidades do APPO por e-mail"):
+        st.caption("Sem criar conta: deixa o teu e-mail para saberes quando houver novidades, formações e actualizações. Podes sair quando quiseres.")
+        with st.form(f"{key_prefix}_form_subscricao", clear_on_submit=True):
+            em = st.text_input("E-mail", max_chars=200, key=f"{key_prefix}_sub_email")
+            ok = st.checkbox("Aceito receber novidades do APPO neste e-mail.", key=f"{key_prefix}_sub_ok")
+            env = st.form_submit_button("Subscrever")
+        if env:
+            if not _REGEX_EMAIL.match((em or "").strip()):
+                st.error("O e-mail indicado não parece válido.")
+            elif not ok:
+                st.error("É necessário aceitar para subscrever.")
+            elif not _pode_enviar("ultima_subscricao", 20):
+                st.warning("Aguarda alguns segundos.")
+            else:
+                try:
+                    guardar_subscritor(em)
+                    st.success("Subscrição registada. Obrigado!")
+                except Exception:
+                    traceback.print_exc()
+                    st.error("Não foi possível registar neste momento.")
+
+
+def painel_contas_pendentes():
+    """Topo do separador Contas do administrador: aprovar ou rejeitar pedidos de conta gratuita."""
+    dfp = listar_contas_pendentes()
+    st.subheader(f"Pedidos de conta gratuita ({len(dfp)} pendente{'s' if len(dfp) != 1 else ''})")
+    if dfp.empty:
+        st.caption("Sem pedidos por tratar.")
+    for _, p in dfp.iterrows():
+        a, b, c = st.columns([3, 1, 1])
+        a.write(f"**{p['nome']}** — {p['email']}" + (f" · {p['telefone']}" if p["telefone"] else "") + f" · {str(p['criado_em'])[:16]}")
+        if b.button("Aprovar", key=f"cg_apr_{int(p['id'])}", type="primary"):
+            try:
+                nome, em = decidir_conta_pendente(int(p["id"]), True)
+                ok, erro = enviar_email(em, "A tua conta APPO foi aprovada", f"Olá {nome},\n\nA tua conta gratuita no Clube de Investimento APPO foi aprovada. Já podes entrar em {APP_URL} com o e-mail e a palavra-passe que escolheste.\n\nBem-vindo(a)!\nAPPO")
+                st.session_state["cg_msg"] = f"Conta de {em} aprovada." + ("" if ok else " Não foi possível enviar o e-mail: avisa a pessoa por outro canal.")
+            except Exception as e:
+                st.session_state["cg_msg"] = str(e)
+            st.rerun()
+        if c.button("Rejeitar", key=f"cg_rej_{int(p['id'])}"):
+            try:
+                decidir_conta_pendente(int(p["id"]), False)
+                st.session_state["cg_msg"] = f"Pedido de {p['email']} rejeitado."
+            except Exception as e:
+                st.session_state["cg_msg"] = str(e)
+            st.rerun()
+    _m = st.session_state.pop("cg_msg", None)
+    if _m:
+        st.info(_m)
+    try:
+        subs = consultar_df("SELECT email, criado_em FROM subscritores ORDER BY criado_em DESC")
+        with st.expander(f"🔔 Subscritores de novidades ({len(subs)})"):
+            if subs.empty:
+                st.caption("Ainda não há subscritores.")
+            else:
+                st.dataframe(subs, hide_index=True)
+                st.download_button("⬇️ Descarregar CSV", data=subs.to_csv(index=False, sep=";").encode("utf-8-sig"), file_name="subscritores_appo.csv", mime="text/csv", key="dl_subs")
+    except Exception:
+        pass
+    st.divider()
+
+
+def pagina_login():
+    col_esq, col_centro, col_dir = st.columns([1, 1.4, 1])
+    with col_centro:
+        st.selectbox("🌐", LISTA_IDIOMAS, key="idioma", label_visibility="collapsed")
+        tx = t()
+        banner_capa(IMG_SKYLINE, "Crescimento Sustentável, Foco no Longo Prazo", altura=150, escurecimento=0.42)
+        logo_com_texto(110)
+        render_html(f'<p style="text-align:center; opacity:0.75; margin-top:6px;">{tx["tagline"]}</p>')
+        st.markdown(f"#### {tx['login_titulo']}")
+        _t_entrar, _t_criar = st.tabs(["🔑 Entrar", "✨ Criar conta gratuita"])
+        with _t_entrar:
+            with st.form("form_login"):
+                email    = st.text_input(tx["email"])
+                password = st.text_input(tx["password"], type="password")
+                submeter = st.form_submit_button(tx["entrar"])
+            with st.expander("Esqueci-me da palavra-passe"):
+                st.caption("Indica o e-mail da tua conta e um telemóvel ou WhatsApp. O administrador contacta-te para confirmar que és tu e repor o acesso.")
+                with st.form("form_recuperar_pw", clear_on_submit=True):
+                    rec_email = st.text_input("E-mail da conta", key="rec_email", max_chars=200)
+                    rec_tel = st.text_input("Telemóvel ou WhatsApp", key="rec_tel", max_chars=30)
+                    rec_enviar = st.form_submit_button("Pedir ajuda")
+                if rec_enviar:
+                    _e = (rec_email or "").strip()
+                    if not _REGEX_EMAIL.match(_e) or len((rec_tel or "").strip()) < 6:
+                        st.error("Indica um e-mail válido e um telemóvel para te podermos contactar.")
+                    elif not _pode_enviar("ultimo_pedido_recup", 30):
+                        st.warning("Aguarda alguns segundos antes de enviar outro pedido.")
+                    else:
+                        try:
+                            registar_pedido_recuperacao(_e, rec_tel)
+                        except Exception:
+                            traceback.print_exc()
+                        st.success("Pedido enviado. Se existir uma conta com este e-mail, o administrador vai contactar-te em breve.")
+        with _t_criar:
+            formulario_conta_gratuita()
+        if submeter:
+            conta = obter_conta_por_email(email.strip().lower())
+            if conta and verificar_password(password, conta[3]) and str(conta[9] or "activa") != "activa":
+                registar_acesso(email, False)
+                if str(conta[9]) == "pendente":
+                    st.info("A tua conta foi criada e aguarda aprovação de um administrador. Recebes um e-mail quando estiver activa.")
+                else:
+                    st.error("Esta conta não foi aprovada. Se achas que é um engano, escreve-nos.")
+            elif conta and verificar_password(password, conta[3]):
+                registar_acesso(email, True)
+                st.session_state["autenticado"]     = True
+                st.session_state["login_timestamp"] = time.time()
+                st.session_state["conta_id"]        = conta[0]
+                st.session_state["conta_nome"]      = conta[1]
+                st.session_state["conta_email"]     = conta[2]
+                st.session_state["is_admin"]        = bool(conta[4])
+                st.session_state["is_premium"]      = bool(conta[5])
+                st.session_state["is_participante"] = bool(conta[6])
+                st.session_state["nivel"]           = str(conta[7] or "iniciante")
+                st.session_state["trocar_password"] = bool(conta[8])
+                try:
+                    _carregar_perfil_sessao(conta[0])
+                except Exception:
+                    traceback.print_exc()
+                st.rerun()
+            else:
+                registar_acesso(email, False)
+                st.error(tx["erro_login"])
+        formulario_subscricao(key_prefix="login")
+
+
+if not st.session_state["autenticado"]:
+    _aba_entrar, _aba_cf, _aba_edu, _aba_int = st.tabs(["🔐 Entrar", "🧠 Capacidade Financeira", "🎓 Educação & Serviços", "🤝 Manifestação de interesse"])
+    with _aba_entrar:
+        pagina_login()
+    with _aba_cf:
+        pagina_capacidade_financeira(False)
+    with _aba_edu:
+        pagina_educacao_servicos()
+    with _aba_int:
+        pagina_manifestacao_interesse()
+    st.stop()
+
+# Palavra-passe reposta pelo administrador: a pessoa tem de escolher uma só sua antes de continuar
+if st.session_state.get("trocar_password"):
+    st.markdown("### Escolhe a tua nova palavra-passe")
+    st.info("O administrador repôs o teu acesso. Por segurança, define agora uma palavra-passe só tua.")
+    with st.form("form_troca_obrigatoria"):
+        _tp_a = st.text_input("Palavra-passe provisória (a que recebeste)", type="password")
+        _tp_n = st.text_input("Nova palavra-passe (mín. 8 caracteres)", type="password")
+        _tp_r = st.text_input("Repetir a nova palavra-passe", type="password")
+        _tp_ok = st.form_submit_button("Guardar e continuar", type="primary")
+    if _tp_ok:
+        _tp_err = alterar_password_propria(st.session_state.get("conta_id"), _tp_a, _tp_n, _tp_r)
+        if _tp_err:
+            st.error(_tp_err)
+        else:
+            st.session_state["trocar_password"] = False
+            st.rerun()
+    if st.button("Terminar sessão", key="troca_sair"):
+        for _ch in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium", "is_participante", "nivel", "perfil", "perfil_data", "_perfil_visto", "trocar_password"]:
+            st.session_state.pop(_ch, None)
+        st.rerun()
+    st.stop()
+
+# =========================================================
+# BARRA LATERAL
+# =========================================================
+tx = t()
+render_html(f'<div class="appo-sidebar-header">{logo_svg(50)}<div><p class="appo-sidebar-sub">Clube de Investimento</p><div class="appo-sidebar-word">APPO</div></div></div>')
+st.sidebar.selectbox("🌐 Idioma / Language", LISTA_IDIOMAS, key="idioma")
+selo_premium = " · ⭐ Premium" if st.session_state["is_premium"] else ""
+st.sidebar.caption(f"{tx['sessao']}: {st.session_state['conta_nome']} ({st.session_state['conta_email']}){selo_premium}")
+with st.sidebar:
+    _cartao_portal_lateral()
+st.sidebar.divider()
+
+PAGINAS = ["🏠 Início & Análises", "🧭 Perfil de Investidor", "🧠 Capacidade Financeira"]
+if eh_participante():
+    PAGINAS += ["💰 Contabilidade & Finanças", "📊 Histórico & Relatórios"]   # área patrimonial restrita
+if eh_investidor():   # Portal Investidor (níveis avançados)
+    PAGINAS += ["📈 Cotações & Activos", "🎯 Terminal de Decisão", "📐 Avaliação de Activos", "🧪 Simulador de Investimento", "🧮 Princípio 50/30/20", "💱 Conversor de Moeda"]
+PAGINAS += ["📚 Biblioteca Educativa", "🎓 Educação & Serviços", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos"]
+if st.session_state["is_admin"]:
+    PAGINAS.append("🔐 Painel do Administrador")
+if st.session_state.get("nav_pagina") not in PAGINAS:
+    st.session_state["nav_pagina"] = PAGINAS[0]
+# Primeira visita sem perfil: aterra no Perfil de Investidor (uma só vez; pode sair quando quiser)
+if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.session_state.get("_perfil_visto"):
+    st.session_state["nav_pagina"] = "🧭 Perfil de Investidor"
+    st.session_state["_perfil_visto"] = True
+
+pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
+
+st.sidebar.caption("Versão da app: 2026-10-15 · L (cabeçalho v3, tooltip, zebra)")
+st.sidebar.divider()
+with st.sidebar.expander("🔑 Alterar palavra-passe"):
+    with st.form("form_alterar_pw", clear_on_submit=True):
+        _pw_a = st.text_input("Palavra-passe actual", type="password")
+        _pw_n = st.text_input("Nova palavra-passe (mín. 8 caracteres)", type="password")
+        _pw_r = st.text_input("Repetir a nova palavra-passe", type="password")
+        _pw_ok = st.form_submit_button("Guardar")
+    if _pw_ok:
+        _err_pw = alterar_password_propria(st.session_state.get("conta_id"), _pw_a, _pw_n, _pw_r)
+        if _err_pw:
+            st.error(_err_pw)
+        else:
+            st.success("Palavra-passe alterada.")
+if st.sidebar.button(tx["terminar_sessao"]):
+    for chave in ["autenticado", "login_timestamp", "conta_id", "conta_nome", "conta_email", "is_admin", "is_premium", "is_participante", "nivel", "perfil", "perfil_data", "_perfil_visto", "trocar_password"]:
+        st.session_state.pop(chave, None)
+    st.rerun()
+
+st.sidebar.caption(f"Última actualização da página: {agora()}")
+
+_df_activos_ticker = obter_activos()
+try:
+    _topo = st.container(key="appo_topo")
+except TypeError:   # versões antigas do Streamlit sem «key»
+    _topo = st.container()
+with _topo:
+    render_html('<span class="appo-sticky-anchor"></span><div class="appo-topbar"><div class="appo-marca">APPO</div>'
+                                f'<div class="appo-pagina">{_esc(tx["nav_map"].get(pagina, pagina))}</div></div>')
+    ticker_tape(_df_activos_ticker)
+
+# =========================================================
+# PÁGINA: INÍCIO & ANÁLISES
+# =========================================================
+try:
+    if pagina == "🏠 Início & Análises":
+        tx = t()
+        hero("Clube de Investimento APPO", tx["inicio_hero_sub"])
+
+        if not eh_participante():
+            _painel_inicio_aluno()
+            st.stop()
+
+        resumo = obter_resumo_patrimonial()
+        total_patrimonio = resumo["capital_realizado"]  # investimentos e reservas são parte do realizado
+
+        _sub, _real, _inv, _res = (float(resumo[k] or 0) for k in ("capital_subscrito", "capital_realizado", "investimentos", "reservas"))
+        _cartoes = [
+            kpi_card("🏦", tx["inicio_capital_subscrito"], kz(_sub), "Compromisso total dos sócios"),
+            kpi_card("💳", tx["inicio_capital_realizado"], kz(_real), (f"{_real / _sub * 100:.0f}{tx['inicio_pct_subscrito']}" if _sub else None), (_real / _sub if _sub else None)),
+            kpi_card("📈", tx["inicio_investimentos"], kz(_inv), (f"{_inv / _real * 100:.0f}% do realizado" if _real else None), (_inv / _real if _real else None)),
+            kpi_card("🛡️", tx["inicio_reservas"], kz(_res), (f"{_res / _real * 100:.0f}% do realizado" if _real else None), (_res / _real if _real else None)),
+            kpi_card("🧮", tx["inicio_patrimonio_total"], kz(total_patrimonio), "Capital realizado", destaque=True),
+        ]
+        _res_idx = resumo_indice_appo(_df_activos_ticker)
+        if _res_idx:
+            _v1 = _res_idx[1]
+            _cartoes.append(kpi_card("📊", "Índice APPO (100 = 19/08/2026)", f"{_res_idx[0]:.2f}",
+                                     (f"{_v1:+.2f}% em 1d" if _v1 is not None else None), None, ("up" if (_v1 or 0) > 0 else "down" if (_v1 or 0) < 0 else None)))
+        else:
+            _ind = calcular_indice_mercado(_df_activos_ticker)
+            _cartoes.append(kpi_card("📊", tx["inicio_indice_label"], pct_bruto(_ind), None, None, ("up" if _ind > 0 else "down" if _ind < 0 else None)))
+        kpi_linha(_cartoes)
+        st.caption("Índice APPO: variação média de todas as acções cotadas desde o dia em que o Clube começou a investir." if _res_idx else tx["inicio_indice_caption"])
+        st.divider()
+
+        st.subheader(tx["inicio_distribuicao"])
+        cats = tx["inicio_distribuicao_cats"]
+        fx_barras(pd.DataFrame({"Categoria": cats,
+                                   "Montante (Kz)": [resumo["capital_realizado"], resumo["investimentos"], resumo["reservas"]]}).set_index("Categoria"))
+
+        st.divider()
+        banner_capa(IMG_GRAFICO, tx["inicio_capa_texto"], altura=130, escurecimento=0.48)
+
+        st.subheader(tx["inicio_cotacoes_destaque"])
+        if not _df_activos_ticker.empty:
+            tabela_activos_clicavel(tabela_cotacoes_estilizada(_df_activos_ticker), _df_activos_ticker, "tb_clic_b")
+
+        secao_vup_inicio()
+
+    # =========================================================
+    # PÁGINA: COTAÇÕES & ACTIVOS
+    # =========================================================
+    elif pagina == "📈 Cotações & Activos":
+        tx = t()
+        hero("📈 " + tx["nav_map"]["📈 Cotações & Activos"].replace("📈 ", ""), tx["cot_hero_sub"], "🇦🇴 Dados BODIVA")
+
+        df_activos = _df_activos_ticker
+        if df_activos.empty:
+            st.info(tx["cot_fav_info"])
+            painel_mercado_bodiva()
+        else:
+            st.subheader("📊 Índices")
+            _painel_indices(df_activos)
+            st.divider()
+
+            aba_mkt, aba_fav, aba_todos, aba_graf = st.tabs(["🌐 Mercado BODIVA", tx["cot_tab_favoritos"], tx["cot_tab_todos"], "📊 Gráficos do Clube"])
+            with aba_mkt:
+                painel_mercado_bodiva()
+            conta_id          = st.session_state["conta_id"]
+            favoritos_actuais = obter_favoritos(conta_id)
+
+            with aba_fav:
+                opcoes           = dict(zip(df_activos["nome"], df_activos["id"]))
+                seleccionados_nomes = [nome for nome, aid in opcoes.items() if aid in favoritos_actuais]
+                novos_nomes      = st.multiselect(tx["cot_fav_escolher"], options=list(opcoes.keys()), default=seleccionados_nomes)
+                if set(novos_nomes) != set(seleccionados_nomes):
+                    definir_favoritos(conta_id, [opcoes[n] for n in novos_nomes])
+                    st.rerun()
+                if novos_nomes:
+                    st.dataframe(tabela_cotacoes_estilizada(df_activos[df_activos["nome"].isin(novos_nomes)]), hide_index=True, column_config=cfg_logo())
+                else:
+                    st.info(tx["cot_fav_info"])
+
+            with aba_todos:
+                st.caption("Todos os activos que o Clube acompanha — cotados na BODIVA ou não —, organizados por classe.")
+                _classes = {"Todas": None, "📈 Ações": ("ação", "acao", "acç"), "🏛️ Obrigações": ("obrig", "bilhete", "título público", "titulo publico"), "📊 Fundos": ("fundo",)}
+                _cl = st.radio("Classe de activo", list(_classes), horizontal=True, key="cot_classe")
+                _chaves = _classes[_cl]
+                df_filtrado = df_activos if _chaves is None else df_activos[df_activos["tipo"].astype(str).str.lower().apply(lambda v: any(c in v for c in _chaves))]
+                if df_filtrado.empty:
+                    st.info(f"O Clube ainda não acompanha activos nesta classe ({_cl.split(' ', 1)[-1]}). "
+                            "O administrador pode registá-los em Painel do Administrador › Cotações & Activos.")
+                tabela_activos_clicavel(tabela_cotacoes_estilizada(df_filtrado), df_filtrado, "tb_clic_todos")
+                st.caption(f"{tx['cot_ultima_actualizacao']} {df_filtrado['actualizado_em'].max()}")
+                _xl_cot = _xlsx_seguro(lambda: gerar_xlsx_cotacoes(df_filtrado))
+                if _xl_cot:
+                    st.download_button("⬇️ Descarregar Excel (formatado)", data=_xl_cot, file_name="cotacoes_appo.xlsx",
+                                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_cot_xlsx")
+                st.download_button(tx["cot_descarregar_csv"],
+                                   data=df_filtrado[["ticker", "nome", "tipo", "preco", "variacao"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                                   file_name="cotacoes_appo.csv", mime="text/csv")
+                st.divider()
+                st.subheader(tx["cot_comparacao"])
+                cols_tb = tx["cot_tabela_cols"]
+                if not df_filtrado.empty:
+                    fx_barras(df_filtrado.set_index("nome")[["preco"]].rename(columns={"preco": tx["cot_preco_kz"]}))
+
+            with aba_graf:
+                registar_cotacoes_hoje(df_activos)
+                try:
+                    _tk_cart = {str(x).strip().upper() for x in obter_carteira_real()["ticker"]}
+                except Exception:
+                    _tk_cart = set()
+                _ops = []
+                for _, _a in df_activos.iterrows():
+                    _t = str(_a.get("ticker") or "").strip().upper()
+                    if _t:
+                        _ops.append((("★ " if _t in _tk_cart else "") + str(_a["nome"]), _t, str(_a["nome"])))
+                _ops.sort(key=lambda x: (not x[0].startswith("★"), x[0]))
+                if not _ops:
+                    if eh_admin():
+                        st.info("Registe os tickers dos activos em Painel do Administrador → Cotações & Activos.")
+                    else:
+                        st.caption("As cotações de referência ainda estão a ser preparadas.")
+                else:
+                    gc1, gc2 = st.columns([2, 3])
+                    _rot = gc1.selectbox("Título (★ = em carteira do Clube)", [o[0] for o in _ops], key="graf_titulo")
+                    _periodo = gc2.radio("Período", PERIODOS_GRAFICO, index=2, horizontal=True, key="graf_periodo")
+                    _sel = next(o for o in _ops if o[0] == _rot)
+                    _opv = obter_opv(_sel[1])
+                    _ref = ((f"Preço da OPV: {_opv[0]:,.0f} Kz".replace(",", " ") + (f" ({_opv[1]:%d/%m/%Y})" if _opv[1] else "")), _opv[0]) if _opv else None
+                    painel_grafico(_sel[2].upper(), f"{_sel[1]}  |  BODIVA  |  AOA", obter_serie_cotacao(_sel[1], _periodo), "Kz", _periodo, referencia=_ref,
+                                   nota=("O histórico do Clube é gravado de cada vez que as cotações são actualizadas (um valor por dia, "
+                                         "o último desse dia). Quanto mais actualizações, mais completo o gráfico. "
+                                         "Não há valores dentro do dia (intraday)."))
+
+    # =========================================================
+    # PÁGINA: CONTABILIDADE & FINANÇAS
+    # =========================================================
+    elif pagina == "🎯 Terminal de Decisão":
+        pagina_terminal_decisao()
+
+    elif pagina == "💰 Contabilidade & Finanças":
+        tx = t()
+        hero("💰 " + tx["nav_map"]["💰 Contabilidade & Finanças"].replace("💰 ", ""), tx["cont_hero_sub"])
+        pagina_contabilidade(tx)
+
+    # =========================================================
+    # PÁGINA: HISTÓRICO & RELATÓRIOS
+    # =========================================================
+    elif pagina == "📊 Histórico & Relatórios":
+        tx = t()
+        hero("📊 " + tx["nav_map"]["📊 Histórico & Relatórios"].replace("📊 ", ""), tx["hist_hero_sub"])
+        pagina_historico_relatorios(tx)
+
+    # =========================================================
+    # PÁGINA: AVALIAÇÃO DE ACTIVOS
+    # =========================================================
+    elif pagina == "📐 Avaliação de Activos":
+        tx = t()
+        hero("📐 " + tx["nav_map"]["📐 Avaliação de Activos"].replace("📐 ", ""), tx["aval_hero_sub"])
+        pagina_avaliacao_activos(tx)
+
+    # =========================================================
+    # PÁGINA: CONVERSOR DE MOEDA
+    # =========================================================
+    elif pagina == "💱 Conversor de Moeda":
+        tx = t()
+        hero("💱 " + tx["nav_map"]["💱 Conversor de Moeda"].replace("💱 ", ""), tx["conv_hero_sub"], "💱 BNA (oficial) + mercado indicativo")
+        pagina_conversor(tx)
+
+    # =========================================================
+    # PÁGINA: SIMULADOR — HOME BROKER APPO + JUROS COMPOSTOS
+    # =========================================================
+    elif pagina == "🧪 Simulador de Investimento":
+        tx = t()
+        hero("🧪 Home Broker APPO — BODIVA Virtual",
+             "Opera a bolsa angolana sem risco real · Dotação inicial: 3 000 000 Kz",
+             "🎮 BODIVA Virtual · Dinheiro fictício")
+
+        # ── carregar estado persistido deste sócio (uma vez por sessão) ─
+        _email_sim = st.session_state.get("conta_email", "")
+        if st.session_state.get("sim_carregado_para") != _email_sim:
+            _saldo0, _cart0, _hist0 = obter_estado_simulador(_email_sim)
+            st.session_state["sim_carteira"]    = _cart0
+            st.session_state["sim_saldo_caixa"] = _saldo0
+            st.session_state["sim_historico"]   = _hist0
+            st.session_state["sim_carregado_para"] = _email_sim
+        if "sim_qtd_sel" not in st.session_state:
+            st.session_state["sim_qtd_sel"] = {}
+
+        df_activos_sim = _df_activos_ticker.copy()
+        # Filtro robusto: aceita Ação, ACÇÃO, Acao, etc.
+        if not df_activos_sim.empty:
+            acoes_sim = df_activos_sim[
+                df_activos_sim["tipo"].str.upper().str.replace("Ç","C").str.replace("Ã","A").str.contains("A", na=False)
+            ].copy()
+        else:
+            acoes_sim = pd.DataFrame()
+
+        aba_broker, aba_carteira, aba_ordens, aba_compostos = st.tabs(
+            ["📊 Mercado", "💼 Carteira", "🧾 Ordens", "📈 Juros Compostos"])
+
+        import html as _html
+
+        # Estilo "home broker" claro, nas cores do Clube (bordeaux / cinzento avermelhado) — só nesta página
+        render_html("""<style>
+    .bfa-wrap{background:#FFFFFF;border:1px solid #ECDEE3;border-radius:8px;overflow-x:auto;margin-bottom:12px;}
+    .bfa-tbl{width:100%;border-collapse:collapse;font-size:0.8rem;color:#1A1A2E;}
+    .bfa-tbl th{color:#7C1F3E;font-weight:700;text-align:right;padding:9px 10px;background:#F4ECEF;border-bottom:2px solid #7C1F3E;font-size:0.7rem;white-space:nowrap;text-transform:uppercase;letter-spacing:0.4px;}
+    .bfa-tbl td{padding:10px;text-align:right;border-bottom:1px solid #F0E6EA;background:#FFFFFF;white-space:nowrap;}
+    .bfa-tbl tr:nth-child(even) td{background:#FBF8F6;}
+    .bfa-tbl tr.sel td{background:#F1E2E7;}
+    .bfa-tbl tr.tot td{background:#F4ECEF;font-weight:700;border-top:2px solid #7C1F3E;}
+    .bfa-tbl th.l,.bfa-tbl td.l{text-align:left;}
+    .bfa-up{color:#0D9488;}.bfa-dn{color:#DC2626;}.bfa-fl{color:#6B7280;}
+    .bfa-bar{background:#FBF8F6;border:1px solid #ECDEE3;border-radius:8px;padding:12px 20px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
+    .bfa-bar .k{font-size:0.62rem;color:#8A7B80;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:3px;}
+    .bfa-bar .v{font-size:1.02rem;color:#1A1A2E;font-weight:700;background:#F4ECEF;padding:4px 10px;border-radius:4px;display:inline-block;}
+    .bfa-ticket{background:#FBF8F6;border:1px solid #ECDEE3;border-left:4px solid #7C1F3E;border-radius:8px;padding:16px 22px;margin:10px 0;display:flex;gap:40px;flex-wrap:wrap;align-items:center;}
+    .bfa-ticket .nome{font-size:1.25rem;font-weight:800;color:#1A1A2E;}
+    .bfa-ticket .sub{font-size:0.7rem;color:#8A7B80;margin-top:3px;}
+    .bfa-ticket .k{font-size:0.62rem;color:#8A7B80;text-transform:uppercase;display:block;}
+    .bfa-ticket .big{font-size:1.7rem;font-weight:800;color:#7C1F3E;}
+    .bfa-ticket .m{font-size:1.0rem;font-weight:700;color:#1A1A2E;}
+    button[kind="primary"],button[data-testid="stBaseButton-primary"]{background:#6E3B4A !important;border-color:#6E3B4A !important;color:#FFFFFF !important;}
+    button[kind="primary"]:hover,button[data-testid="stBaseButton-primary"]:hover{background:#592E3B !important;border-color:#592E3B !important;}
+    button[kind="secondary"],button[data-testid="stBaseButton-secondary"]{background:#E9D6DB !important;border-color:#D9BCC4 !important;color:#4A2A33 !important;}
+    button[kind="secondary"]:hover,button[data-testid="stBaseButton-secondary"]:hover{background:#DEC4CB !important;}
+    </style>""")
+
+        # título → preço / variação actuais (chave = ticker, ou nome se não houver ticker)
+        _mapa_preco, _mapa_var = {}, {}
+        if not df_activos_sim.empty:
+            for _, _r in df_activos_sim.iterrows():
+                _k = str(_r.get("ticker") or "").strip().upper() or str(_r["nome"])
+                _mapa_preco[_k] = float(_r["preco"])
+                _mapa_var[_k]   = float(_r["variacao"])
+
+        # ══════════════════════════════════════════════════════════════
+        # ABA 1 — MERCADO + PAINEL DE NEGOCIAÇÃO (estilo BFA Capital Markets)
+        # ══════════════════════════════════════════════════════════════
+        with aba_broker:
+            saldo_caixa = st.session_state["sim_saldo_caixa"]
+            cart        = st.session_state["sim_carteira"]
+            valor_acoes = sum(d["qtd"] * _mapa_preco.get(k, d["preco_medio"]) for k, d in cart.items())
+            patrimonio  = saldo_caixa + valor_acoes
+            var_total   = patrimonio - 3_000_000
+            cls_vt      = "bfa-up" if var_total >= 0 else "bfa-dn"
+
+            render_html(f"""<div class="bfa-bar">
+        <div><span class="k">Conta</span><span class="v">Virtual APPO</span></div>
+        <div><span class="k">Titular</span><span class="v">{_html.escape(str(st.session_state.get('conta_nome', '')).upper())}</span></div>
+        <div><span class="k">Saldo negociação</span><span class="v">{kz2(saldo_caixa)}</span></div>
+        <div><span class="k">Em acções</span><span class="v">{kz2(valor_acoes)}</span></div>
+        <div><span class="k">Património total</span><span class="v">{kz2(patrimonio)}</span></div>
+        <div><span class="k">Ganho / perda</span><span class="v {cls_vt}">{kz2(var_total)} ({var_total/3_000_000*100:+.2f}%)</span></div>
+        </div>""")
+
+            _msg = st.session_state.pop("sim_msg", None)
+            if _msg:
+                st.success(_msg)
+
+            if acoes_sim.empty:
+                st.info("Ainda não existem acções cotadas para negociar.")
+            else:
+                _lista = []
+                for _, row in acoes_sim.iterrows():
+                    _tk = str(row.get("ticker") or "").strip().upper()
+                    _lista.append({
+                        "chave": _tk or str(row["nome"]), "nome": str(row["nome"]), "tk": _tk,
+                        "preco": float(row["preco"]), "var": float(row["variacao"]),
+                        "act": row.get("actualizado_em"),
+                    })
+                _rotulos = [x["nome"] + (f"  ({x['tk']})" if x["tk"] else "") for x in _lista]
+                if st.session_state.get("sim_sel") not in _rotulos:
+                    st.session_state["sim_sel"] = _rotulos[0]
+                _sel = st.session_state["sim_sel"]
+
+                _linhas_html = []
+                for x, rot in zip(_lista, _rotulos):
+                    v    = x["var"]
+                    cls  = "bfa-up" if v > 0 else ("bfa-dn" if v < 0 else "bfa-fl")
+                    seta = "↑" if v > 0 else ("↓" if v < 0 else "—")
+                    qc   = cart.get(x["chave"], {}).get("qtd", 0)
+                    sel  = " class='sel'" if rot == _sel else ""
+                    _linhas_html.append(
+                        f"<tr{sel}><td class='l'><b>{_html.escape(x['nome'].upper())}</b></td>"
+                        f"<td class='l'>{_html.escape(x['tk'] or '—')}</td><td class='l'>BODIVA ACÇÕES</td>"
+                        f"<td><b>{kz2(x['preco'])}</b></td><td>AOA</td><td>{_fmt_dt(x['act'])}</td>"
+                        f"<td class='{cls}'>{pct_bruto(v)} {seta}</td><td>{qc:g}</td></tr>")
+                render_html(
+                    "<div class='bfa-wrap'><table class='bfa-tbl'><thead><tr>"
+                    "<th class='l'>título</th><th class='l'>ticker</th><th class='l'>mercado</th>"
+                    "<th>cotação</th><th>moeda</th><th>últ. cotação</th><th>% var. diária</th><th>em carteira</th>"
+                    "</tr></thead><tbody>" + "".join(_linhas_html) + "</tbody></table></div>")
+
+                st.selectbox("Título a negociar", _rotulos, key="sim_sel")
+                a        = _lista[_rotulos.index(st.session_state["sim_sel"])]
+                ent      = cart.get(a["chave"], {})
+                qtd_cart = ent.get("qtd", 0)
+                cls_a    = "bfa-up" if a["var"] > 0 else ("bfa-dn" if a["var"] < 0 else "bfa-fl")
+                pm_txt   = kz2(ent["preco_medio"]) if ent else "—"
+                render_html(f"""<div class="bfa-ticket">
+            <div><div class="nome">{_html.escape(a['nome'].upper())}</div>
+            <div class="sub">{_html.escape(a['tk'] or '—')} &nbsp;|&nbsp; BODIVA ACÇÕES &nbsp;|&nbsp; AOA</div></div>
+            <div><span class="k">Cotação</span><span class="big">{kz2(a['preco'])}</span></div>
+            <div><span class="k">Variação</span><span class="m {cls_a}">{pct_bruto(a['var'])}</span></div>
+            <div><span class="k">Em carteira</span><span class="m">{qtd_cart:g}</span></div>
+            <div><span class="k">Preço médio</span><span class="m">{pm_txt}</span></div>
+            </div>""")
+
+                # confirmação de ordem pendente
+                pend = st.session_state.get("sim_ordem_pend")
+                if pend:
+                    _tp = pend["qtd"] * pend["preco"]
+                    st.info(f"**Confirmar ordem de {'COMPRA' if pend['op'] == 'C' else 'VENDA'}** — "
+                            f"{pend['qtd']:g} × {pend['nome']} a {kz2(pend['preco'])} = **{kz2(_tp)} Kz**")
+                    cc1, cc2, _ = st.columns([1, 1, 2])
+                    if cc1.button("✅ Confirmar ordem", key="sim_conf", type="primary", use_container_width=True):
+                        ch, nm, tkp, q, p = pend["chave"], pend["nome"], pend["tk"], pend["qtd"], pend["preco"]
+                        valor = q * p
+                        oper  = None
+                        if pend["op"] == "C":
+                            if st.session_state["sim_saldo_caixa"] >= valor:
+                                st.session_state["sim_saldo_caixa"] -= valor
+                                if ch in cart:
+                                    tq = cart[ch]["qtd"] + q
+                                    tc = cart[ch]["qtd"] * cart[ch]["preco_medio"] + valor
+                                    cart[ch] = {"qtd": tq, "preco_medio": tc / tq, "nome": nm}
+                                else:
+                                    cart[ch] = {"qtd": q, "preco_medio": p, "nome": nm}
+                                oper = "✅ COMPRA"
+                        else:
+                            if cart.get(ch, {}).get("qtd", 0) >= q:
+                                st.session_state["sim_saldo_caixa"] += valor
+                                cart[ch]["qtd"] -= q
+                                if cart[ch]["qtd"] <= 0:
+                                    del cart[ch]
+                                oper = "🔴 VENDA"
+                        if oper is None:
+                            st.session_state.pop("sim_ordem_pend", None)
+                            st.session_state["sim_msg"] = "Ordem não executada: saldo ou quantidade insuficiente."
+                            st.rerun()
+                        else:
+                            st.session_state["sim_historico"].insert(0, {
+                                "Operação": oper, "Ticker": tkp or nm, "Qtd": q, "Preço Unit.": p, "Total": valor})
+                            guardar_saldo_simulador(_email_sim, st.session_state["sim_saldo_caixa"])
+                            guardar_posicao_simulador(_email_sim, ch, cart.get(ch))
+                            registar_operacao_simulador(_email_sim, oper, tkp or nm, q, p, valor)
+                            st.session_state.pop("sim_ordem_pend", None)
+                            st.session_state["sim_msg"] = f"{oper} executada: {q:g} × {nm} a {kz2(p)} Kz."
+                            st.rerun()
+                    if cc2.button("✖ Cancelar", key="sim_canc", use_container_width=True):
+                        st.session_state.pop("sim_ordem_pend", None)
+                        st.rerun()
+
+                c1, c2, c3 = st.columns(3)
+                qtd_op = int(c1.number_input("Quantidade", min_value=1, value=1, step=1, key="sim_qtd_op"))
+                total  = qtd_op * a["preco"]
+                c2.metric("Preço (cotação de mercado)", kz2(a["preco"]))
+                c3.metric("Valor da ordem", kz2(total))
+                b1, b2, _ = st.columns([1, 1, 2])
+                comprar = b1.button("＋ Comprar", key="sim_btn_buy", type="primary", use_container_width=True)
+                vender  = b2.button("－ Vender", key="sim_btn_sell", type="secondary", use_container_width=True,
+                                    disabled=(qtd_cart < qtd_op))
+                if comprar or vender:
+                    if comprar and saldo_caixa < total:
+                        st.warning(f"Saldo insuficiente — necessitas {kz2(total)} Kz, tens {kz2(saldo_caixa)} Kz.")
+                    else:
+                        st.session_state["sim_ordem_pend"] = {
+                            "op": "C" if comprar else "V", "chave": a["chave"], "nome": a["nome"],
+                            "tk": a["tk"], "qtd": qtd_op, "preco": a["preco"]}
+                        st.rerun()
+
+                aviso_discreto("Ambiente de treino pedagógico com dados de mercado de referência (não em tempo real): os fechos e volumes são carregados pelo APPO depois de cada sessão de mercado. "
+                               "As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.")
+
+        # ══════════════════════════════════════════════════════════════
+        # ABA 2 — CARTEIRA (estilo BFA Capital Markets)
+        # ══════════════════════════════════════════════════════════════
+        with aba_carteira:
+            cart        = st.session_state["sim_carteira"]
+            saldo_caixa = st.session_state["sim_saldo_caixa"]
+            if not cart:
+                st.info("A tua carteira virtual está vazia. Vai ao Mercado e compra as tuas primeiras acções!")
+            else:
+                _vals      = {k: d["qtd"] * _mapa_preco.get(k, d["preco_medio"]) for k, d in cart.items()}
+                _tot_acoes = sum(_vals.values())
+                _tot_aq    = sum(d["qtd"] * d["preco_medio"] for d in cart.values())
+                _linhas_c  = []
+                for k, d in cart.items():
+                    p_act  = _mapa_preco.get(k, d["preco_medio"])
+                    var_d  = _mapa_var.get(k, 0.0)
+                    v_act  = _vals[k]
+                    v_aq   = d["qtd"] * d["preco_medio"]
+                    pl     = v_act - v_aq
+                    cls_pl = "bfa-up" if pl > 0 else ("bfa-dn" if pl < 0 else "bfa-fl")
+                    cls_vd = "bfa-up" if var_d > 0 else ("bfa-dn" if var_d < 0 else "bfa-fl")
+                    peso   = (v_act / _tot_acoes * 100) if _tot_acoes else 0
+                    _linhas_c.append(
+                        f"<tr><td class='l'><b>{_html.escape(str(d['nome']).upper())}</b></td><td class='l'>{_html.escape(k)}</td>"
+                        f"<td class='l'>BODIVA ACÇÕES</td><td>{d['qtd']:g}</td><td>{kz2(p_act)}</td><td>AOA</td>"
+                        f"<td>{kz2(v_act)}</td><td>{kz2(v_aq)}</td><td class='{cls_pl}'>{kz2(pl)}</td>"
+                        f"<td class='{cls_vd}'>{pct_bruto(var_d)}</td><td>{peso:.2f}%</td></tr>")
+                _pl_t   = _tot_acoes - _tot_aq
+                cls_plt = "bfa-up" if _pl_t > 0 else ("bfa-dn" if _pl_t < 0 else "bfa-fl")
+                _linhas_c.append(
+                    f"<tr class='tot'><td class='l' colspan='6'>TOTAL</td><td>{kz2(_tot_acoes)}</td>"
+                    f"<td>{kz2(_tot_aq)}</td><td class='{cls_plt}'>{kz2(_pl_t)}</td><td></td><td>100,00%</td></tr>")
+                render_html(
+                    "<div class='bfa-wrap'><table class='bfa-tbl'><thead><tr>"
+                    "<th class='l'>título</th><th class='l'>ticker</th><th class='l'>mercado</th>"
+                    "<th>quantidade</th><th>cotação</th><th>moeda</th><th>valor actual</th><th>aquisição</th>"
+                    "<th>valias potenciais</th><th>var. diária</th><th>% carteira</th>"
+                    "</tr></thead><tbody>" + "".join(_linhas_c) + "</tbody></table></div>")
+
+                col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+                col_r1.metric("Saldo negociação", kz2(saldo_caixa))
+                col_r2.metric("Valor em acções", kz2(_tot_acoes))
+                col_r3.metric("Património total", kz2(saldo_caixa + _tot_acoes))
+                var_t = saldo_caixa + _tot_acoes - 3_000_000
+                col_r4.metric("Ganho/Perda total", kz2(var_t), delta=f"{var_t/3_000_000*100:+.2f}%")
+                nota_indicador("<b>Valias potenciais</b> = diferença entre o valor actual e o que pagaste (ganho/perda ainda não realizado).")
+
+        # ══════════════════════════════════════════════════════════════
+        # ABA 3 — ORDENS (histórico) + reiniciar
+        # ══════════════════════════════════════════════════════════════
+        with aba_ordens:
+            st.subheader("📜 Histórico de Ordens")
+            if st.session_state["sim_historico"]:
+                df_h = pd.DataFrame(st.session_state["sim_historico"])
+                for _c in ("Preço Unit.", "Total"):
+                    if _c in df_h.columns:
+                        df_h[_c] = df_h[_c].apply(lambda v: kz2(v) if isinstance(v, (int, float)) else v)
+                st.dataframe(df_h, hide_index=True)
+            else:
+                st.info("Ainda não executaste nenhuma ordem.")
+
+            if st.button("🔄 Reiniciar carteira virtual (voltar a 3 000 000 Kz)", type="secondary"):
+                reiniciar_simulador_db(_email_sim)
+                st.session_state["sim_carteira"] = {}
+                st.session_state["sim_saldo_caixa"] = 3_000_000.0
+                st.session_state["sim_historico"] = []
+                st.session_state.pop("sim_ordem_pend", None)
+                for k in list(st.session_state.keys()):
+                    if k.startswith("sim_qtd_") and k != "sim_qtd_op":
+                        del st.session_state[k]
+                st.rerun()
+
+        # ══════════════════════════════════════════════════════════════
+        # ABA 4 — JUROS COMPOSTOS
+        # ══════════════════════════════════════════════════════════════
+        with aba_compostos:
+            st.subheader("📈 Simulador de Juros Compostos")
+            col1, col2 = st.columns(2)
+            valor_inicial  = col1.number_input("Valor inicial (Kz)", min_value=0.0, value=100000.0, step=10000.0)
+            contrib_mensal = col2.number_input("Contribuição mensal (Kz)", min_value=0.0, value=20000.0, step=5000.0)
+            col3, col4, col5 = st.columns(3)
+            taxa_anual   = col3.slider("Taxa de retorno anual esperada (%)", 0.0, 40.0, 12.0, 0.5)
+            anos         = col4.slider("Prazo (anos)", 1, 30, 10)
+            inflacao_sim = col5.slider("Inflação anual assumida (%)", 0.0, 40.0, 13.5, 0.5)
+
+            taxa_m   = (1 + taxa_anual   / 100) ** (1 / 12) - 1
+            infl_m   = (1 + inflacao_sim / 100) ** (1 / 12) - 1
+            saldo_c  = valor_inicial
+            total_inv= valor_inicial
+            pontos   = []
+            for mes in range(1, anos * 12 + 1):
+                saldo_c   = saldo_c * (1 + taxa_m) + contrib_mensal
+                total_inv += contrib_mensal
+                if mes % 12 == 0:
+                    pontos.append({
+                        "Ano": mes // 12,
+                        "Saldo Nominal": saldo_c,
+                        "Total Investido": total_inv,
+                        "Saldo Real": saldo_c / ((1 + infl_m) ** mes),
+                    })
+
+            df_sim = pd.DataFrame(pontos).set_index("Ano")
+            col_a, col_b, col_c = st.columns(3)
+            col_a.metric("Saldo Final (nominal)", kz(saldo_c))
+            col_b.metric("Total Investido",       kz(total_inv))
+            col_c.metric("Juros Compostos",       kz(saldo_c - total_inv))
+            fx_barras(df_sim[["Saldo Nominal", "Total Investido"]])
+            saldo_real_f = df_sim["Saldo Real"].iloc[-1]
+            st.caption(f"Saldo final em poder de compra de hoje (inflação {inflacao_sim:.1f}%/ano): {kz(saldo_real_f)}")
+            nota_indicador(f"Com inflação de {inflacao_sim:.1f}%/ano, o teu saldo nominal de {kz(saldo_c)} equivale apenas a {kz(saldo_real_f)} em poder de compra actual.")
+            aviso_discreto("Ambiente de treino pedagógico. As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.")
+            botoes_partilha(f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo_c)} — Clube de Investimento APPO", topo=64)
+
+    # =========================================================
+    # PÁGINA: REGRA 50/30/20
+    # =========================================================
+    elif pagina == "🧮 Princípio 50/30/20":
+        tx = t()
+        hero("🧮 " + tx["nav_map"]["🧮 Princípio 50/30/20"].replace("🧮 ", ""), tx["r50_hero_sub"], "📐 " + tx["r50_rendimento"])
+        aviso_discreto("O princípio 50/30/20 é uma referência educativa, não uma regra adequada a todas as pessoas. Para medir o seu ponto de partida, faça o diagnóstico em Capacidade Financeira.")
+        tab_regra, tab_orc = st.tabs(["🧮 Princípio 50/30/20", "📒 Meu Orçamento Mensal"])
+
+        with tab_regra:
+            rendimento = st.number_input(tx["r50_rendimento"], min_value=0.0, step=5000.0, value=250000.0, format="%.2f")
+            alvo_consumo, alvo_inv, alvo_entes = rendimento * 0.50, rendimento * 0.30, rendimento * 0.20
+
+            st.subheader(tx["r50_alocacao"])
+            col1, col2, col3 = st.columns(3)
+            col1.metric(tx["r50_consumo"],       kz(alvo_consumo))
+            col2.metric(tx["r50_investimento"],  kz(alvo_inv))
+            col3.metric(tx["r50_entesouramento"],kz(alvo_entes))
+            fx_barras(pd.DataFrame({"Categoria": [tx["r50_consumo"], tx["r50_investimento"], tx["r50_entesouramento"]],
+                                       "Valor recomendado (Kz)": [alvo_consumo, alvo_inv, alvo_entes]}).set_index("Categoria"))
+
+            st.divider()
+            st.subheader(tx["r50_comparar_titulo"])
+            with st.form("form_orcamento_real"):
+                col_a, col_b, col_c = st.columns(3)
+                real_consumo      = col_a.number_input(tx["r50_real_consumo"],       min_value=0.0, step=1000.0)
+                real_investimento = col_b.number_input(tx["r50_real_investimento"],  min_value=0.0, step=1000.0)
+                real_entes        = col_c.number_input(tx["r50_real_entesouramento"],min_value=0.0, step=1000.0)
+                comparar = st.form_submit_button(tx["r50_comparar_btn"])
+            if comparar:
+                st.markdown(tx["r50_resultado"])
+                col1, col2, col3 = st.columns(3)
+                col1.metric(tx["r50_consumo"],       kz(real_consumo),      delta=kz(real_consumo      - alvo_consumo), delta_color="inverse")
+                col2.metric(tx["r50_investimento"],  kz(real_investimento), delta=kz(real_investimento - alvo_inv),     delta_color="normal")
+                col3.metric(tx["r50_entesouramento"],kz(real_entes),        delta=kz(real_entes        - alvo_entes),   delta_color="normal")
+                if real_entes < alvo_entes:
+                    st.warning(tx["r50_aviso"])
+                else:
+                    st.success(tx["r50_sucesso"])
+
+        with tab_orc:
+            _email_orc = st.session_state.get("conta_email", "")
+            st.subheader("📒 Orçamento mensal pessoal ou familiar")
+            st.caption("Preencha as receitas e os gastos do mês (em kwanzas inteiros). A app compara automaticamente "
+                       "com a Princípio 50/30/20 e mostra quanto está a poupar e a investir. O orçamento fica gravado na sua conta.")
+
+            if st.session_state.get("orc_carregado_para") != _email_orc:
+                _d0 = obter_orcamento(_email_orc)
+                st.session_state["orc_rec_base"]  = pd.DataFrame(_d0["receitas"], columns=["Descrição", "Valor (Kz)"])
+                st.session_state["orc_desp_base"] = pd.DataFrame(_d0["despesas"], columns=["Categoria", "Descrição", "Valor (Kz)"])
+                st.session_state["orc_carregado_para"] = _email_orc
+            _ver = st.session_state.get("orc_versao", 0)
+
+            _cfg_valor = st.column_config.NumberColumn("Valor (Kz)", min_value=0, step=100, format="%d")
+            st.markdown("**1. Receitas do mês**")
+            df_rec = st.data_editor(
+                st.session_state["orc_rec_base"], num_rows="dynamic", key=f"orc_rec_{_ver}", hide_index=True,
+                column_config={"Descrição": st.column_config.TextColumn("Descrição"), "Valor (Kz)": _cfg_valor})
+            st.markdown("**2. Despesas e poupança do mês** — abre cada grupo e detalha o que vais comprar ou pagar")
+            _bd = st.session_state["orc_desp_base"].copy()
+            _bd.loc[~_bd["Categoria"].isin(ORC_CATEGORIAS), "Categoria"] = ORC_CATEGORIAS[0]
+            _rec_prev = float(sum(_num_seguro(v) for v in df_rec["Valor (Kz)"]))
+            _partes = []
+            for _gi, (_cat, _ico, _meta, _sug) in enumerate(ORC_GRUPOS):
+                _b = _bd[_bd["Categoria"] == _cat][["Descrição", "Valor (Kz)"]].reset_index(drop=True)
+                with st.expander(f"{_ico} {_cat}"):
+                    st.caption(_sug)
+                    _e = st.data_editor(_b, num_rows="dynamic", key=f"orc_desp_{_gi}_{_ver}", hide_index=True,
+                                        column_config={"Descrição": st.column_config.TextColumn("O que vais comprar / pagar"), "Valor (Kz)": _cfg_valor})
+                    _sub = float(sum(_num_seguro(v) for v in _e["Valor (Kz)"]))
+                    if _rec_prev > 0:
+                        st.progress(min(_sub / (_rec_prev * _meta), 1.0))
+                        st.caption(f"Subtotal {kz(_sub)} · meta {_meta * 100:.0f}% das receitas = {kz(_rec_prev * _meta)}")
+                    else:
+                        st.caption(f"Subtotal {kz(_sub)}")
+                _e = _e.copy()
+                _e["Categoria"] = _cat
+                _partes.append(_e[["Categoria", "Descrição", "Valor (Kz)"]])
+            df_desp = pd.concat(_partes, ignore_index=True)
+
+            rec_total = float(sum(_num_seguro(v) for v in df_rec["Valor (Kz)"]))
+            _dd = df_desp.copy()
+            _dd["_v"] = _dd["Valor (Kz)"].apply(_num_seguro)
+            tot_cat = {c: float(_dd.loc[_dd["Categoria"] == c, "_v"].sum()) for c in ORC_CATEGORIAS}
+            sem_cat = int(((_dd["Categoria"].isna()) & (_dd["_v"] > 0)).sum())
+            desp_total = sum(tot_cat.values())
+            saldo_livre = rec_total - desp_total
+            poup_total = tot_cat[ORC_CATEGORIAS[1]] + tot_cat[ORC_CATEGORIAS[2]]
+
+            st.divider()
+            st.markdown("**3. Resultado**")
+            if sem_cat:
+                st.warning(f"{sem_cat} linha(s) com valor mas sem categoria foram ignoradas no cálculo.")
+            if rec_total <= 0:
+                st.info("Introduza as suas receitas para ver a comparação com a Princípio 50/30/20.")
+            else:
+                alvos = {ORC_CATEGORIAS[0]: rec_total * 0.50, ORC_CATEGORIAS[1]: rec_total * 0.30, ORC_CATEGORIAS[2]: rec_total * 0.20}
+                k1, k2, k3, k4 = st.columns(4)
+                k1.metric("Receitas", kz(rec_total))
+                k2.metric("Despesas + poupança planeadas", kz(desp_total))
+                k3.metric("Saldo por alocar", kz(saldo_livre))
+                k4.metric("Poupado + investido", f"{poup_total / rec_total * 100:.0f}%", help="Investimento + Entesouramento, em % das receitas (meta: 50%)")
+
+                c1, c2, c3 = st.columns(3)
+                for col, cat, inv in ((c1, ORC_CATEGORIAS[0], "inverse"), (c2, ORC_CATEGORIAS[1], "normal"), (c3, ORC_CATEGORIAS[2], "normal")):
+                    col.metric(f"{cat}", kz(tot_cat[cat]), delta=f"{kz(tot_cat[cat] - alvos[cat])} face à meta ({kz(alvos[cat])})", delta_color=inv)
+                fx_barras(pd.DataFrame(
+                    {"O seu orçamento (Kz)": [tot_cat[c] for c in ORC_CATEGORIAS], "Recomendado 50/30/20 (Kz)": [alvos[c] for c in ORC_CATEGORIAS]},
+                    index=ORC_CATEGORIAS))
+
+                if desp_total > rec_total:
+                    st.error(f"Os gastos e a poupança planeados superam as receitas em {kz(-saldo_livre)}. Reduza o consumo antes de pensar em investir.")
+                else:
+                    if tot_cat[ORC_CATEGORIAS[0]] > alvos[ORC_CATEGORIAS[0]]:
+                        st.warning(f"O consumo ({tot_cat[ORC_CATEGORIAS[0]] / rec_total * 100:.0f}% das receitas) está acima dos 50% recomendados — "
+                                   f"tente reduzir cerca de {kz(tot_cat[ORC_CATEGORIAS[0]] - alvos[ORC_CATEGORIAS[0]])}.")
+                    if tot_cat[ORC_CATEGORIAS[1]] < alvos[ORC_CATEGORIAS[1]]:
+                        st.info(f"Para chegar aos 30% de investimento faltam {kz(alvos[ORC_CATEGORIAS[1]] - tot_cat[ORC_CATEGORIAS[1]])} por mês.")
+                    if tot_cat[ORC_CATEGORIAS[2]] < alvos[ORC_CATEGORIAS[2]]:
+                        st.info(f"Para chegar aos 20% de entesouramento (reserva) faltam {kz(alvos[ORC_CATEGORIAS[2]] - tot_cat[ORC_CATEGORIAS[2]])} por mês.")
+                    if (tot_cat[ORC_CATEGORIAS[0]] <= alvos[ORC_CATEGORIAS[0]] and tot_cat[ORC_CATEGORIAS[1]] >= alvos[ORC_CATEGORIAS[1]]
+                            and tot_cat[ORC_CATEGORIAS[2]] >= alvos[ORC_CATEGORIAS[2]]):
+                        st.success("Parabéns — o seu orçamento cumpre a Princípio 50/30/20.")
+                    if saldo_livre > 0:
+                        st.info(f"Tem {kz(saldo_livre)} ainda por alocar: distribua-os pelas linhas de investimento e entesouramento.")
+                if poup_total > 0:
+                    st.caption(f"Ao ritmo actual, poupa e investe {kz(poup_total)} por mês: cerca de {kz(poup_total * 12)} em 12 meses "
+                               "(sem juros). Veja o efeito dos juros compostos no Simulador de Investimento.")
+
+            b1, b2, b3 = st.columns(3)
+            if b1.button("💾 Guardar orçamento", type="primary", key="orc_guardar", use_container_width=True):
+                def _recs(df):
+                    return df.astype(object).where(df.notna(), None).to_dict("records")
+                guardar_orcamento(_email_orc, {"receitas": _recs(df_rec), "despesas": _recs(df_desp)})
+                # a base da sessão passa a ser o que ficou gravado; assim, ao sair da página e voltar,
+                # os dados continuam lá. O editor recomeça com uma chave nova a partir dessa base.
+                st.session_state["orc_rec_base"]  = df_rec.reset_index(drop=True).copy()
+                st.session_state["orc_desp_base"] = df_desp.reset_index(drop=True).copy()
+                st.session_state["orc_versao"] = _ver + 1
+                st.session_state["orc_msg"] = "Orçamento guardado na sua conta."
+                st.rerun()
+            if b2.button("↺ Repor modelo inicial", key="orc_repor", use_container_width=True):
+                _m = orcamento_modelo_inicial()
+                st.session_state["orc_rec_base"]  = pd.DataFrame(_m["receitas"], columns=["Descrição", "Valor (Kz)"])
+                st.session_state["orc_desp_base"] = pd.DataFrame(_m["despesas"], columns=["Categoria", "Descrição", "Valor (Kz)"])
+                st.session_state["orc_versao"] = _ver + 1
+                st.rerun()
+            _xl_orc = _xlsx_seguro(lambda: gerar_xlsx_orcamento(df_rec, df_desp, ORC_CATEGORIAS))
+            if _xl_orc:
+                b3.download_button("⬇️ Descarregar Excel", data=_xl_orc, file_name="orcamento_mensal_appo.xlsx",
+                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                   use_container_width=True, key="dl_orc_xlsx")
+            else:
+                _csv = pd.concat([
+                    df_rec.assign(Tipo="Receita", Categoria=""),
+                    df_desp.assign(Tipo="Despesa"),
+                ], ignore_index=True)[["Tipo", "Categoria", "Descrição", "Valor (Kz)"]].to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
+                b3.download_button("⬇️ Descarregar (CSV)", data=_csv, file_name="orcamento_mensal.csv", mime="text/csv", use_container_width=True)
+            _om = st.session_state.pop("orc_msg", None)
+            if _om:
+                st.success(_om)
+
+
+    # =========================================================
+    # PÁGINA: BIBLIOTECA EDUCATIVA
+    # =========================================================
+    elif pagina == "📚 Biblioteca Educativa":
+        tx = t()
+        hero("📚 " + tx["nav_map"]["📚 Biblioteca Educativa"].replace("📚 ", ""), tx["bib_hero_sub"])
+        df_artigos = obter_artigos()
+        df_docs_bib = obter_documentos("biblioteca")
+        if not df_docs_bib.empty:
+            st.subheader("📄 Publicações em PDF")
+            for _, doc in df_docs_bib.iterrows():
+                with st.expander(f"{ICONES_CATEGORIA.get(doc['categoria'], '📄')} {doc['titulo']}"):
+                    st.caption(f"{doc['categoria']} · {tx['bib_publicado']} {doc['criado_em']} · {doc['tamanho'] / 1048576:.1f} MB")
+                    if str(doc["descricao"] or "").strip():
+                        st.write(doc["descricao"])
+                    bloco_documento_pdf(int(doc["id"]), doc["nome_ficheiro"], f"bib_{int(doc['id'])}")
+            if not df_artigos.empty:
+                st.subheader("📝 Artigos")
+        if df_artigos.empty:
+            if df_docs_bib.empty:
+                st.info(tx["bib_sem_artigos"])
+        else:
+            todas_label = tx["bib_todas"]
+            categorias  = [todas_label] + sorted(df_artigos["categoria"].unique().tolist())
+            filtro      = st.selectbox(tx["bib_filtrar"], categorias)
+            filtro_bd   = None if filtro == todas_label else filtro
+            _df_f = obter_artigos(filtro_bd)
+            biblioteca_por_nivel(_df_f, tx)
+
+    # =========================================================
+    # PÁGINA: CAPACIDADE FINANCEIRA
+    # =========================================================
+    elif pagina == "🧭 Perfil de Investidor":
+        hero("🧭 Perfil de Investidor", "Descobre o teu perfil de risco e o portal que melhor se ajusta ao teu momento", badge="🇦🇴 Kwanzas (Kz)")
+        pagina_perfil_investidor()
+
+    elif pagina == "🧠 Capacidade Financeira":
+        hero("🧠 Capacidade Financeira", "Diagnóstico, treino e ferramentas para decidir com autonomia", badge="🇦🇴 Kwanzas (Kz)")
+        pagina_capacidade_financeira(True)
+
+    # =========================================================
+    # PÁGINA: EDUCAÇÃO & SERVIÇOS
+    # =========================================================
+    elif pagina == "🎓 Educação & Serviços":
+        hero("🎓 Educação & Serviços", "Formação, materiais e ferramentas educativas do APPO", badge="🇦🇴 Educação financeira · Kwanzas (Kz)")
+        pagina_educacao_servicos()
+
+    # =========================================================
+    # PÁGINA: MANIFESTAÇÃO DE INTERESSE (antiga «Adesão de Sócios»; a chave interna mantém-se)
+    # =========================================================
+    elif pagina == "🧾 Adesão de Sócios":
+        tx = t()
+        hero("🧾 " + tx["nav_map"]["🧾 Adesão de Sócios"].replace("🧾 ", ""), "Regista o teu interesse numa futura participação. Não é uma admissão.", badge="🇦🇴 APPO")
+        pagina_manifestacao_interesse()
+
+    # =========================================================
+    # PÁGINA: SOBRE NÓS & ESTATUTOS
+    # =========================================================
+    elif pagina == "ℹ️ Sobre Nós & Estatutos":
+        tx = t()
+        hero("ℹ️ " + tx["nav_map"]["ℹ️ Sobre Nós & Estatutos"].replace("ℹ️ ", ""), tx["sobre_hero_sub"])
+        pagina_sobre_nos(tx)
+
+    # =========================================================
+    # PÁGINA: PAINEL DO ADMINISTRADOR (mantém-se em PT)
+    # =========================================================
+    elif pagina == "🔐 Painel do Administrador":
+        hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
+
+        aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca, aba_edu_serv, aba_despesas, aba_site, aba_teses = st.tabs(
+            ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança", "Educação & Serviços", "Despesas do grupo", "Site & Sobre Nós", "Teses & Fair Value"])
+        with aba_edu_serv:
+            painel_educacao_servicos_admin()
+        with aba_despesas:
+            painel_despesas_admin()
+        with aba_teses:
+            st.subheader("Teses e fair value (Terminal de Decisão)")
+            _ac = obter_activos()
+            _ac = _ac[_ac["ticker"].astype(str).str.strip() != ""]
+            if _ac.empty:
+                st.warning("Registe primeiro os activos com ticker em «Cotações & Activos».")
+            else:
+                _tz = obter_teses()
+                _mapa = {_chave_ticker(r["ticker"]): r for _, r in _tz.iterrows()} if not _tz.empty else {}
+                _escolha = st.selectbox("Activo", _ac["ticker"].tolist(), key="tese_tk",
+                                        format_func=lambda tk: f"{_ac.loc[_ac['ticker'] == tk, 'nome'].iloc[0]} ({tk})")
+                _cur = _mapa.get(_chave_ticker(_escolha))
+                _fv0 = float(_cur["fair_value"]) if _cur is not None and pd.notna(_cur["fair_value"]) else 0.0
+                _dc0 = _cur["decisao"] if _cur is not None and _cur["decisao"] in DECISOES_CLUBE else "Em observação"
+                with st.form(f"form_tese_{_escolha}"):
+                    _fv = st.number_input("Fair value (Kz por acção; 0 = sem estimativa)", min_value=0.0, value=_fv0, step=500.0)
+                    _dc = st.selectbox("Decisão do Clube", DECISOES_CLUBE, index=DECISOES_CLUBE.index(_dc0))
+                    _ts = st.text_area("Tese de investimento", value=(_cur["tese"] if _cur is not None and _cur["tese"] else ""), height=180, max_chars=4000)
+                    _gv = st.form_submit_button("Guardar tese")
+                if _gv:
+                    try:
+                        guardar_tese(_escolha, _ts, _fv, _dc)
+                        st.success("Tese guardada.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+                if not _tz.empty:
+                    _v = _tz[["ticker", "decisao", "fair_value", "actualizado_em", "actualizado_por"]].copy()
+                    _v["fair_value"] = _v["fair_value"].apply(lambda x: kz(float(x)) if pd.notna(x) else "—")
+                    st.dataframe(_v, hide_index=True)
+
+        with aba_site:
+            painel_site_admin()
+
+        with aba_resumo:
+            st.subheader("Editar Resumo Patrimonial")
+            st.caption("O Capital Realizado deve ser sempre ≤ ao Capital Subscrito.")
+            resumo = obter_resumo_patrimonial()
+            with st.form("form_editar_resumo"):
+                novo_subscrito  = st.number_input("Capital Subscrito (Kz)",  min_value=0.0, step=10000.0, value=float(resumo["capital_subscrito"]))
+                novo_realizado  = st.number_input("Capital Realizado (Kz)",  min_value=0.0, step=10000.0, value=float(resumo["capital_realizado"]))
+                novo_invest     = st.number_input("Investimentos (Kz)",      min_value=0.0, step=10000.0, value=float(resumo["investimentos"]))
+                novas_reservas  = st.number_input("Reservas (Kz)",           min_value=0.0, step=10000.0, value=float(resumo["reservas"]))
+                guardar_resumo  = st.form_submit_button("Guardar alterações")
+            if guardar_resumo:
+                if novo_realizado > novo_subscrito:
+                    st.error("O Capital Realizado não pode ser maior do que o Capital Subscrito.")
+                else:
+                    actualizar_resumo_patrimonial(novo_subscrito, novo_realizado, novo_invest, novas_reservas)
+                    st.success("Resumo patrimonial actualizado e novo ponto de histórico registado.")
+                    st.rerun()
+
+            st.divider()
+            st.subheader("Histórico de património (alimenta os gráficos)")
+            st.caption("Cada vez que guarda o resumo acima, regista-se um ponto com o Capital Realizado desse momento. "
+                       "Elimine aqui os pontos de teste ou com valores errados.")
+            _hist_adm = obter_historico_patrimonio_admin()
+            if _hist_adm.empty:
+                st.info("Ainda não há pontos de histórico.")
+            else:
+                for _, _h in _hist_adm.iterrows():
+                    hc1, hc2, hc3 = st.columns([2, 3, 1])
+                    hc1.write(str(_h["registado_em"])[:16])
+                    hc2.write(f"Capital realizado: {kz(_h['capital_social'])}")
+                    if hc3.button("Eliminar", key=f"del_hist_{int(_h['id'])}"):
+                        eliminar_registo_historico(int(_h["id"]))
+                        st.rerun()
+
+        with aba_unidades:
+            exigir_admin()
+            st.subheader("📐 Património líquido, unidades e VUP")
+            st.info("O VUP é o património líquido validado dividido pelas unidades em circulação. Ganhos e perdas alteram o valor das unidades. "
+                    "Emissões e cancelamentos alteram a sua quantidade. Transferências entre participantes alteram a titularidade, não a quantidade total.")
+            _msg_c = st.session_state.pop("cotas_msg", None)
+            if _msg_c:
+                st.success(_msg_c)
+            _cfg = obter_cotas_config()
+            _vi = obter_vup_info()
+            _bal = _vi["balanco"]
+
+            # ---------- A. Estado actual ----------
+            _cor = {"Não calculado": "🔴", "Provisório": "🟠", "Validado": "🟢"}[_vi["estado"]]
+            st.markdown(f"**Estado do indicador:** {_cor} {_vi['estado']}")
+            for _mot in _vi["motivos"]:
+                st.warning(_mot)
+            if _vi["estado"] == "Provisório":
+                st.caption("Provisório: o balanço mais recente e/ou a base de unidades ainda não foram validados. Não apresente este valor como certeza contabilística.")
+            u1, u2, u3, u4 = st.columns(4)
+            u1.metric("Património líquido", kz(_vi["vlg"]) if _vi["estado"] != "Não calculado" else "—")
+            u2.metric("Unidades validadas", f"{_vi['unidades']:,.6f}".replace(",", " "))
+            u3.metric("VUP", (kz2(_vi["vup"]) + " Kz") if _vi["estado"] != "Não calculado" else "—")
+            _rent_u = (_vi["vup"] / _vi["vup_base"] - 1) * 100 if _vi["vup_base"] > 0 and _vi["estado"] != "Não calculado" else None
+            u4.metric(f"Variação desde a data-base ({_vi['data_base']:%d/%m/%Y})" if _vi["data_base"] else "Variação desde a data-base",
+                      pct_bruto(_rent_u) if _rent_u is not None else "—")
+            st.caption("A variação conta a partir da data-base das unidades; não representa o desempenho desde 2024 nem esconde as perdas históricas (ver registo histórico privado, abaixo).")
+            if _vi["unidades_por_rever"] > 0:
+                st.warning(f"Há {_vi['unidades_por_rever']:,.4f} unidades 'Por rever' (lançadas antes desta revisão). Não entram no VUP até serem validadas, corrigidas ou anuladas (secção 5).".replace(",", " "))
+            _dp = _vi["data_precos"]
+            st.caption(f"Investimentos a preços de avaliação da app: {kz(_vi['valor_carteira'])} (data dos preços: {_dp:%d/%m/%Y %H:%M}; preços inseridos pelo administrador, não são tempo real)."
+                       if _dp else f"Investimentos a preços de avaliação da app: {kz(_vi['valor_carteira'])} (sem data de actualização registada).")
+
+            # ---------- B. Balanço ----------
+            with st.expander("1. Balanço: dinheiro disponível, outros activos e passivos", expanded=_bal is None):
+                if _bal:
+                    st.write(f"**Último retrato:** {_bal[1]:%d/%m/%Y}  ·  dinheiro disponível {kz2(_bal[2])} Kz  ·  outros activos {kz2(_bal[3])} Kz  ·  "
+                             f"passivos {kz2(_bal[4])} Kz  ·  estado: **{_bal[7]}**")
+                    st.caption(f"Fonte: {_bal[5] or '—'}  ·  Titularidade: {_bal[6] or '—'}  ·  Origem: {_bal[8] or '—'}")
+                    if _bal[7] != "Validado":
+                        if st.button("Validar este retrato", key="validar_balanco_btn"):
+                            validar_balanco(int(_bal[0]), "Validado pelo administrador")
+                            st.session_state["cotas_msg"] = "Balanço validado."
+                            st.rerun()
+                st.caption("Os retratos não se editam: cada actualização cria um novo, e os anteriores ficam guardados. Dinheiro disponível: o que está efectivamente "
+                           "disponível (extracto do homebroker/banco). Ordens vivas podem imobilizar saldo; ordens não executadas não são posições. "
+                           "O capital realizado e as 'reservas' do Resumo Patrimonial não entram neste cálculo.")
+                with st.form("form_balanco"):
+                    b1, b2 = st.columns(2)
+                    _b_data = b1.date_input("Data do retrato", value=datetime.now().date())
+                    _b_din = b2.text_input("Dinheiro disponível (Kz)", value="")
+                    b3, b4 = st.columns(2)
+                    _b_out = b3.text_input("Outros activos e direitos comprovados (Kz)", value="0")
+                    _b_pas = b4.text_input("Passivos e obrigações (Kz)", value="0")
+                    _b_fonte = st.text_input("Fonte (ex.: extracto do homebroker de 05/10/2026)")
+                    _b_tit = st.text_input("Titularidade da conta/activos (ex.: conta pessoal do administrador; acordo documentado?)")
+                    _b_val = st.checkbox("Marcar já como Validado (confirmei os valores com documentos)")
+                    _b_ok = st.form_submit_button("Registar novo retrato")
+                if _b_ok:
+                    _din, _out, _pas = _numero_flex(_b_din), _numero_flex(_b_out), _numero_flex(_b_pas)
+                    if _din is None or _out is None or _pas is None or min(_din, _out, _pas) < 0:
+                        st.error("Indique números válidos (≥ 0) nos três campos, por exemplo 2014073,93.")
+                    elif not _b_fonte.strip():
+                        st.error("Indique a fonte do retrato.")
+                    else:
+                        registar_balanco(_b_data, _din, _out, _pas, _b_fonte.strip(), _b_tit.strip(), "Validado" if _b_val else "Provisório")
+                        registar_vup_hoje()
+                        st.session_state["cotas_msg"] = "Retrato registado."
+                        st.rerun()
+
+            # ---------- C. Regras ----------
+            with st.expander("2. Regras (propostas pendentes de formalização)"):
+                st.caption("Estas regras são propostas, não regras comprovadas dos Estatutos, enquanto não houver deliberação documentada. "
+                           "100 unidades não equivalem necessariamente a 10 000 000 Kz quando o VUP varia. Os direitos de governação são separados da participação económica: "
+                           "todas as unidades valem o mesmo dinheiro; o peso do voto das unidades Fundadoras é uma proposta (1 = sem privilégio).")
+                with st.form("form_cotas_cfg"):
+                    fc1, fc2, fc3, fc4 = st.columns(4)
+                    _n_c = fc1.number_input("Valor nominal de referência (Kz)", min_value=1000.0, value=float(_cfg["valor_nominal"]), step=1000.0)
+                    _l_c = fc2.number_input("Limite de unidades (0 = sem limite)", min_value=0.0, value=float(_cfg["limite_cotas"]), step=10.0)
+                    _m_c = fc3.number_input("Entrada mínima (Kz)", min_value=0.0, value=float(_cfg["entrada_minima"]), step=10000.0)
+                    _p_c = fc4.number_input("Votos por unidade Fundadora", min_value=1.0, value=float(_cfg["peso_voto_fundadora"]), step=1.0)
+                    if st.form_submit_button("Guardar regras"):
+                        guardar_cotas_config(float(_n_c), float(_l_c), float(_m_c), float(_p_c))
+                        st.session_state["cotas_msg"] = "Regras guardadas (propostas pendentes de formalização)."
+                        st.rerun()
+                st.markdown(f"**Admissão de novos participantes:** 🔒 DESACTIVADA. Só poderá ser activada por decisão documentada e enquadramento validado, "
+                            "não por um botão. Entretanto, recolhem-se apenas manifestações de interesse.")
+                _rec = st.checkbox("A base de unidades foi reconciliada com contribuições comprovadas, acordos e perdas", value=_cfg["unidades_base_validada"], key="base_rec_chk")
+                if _rec != _cfg["unidades_base_validada"]:
+                    _nota_rec = st.text_input("Fundamento desta alteração (obrigatório)", key="base_rec_nota")
+                    if st.button("Confirmar alteração do estado da base", key="base_rec_btn"):
+                        if not _nota_rec.strip():
+                            st.error("Indique o fundamento.")
+                        else:
+                            definir_base_reconciliada(_rec, _nota_rec.strip())
+                            registar_vup_hoje()
+                            st.rerun()
+
+            # ---------- D. Estrutura inicial ----------
+            _validadas = int(consultar_um("SELECT COUNT(*) FROM unidades_movimentos WHERE estado = 'Validado'")[0])
+            with st.expander("3. Adopção da estrutura inicial de unidades (reorganização, não é entrada de dinheiro)", expanded=_validadas == 0):
+                if _validadas > 0:
+                    st.info("Já existe uma estrutura de unidades validada. Só se adopta uma vez; alterações fazem-se por anulação documentada.")
+                else:
+                    _rs = obter_resumo_patrimonial()
+                    st.warning(f"HIPÓTESE: {kz(_rs['capital_realizado'])} ÷ {kz(_cfg['valor_nominal'])} = {_rs['capital_realizado'] / _cfg['valor_nominal']:.5f} unidades. "
+                               "Não é uma reconstrução comprovada das contribuições históricas e não prova quem entregou cada montante. "
+                               "Esta etapa regista um ACORDO de participação como reorganização: não cria transferências bancárias nem movimentos financeiros.")
+                    _cap_base = st.number_input("Capital de referência a repartir (Kz)", min_value=0.0, step=1000.0, value=float(round(_rs["capital_realizado"])), key="cotas_cap_base")
+                    _base_f = pd.DataFrame({"Sócio": [NOME_ADMIN_PUBLICO, "", "", "", ""], "E-mail da conta (opcional)": [""] * 5,
+                                            "% do capital": [55.0, 15.0, 10.0, 10.0, 10.0]})
+                    st.caption("Percentagens de referência inicialmente acordadas: 55%, 15%, 10%, 10%, 10%. Escreva o nome real de cada participante (fica só nos registos internos).")
+                    _fund = st.data_editor(_base_f, num_rows="dynamic", hide_index=True, key="cotas_fundadores",
+                                           column_config={"% do capital": st.column_config.NumberColumn("% do capital", min_value=0.0, max_value=100.0, step=0.5, format="%.2f")})
+                    try:
+                        _subs = calcular_subscricoes_iniciais(float(_cap_base), _cfg["valor_nominal"], _fund.to_dict("records"))
+                    except ValueError as _e:
+                        _subs = None
+                        st.info(str(_e))
+                    if _subs:
+                        _prev = pd.DataFrame(_subs)
+                        _prev["montante"] = _prev["montante"].apply(lambda v: kz2(v) + " Kz")
+                        _prev["cotas"] = _prev["cotas"].apply(lambda v: f"{v:,.6f}".replace(",", " "))
+                        _prev["pct"] = _prev["pct"].apply(lambda v: f"{v:.2f}%")
+                        st.dataframe(_prev[["socio", "pct", "montante", "cotas"]].rename(columns={"socio": "Participante", "pct": "% acordada", "montante": "Valor de referência", "cotas": "Unidades"}), hide_index=True)
+                        _d_base = st.date_input("Data-base da adopção", value=datetime.now().date(), key="data_base_in")
+                        _fund_txt = st.text_area("Fundamento da adopção (acta, acordo, critério)", key="fund_base_txt", height=80)
+                        _rec_now = st.checkbox("Declaro que a base foi reconciliada (se não, o VUP fica 'Provisório')", key="rec_now_chk")
+                        if st.button("Adoptar estrutura inicial", type="primary", key="cotas_criar"):
+                            try:
+                                adoptar_estrutura_inicial(_subs, _cfg["valor_nominal"], _d_base, _fund_txt, _rec_now)
+                                registar_vup_hoje()
+                                st.session_state["cotas_msg"] = "Estrutura inicial adoptada como reorganização."
+                                st.rerun()
+                            except ValueError as _e2:
+                                st.error(str(_e2))
+
+            # ---------- E. Operações ----------
+            st.markdown("**4. Entrada ou saída de um participante (operação autorizada)**")
+            st.caption("Calcula ao VUP aprovado ANTES da operação. Regista a operação, o novo retrato do dinheiro disponível e a auditoria, tudo de uma só vez. "
+                       "Não é possível emitir ao valor nominal para contornar o VUP. Não há reembolso imediato garantido: prazos, liquidez e custos dependem das regras aplicáveis.")
+            _contas_u = listar_contas()
+            _opc_u = [f"{r['nome']} — {r['email']}" for _, r in _contas_u.iterrows()] + ["Outro (escrever o nome)"]
+            if "ref_op" not in st.session_state:
+                st.session_state["ref_op"] = f"OP-{datetime.now():%Y%m%d%H%M%S}-{secrets.token_hex(3)}"
+            with st.form("form_unidades"):
+                _sel_u = st.selectbox("Participante", _opc_u)
+                _nome_u = st.text_input("Nome (só se escolheu 'Outro')")
+                f1, f2 = st.columns(2)
+                _tipo_u = f1.selectbox("Operação", ["Subscrição", "Resgate"])
+                _classe_u = f2.selectbox("Classe", ["Ordinária", "Fundadora"], help="Fundadora só se esse participante já for fundador. A classe é uma proposta pendente de formalização.")
+                f3, f4 = st.columns(2)
+                _mont_u = f3.text_input("Montante (Kz)", value="")
+                _data_u = f4.date_input("Data da operação", value=datetime.now().date())
+                _vh_u = st.text_input("Valor da unidade nessa data (só se a data for anterior a hoje: regularização)", value="")
+                _fund_u = st.text_area("Fundamento / observações (obrigatório em regularizações)", height=70)
+                st.caption(f"Referência desta operação (impede duplicações): {st.session_state['ref_op']}")
+                _ok_u = st.form_submit_button("Registar operação")
+            if _ok_u:
+                if _sel_u.startswith("Outro"):
+                    _socio_u, _mail_u = _nome_u.strip(), None
+                else:
+                    _linha_u = _contas_u.iloc[_opc_u.index(_sel_u)]
+                    _socio_u, _mail_u = str(_linha_u["nome"]), str(_linha_u["email"])
+                _m = _numero_flex(_mont_u)
+                _vh = _numero_flex(_vh_u) if _vh_u.strip() else None
+                if _m is None or _m <= 0:
+                    st.error("Indique um montante válido (ex.: 500000).")
+                else:
+                    try:
+                        _r = registar_operacao_unidades(_tipo_u, _socio_u, _mail_u, _m, _classe_u, _data_u, st.session_state["ref_op"], _fund_u, _vh)
+                        registar_vup_hoje()
+                        st.session_state.pop("ref_op", None)
+                        st.session_state["cotas_msg"] = (f"{_tipo_u} registada: {_r['unidades']} unidades ao VUP de {_r['vup']} Kz ({_r['origem']}). "
+                                                         "O dinheiro disponível foi actualizado no novo retrato.")
+                        st.rerun()
+                    except ValueError as _e3:
+                        st.error(str(_e3))
+
+            # ---------- F. Revisão / movimentos ----------
+            _mov_u = obter_unidades_movimentos()
+            st.markdown("**5. Movimentos de unidades (revisão, correcção e anulação)**")
+            if _mov_u.empty:
+                st.info("Ainda não há movimentos.")
+            else:
+                st.caption("'Por rever': lançados antes desta revisão; não entram no VUP. Podem ser corrigidos e depois validados com fundamento, ou anulados. "
+                           "Movimentos validados não se editam nem se apagam: anulam-se com motivo (fica o rasto), e se houve efeito em caixa regista-se o estorno.")
+                for _, _m in _mov_u.head(30).iterrows():
+                    _mid = int(_m["id"])
+                    _est = str(_m["estado"])
+                    with st.expander(f"{_m['data']}  ·  {_m['socio']}  ·  {_m['tipo']}  ·  {_est}  ·  {kz2(_m['montante'])} Kz  ·  {float(_m['unidades']):,.6f} un.".replace(",", " ")):
+                        st.write(f"Origem: {_m['origem'] or '—'}  ·  Referência: {_m['referencia'] or '—'}  ·  VUP aplicado: {kz2(_m['vup'])} Kz  ·  Classe: {_m['classe'] or '—'}")
+                        if _m["fundamento"]:
+                            st.write(f"Fundamento: {_m['fundamento']}")
+                        if _est == "Anulado":
+                            st.write(f"Anulado por {_m['anulado_por']} em {str(_m['anulado_em'])[:16]}: {_m['motivo_anulacao']}")
+                        if _est == "Por rever":
+                            with st.form(f"form_edit_mov_{_mid}"):
+                                e1, e2 = st.columns(2)
+                                _e_socio = e1.text_input("Participante", value=str(_m["socio"]))
+                                _e_data = e2.date_input("Data", value=_m["data"])
+                                e3, e4, e5 = st.columns(3)
+                                _e_mont = e3.text_input("Montante (Kz)", value=f"{abs(float(_m['montante'])):.2f}".replace(".", ","))
+                                _e_vup = e4.text_input("Valor da unidade nesse dia (Kz)", value=f"{float(_m['vup']):.4f}".replace(".", ","))
+                                _e_cls = e5.selectbox("Classe", ["Fundadora", "Ordinária"], index=0 if str(_m["classe"]) == "Fundadora" else 1)
+                                _gc = st.form_submit_button("Guardar correcção")
+                            if _gc:
+                                try:
+                                    corrigir_movimento_unidades(_mid, _e_data, _e_socio, _numero_flex(_e_mont) or 0, _numero_flex(_e_vup) or 0, _e_cls)
+                                    st.session_state["cotas_msg"] = "Movimento corrigido (auditado)."
+                                    st.rerun()
+                                except ValueError as _e4:
+                                    st.error(str(_e4))
+                            _fv = st.text_input("Fundamento da validação", key=f"fv_{_mid}")
+                            if st.button("Validar movimento", key=f"val_{_mid}"):
+                                try:
+                                    validar_movimento_unidades(_mid, _fv)
+                                    registar_vup_hoje()
+                                    st.session_state["cotas_msg"] = "Movimento validado."
+                                    st.rerun()
+                                except ValueError as _e5:
+                                    st.error(str(_e5))
+                        if _est != "Anulado":
+                            _mot = st.text_input("Motivo da anulação", key=f"mot_{_mid}")
+                            if st.button("Anular movimento", key=f"anu_{_mid}"):
+                                try:
+                                    anular_movimento_unidades(_mid, _mot)
+                                    registar_vup_hoje()
+                                    st.session_state["cotas_msg"] = "Movimento anulado (com estorno em caixa, se aplicável)."
+                                    st.rerun()
+                                except ValueError as _e6:
+                                    st.error(str(_e6))
+
+                # posições (só movimentos validados)
+                _val = _mov_u[_mov_u["estado"] == "Validado"]
+                if not _val.empty:
+                    st.markdown("**6. Posição de cada participante (apenas movimentos validados)**")
+                    _mv = adicionar_votos(_val, _cfg["peso_voto_fundadora"])
+                    _pos = _mv.groupby(["socio", "classe"]).agg(unidades=("unidades", "sum"), aportado=("efeito_caixa", "sum"), votos=("votos", "sum")).reset_index()
+                    _pos = _pos[_pos["unidades"].abs() > 1e-9]
+                    _tot_un, _tot_vt = float(_pos["unidades"].sum()), float(_pos["votos"].sum())
+                    _rot = rotulos_publicos(list(_pos["socio"].unique()))
+                    _pos["Apresentação pública"] = _pos["socio"].map(_rot)
+                    _pos["% das unidades"] = _pos["unidades"].apply(lambda v: f"{v / _tot_un * 100:.2f}%" if _tot_un > 0 else "—")
+                    _pos["% dos votos"] = _pos["votos"].apply(lambda v: f"{v / _tot_vt * 100:.2f}%" if _tot_vt > 0 else "—")
+                    _pos["Valor actual"] = _pos["unidades"].apply(lambda v: kz2(v * _vi["vup"]) + " Kz" if _vi["estado"] != "Não calculado" else "—")
+                    _pos["unidades"] = _pos["unidades"].apply(lambda v: f"{v:,.6f}".replace(",", " "))
+                    _pos["Entradas em dinheiro (líquidas)"] = _pos["aportado"].apply(lambda v: kz2(v) + " Kz")
+                    st.dataframe(_pos[["socio", "Apresentação pública", "classe", "unidades", "% das unidades", "% dos votos", "Entradas em dinheiro (líquidas)", "Valor actual"]].rename(
+                        columns={"socio": "Participante (interno)", "classe": "Classe", "unidades": "Unidades"}), hide_index=True)
+                    st.caption("As 'entradas em dinheiro' só contam subscrições e resgates autorizados; as unidades da reorganização inicial não são dinheiro entregue.")
+
+            # ---------- G. Registo histórico privado + reconciliação ----------
+            with st.expander("7. Registo histórico privado e reconciliação"):
+                st.caption("Registo interno, fora do património, do VUP e do preço de entrada. Não é auditado nem integralmente comprovado.")
+                for _, _h in consultar_df("SELECT id, descricao, valor_estimado, estado, nota, criado_em FROM historico_privado ORDER BY id").iterrows():
+                    st.write(f"**{_h['descricao']}**: ~{kz2(_h['valor_estimado'])} Kz — *{_h['estado']}*")
+                    st.caption(_h["nota"] or "")
+                _rsm = obter_resumo_patrimonial()
+                _nav_txt = kz2(_vi["vlg"]) + " Kz" if _vi["estado"] != "Não calculado" else "não calculado"
+                st.write(f"Capital realizado declarado: {kz2(_rsm['capital_realizado'])} Kz  ·  Património líquido calculado: {_nav_txt}")
+                st.caption("A diferença entre as duas rubricas ainda não está reconciliada e não se atribui a nenhuma causa; faça a reconciliação com documentos antes de a usar em decisões.")
+
+        with aba_activos:
+            st.subheader("Editar Cotações & Activos")
+            st.caption("Cada vez que guardas, o Índice APPO é recalculado e um novo ponto é registado no histórico.")
+            df_activos_admin = obter_activos()
+            # Mostrar variação actual (read-only) para referência
+            df_admin_display = df_activos_admin[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
+            df_admin_display = df_admin_display.rename(columns={"variacao": "Var.% (auto)"})
+            df_admin_display["Var.% (auto)"] = df_admin_display["Var.% (auto)"].apply(pct_bruto)
+            st.caption("A variação % é calculada automaticamente ao guardar. Edita apenas o preço.")
+            df_editado = st.data_editor(
+                df_activos_admin[["ticker", "nome", "tipo", "preco"]], num_rows="dynamic", key="editor_activos",
+                column_config={
+                    "ticker": st.column_config.TextColumn("Ticker", max_chars=12),
+                    "nome": "Nome do activo", "tipo": "Tipo",
+                    "preco": st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
+                })
+            st.dataframe(df_admin_display[["ticker", "Var.% (auto)"]], hide_index=True)
+            # ---- Actualização directa a partir da BODIVA (com pré-visualização) ----
+            st.markdown("**Actualização directa a partir da BODIVA**")
+            st.caption("Vai buscar as cotações à BODIVA para os tickers registados acima (gravados). "
+                       "Nada é gravado até confirmar na pré-visualização.")
+            if st.button("🔄 Buscar cotações na BODIVA"):
+                try:
+                    _tks = [str(x or "").strip().upper() for x in df_activos_admin["ticker"] if str(x or "").strip()]
+                    st.session_state["bodiva_prev"] = buscar_cotacoes_bodiva(_tks)
+                except Exception as _e:
+                    st.session_state.pop("bodiva_prev", None)
+                    st.error(f"Não foi possível obter as cotações da BODIVA agora ({_e}). "
+                             "Pode continuar a editar os preços manualmente.")
+            _prev = st.session_state.get("bodiva_prev")
+            if _prev:
+                _linhas_prev = []
+                for _, _r in df_activos_admin.iterrows():
+                    _tk = str(_r["ticker"] or "").strip().upper()
+                    _novo = _prev.get(_tk)
+                    _atual = float(_r["preco"])
+                    _suspeito = (_novo is not None and _atual > 0 and abs(_novo / _atual - 1) > 0.5)
+                    _linhas_prev.append({
+                        "Ticker": _tk, "Nome": _r["nome"],
+                        "Preço na app (Kz)": _atual,
+                        "Preço BODIVA (Kz)": _novo if _novo is not None else "não encontrado",
+                        "Estado": ("⚠️ variação >50% — não será aplicado" if _suspeito
+                                   else ("sem alteração" if _novo is not None and _novo == _atual
+                                         else ("a actualizar" if _novo is not None else "mantém preço actual"))),
+                    })
+                st.dataframe(pd.DataFrame(_linhas_prev), hide_index=True)
+                if st.button("✅ Aplicar cotações da BODIVA e guardar"):
+                    _df_novo = df_activos_admin[["ticker", "nome", "tipo", "preco"]].copy()
+                    for _i in _df_novo.index:
+                        _novo = _prev.get(str(_df_novo.at[_i, "ticker"] or "").strip().upper())
+                        _atual = float(_df_novo.at[_i, "preco"])
+                        if _novo is not None and not (_atual > 0 and abs(_novo / _atual - 1) > 0.5):
+                            _df_novo.at[_i, "preco"] = _novo
+                    substituir_activos(_df_novo)
+                    st.session_state.pop("bodiva_prev", None)
+                    st.success("Cotações da BODIVA aplicadas. Índice APPO e variações actualizados.")
+                    st.rerun()
+
+            with st.expander("🏷️ Preço da OPV (oferta pública de venda) — referência nos gráficos"):
+                st.caption("Aparece nos gráficos como uma linha tracejada, com a variação desde a OPV.")
+                _tks_opv = [str(x).strip().upper() for x in df_activos_admin["ticker"] if str(x).strip()]
+                oc1, oc2, oc3 = st.columns([2, 1.5, 1.5])
+                _t_opv = oc1.selectbox("Título", _tks_opv, key="opv_tk")
+                _p_opv = oc2.number_input("Preço da OPV (Kz)", min_value=0.0, step=100.0, key="opv_pr")
+                _d_opv = oc3.date_input("Data (opcional)", value=None, key="opv_dt")
+                if st.button("Guardar preço da OPV", key="opv_btn"):
+                    if _p_opv > 0:
+                        guardar_opv(_t_opv, float(_p_opv), _d_opv)
+                        st.success("Preço da OPV guardado.")
+                        st.rerun()
+                    else:
+                        st.error("Indique um preço superior a zero.")
+                _opvs = consultar_df("SELECT ticker, preco, data FROM opv_activos ORDER BY ticker")
+                for _, _o in _opvs.iterrows():
+                    od1, od2 = st.columns([4, 1])
+                    od1.write(f"{_o['ticker']}  ·  {float(_o['preco']):,.0f} Kz".replace(",", " ") + (f"  ·  {_o['data']}" if _o["data"] else ""))
+                    if od2.button("Eliminar", key=f"del_opv_{_o['ticker']}"):
+                        eliminar_opv(_o["ticker"])
+                        st.rerun()
+
+            with st.expander("📥 Importar histórico de cotações (CSV ou Excel)"):
+                st.caption("Para preencher o passado nos gráficos. O ficheiro precisa de três colunas, com cabeçalhos como "
+                           "**data**, **ticker** e **preço** (ex.: 02/10/2026; BAIAAAAA; 94600). Aceita as exportações da BODIVA/BFA se tiverem estas colunas.")
+                _f_hist = st.file_uploader("Ficheiro de histórico", type=["csv", "xlsx"], key="hist_cot_up")
+                _tks_app = [str(x).strip().upper() for x in df_activos_admin["ticker"] if str(x).strip()]
+                _tk_esc = st.selectbox("Se o ficheiro for de UM só título (sem coluna de ticker), escolha o título:",
+                                       ["(o ficheiro já traz a coluna de ticker)"] + _tks_app, key="hist_cot_tk")
+                _tk_forcado = "" if _tk_esc.startswith("(") else _tk_esc
+                if _f_hist is not None and st.button("Importar histórico", key="hist_cot_btn"):
+                    try:
+                        if _f_hist.name.lower().endswith(".csv"):
+                            _dfh = pd.read_csv(_f_hist, sep=None, engine="python", encoding="utf-8-sig")
+                        else:
+                            _dfh = pd.read_excel(_f_hist)
+                        if len(_dfh) > 20000:
+                            st.error("O ficheiro tem demasiadas linhas (máximo 20 000).")
+                        else:
+                            _ok, _mau = importar_historico_cotacoes(_dfh, _tk_forcado)
+                            st.success(f"Importadas {_ok} cotações" + (f"; {_mau} linhas ignoradas (data, ticker ou preço inválidos)." if _mau else "."))
+                    except Exception as _e:
+                        st.error(f"Não foi possível importar: {_e}")
+
+            if st.button("Guardar alterações às cotações"):
+                substituir_activos(df_editado)
+                st.success("Cotações e Índice APPO actualizados com sucesso.")
+                st.rerun()
+
+        with aba_carteira_real:
+            st.subheader("Editar Carteira Real do Clube")
+            st.caption(
+                "Posições REAIS, com dinheiro verdadeiro, investidas de facto pelo Clube "
+                "(ex.: na BFA Capital Markets). É esta tabela que alimenta o relatório PDF — "
+                "diferente do Simulador de Investimento, que é só treino com dinheiro fictício."
+            )
+            df_activos_lista = obter_activos()
+            if df_activos_lista.empty:
+                st.warning("Ainda não há activos em Cotações & Activos — regista-os lá primeiro.")
+            else:
+                # Mapa nome-visível → ticker real, para a lista de escolha. Isto
+                # elimina a classe de bugs em que o ticker escrito à mão (aqui ou
+                # em Cotações) não batia certo entre painéis, e o relatório ou
+                # não encontrava preço nenhum, ou "colava" a todos o preço do
+                # primeiro activo com ticker em branco.
+                df_activos_lista["rotulo"] = df_activos_lista.apply(
+                    lambda r: f"{r['nome']}" + (f"  ({r['ticker']})" if str(r['ticker'] or '').strip() else "  ⚠️ sem ticker — define-o em Cotações & Activos"),
+                    axis=1)
+                mapa_rotulo_para_ticker = dict(zip(df_activos_lista["rotulo"], df_activos_lista["ticker"]))
+                mapa_rotulo_para_nome   = dict(zip(df_activos_lista["rotulo"], df_activos_lista["nome"]))
+
+                df_carteira_admin = obter_carteira_real()
+                # construir a coluna "rotulo" de cada posição já guardada, para o
+                # selector mostrar a escolha actual correcta
+                if not df_carteira_admin.empty:
+                    # só tickers não vazios entram no mapa (evita colisões entre activos sem ticker)
+                    tk_para_rotulo = {str(v).strip().upper(): k for k, v in mapa_rotulo_para_ticker.items() if str(v or "").strip()}
+                    nome_para_rotulo = {str(v).strip().upper(): k for k, v in mapa_rotulo_para_nome.items()}
+
+                    def _resolver_rotulo(linha):
+                        r = tk_para_rotulo.get(str(linha["ticker"] or "").strip().upper())
+                        if r is None:
+                            r = nome_para_rotulo.get(str(linha["nome"] or "").strip().upper())
+                        return r
+
+                    df_carteira_admin["rotulo"] = df_carteira_admin.apply(_resolver_rotulo, axis=1)
+                    if df_carteira_admin["rotulo"].isna().any():
+                        st.warning("⚠️ Há posições gravadas antes que já não correspondem a nenhum activo de Cotações & Activos "
+                                   "(ticker ou nome alterado). Escolhe o activo certo na lista para essas linhas e grava.")
+                    # mesma ordem de Cotações & Activos (BAI no topo, etc.)
+                    ordem_rotulos = {r: i for i, r in enumerate(df_activos_lista["rotulo"])}
+                    df_carteira_admin["_ordem"] = df_carteira_admin["rotulo"].map(ordem_rotulos).fillna(9999)
+                    df_carteira_admin = df_carteira_admin.sort_values("_ordem", kind="stable")
+                    df_carteira_admin["gravado_como"] = df_carteira_admin["nome"]
+                    tabela_base = df_carteira_admin[["rotulo", "gravado_como", "qtd", "valor_aquisicao"]].reset_index(drop=True)
+                    tabela_base["valor_aquisicao"] = tabela_base["valor_aquisicao"].apply(
+                        lambda v: f"{float(v):.2f}".replace(".", ","))
+
+                    # Diagnóstico: o que o relatório PDF está realmente a usar, linha a linha
+                    _preco_por_rotulo = dict(zip(df_activos_lista["rotulo"], df_activos_lista["preco"]))
+                    _diag = []
+                    for _, _p in df_carteira_admin.iterrows():
+                        _pr = _preco_por_rotulo.get(_p["rotulo"]) if _p["rotulo"] is not None else None
+                        _pr = float(_pr) if _pr is not None and pd.notna(_pr) else 0.0
+                        _diag.append({
+                            "Gravado como": _p["nome"],
+                            "Activo ligado (ticker)": _p["rotulo"] if _p["rotulo"] is not None else "⚠️ sem correspondência",
+                            "Qtd": _p["qtd"],
+                            "Preço actual (Kz)": _pr,
+                            "Valor actual (Kz)": round(float(_p["qtd"]) * _pr, 2),
+                        })
+                    st.caption("Ligação actual de cada posição ao activo (é isto que o relatório PDF usa). "
+                               "Se o nome em 'Gravado como' não corresponde ao 'Activo ligado', "
+                               "corrija o activo na tabela abaixo e grave. Preço a 0 = activo sem cotação em Cotações & Activos.")
+                    st.dataframe(pd.DataFrame(_diag), hide_index=True)
+                else:
+                    st.info("Ainda não há nenhuma posição registada na carteira real.")
+                    tabela_base = pd.DataFrame({"rotulo": pd.Series(dtype="object"), "gravado_como": pd.Series(dtype="object"),
+                                                "qtd": pd.Series(dtype="float"), "valor_aquisicao": pd.Series(dtype="object")})
+
+                df_editado_carteira = st.data_editor(
+                    tabela_base, num_rows="dynamic", key="editor_carteira_real",
+                    disabled=["gravado_como"],
+                    column_config={
+                        "gravado_como": st.column_config.TextColumn("Gravado como (só leitura)"),
+                        "rotulo": st.column_config.SelectboxColumn(
+                            "Activo", options=list(mapa_rotulo_para_ticker.keys()), required=True,
+                            help="Escolhe da lista de Cotações & Activos — garante que o relatório encontra sempre o preço certo."),
+                        "qtd": st.column_config.NumberColumn("Quantidade de acções", min_value=0.0, step=1.0),
+                        "valor_aquisicao": st.column_config.TextColumn(
+                            "Valor TOTAL pago na aquisição (Kz)",
+                            help="Escreva com vírgula ou ponto nos cêntimos (ex.: 362031,48). Não é o preço unitário — é o custo total desta posição."),
+                    })
+
+                def _parse_valor_kz(txt):
+                    """Aceita 362031,48 | 362031.48 | 1.311.562,53 | 1 311 562,53 | 1,311,562.53 | 'Kz'."""
+                    if txt is None or (isinstance(txt, float) and pd.isna(txt)):
+                        return None
+                    t_ = str(txt).replace("Kz", "").replace("\u00a0", "").replace(" ", "").strip()
+                    if not t_:
+                        return None
+                    if "," in t_ and "." in t_:
+                        dec = "," if t_.rfind(",") > t_.rfind(".") else "."
+                        mil = "." if dec == "," else ","
+                        t_ = t_.replace(mil, "").replace(dec, ".")
+                    elif "," in t_ or "." in t_:
+                        sep = "," if "," in t_ else "."
+                        partes = t_.split(sep)
+                        if len(partes) == 2 and 1 <= len(partes[1]) <= 2:
+                            t_ = partes[0] + "." + partes[1]      # separador decimal
+                        else:
+                            t_ = "".join(partes)                   # separador de milhares
+                    try:
+                        return float(t_)
+                    except ValueError:
+                        return None
+
+                if st.button("Guardar alterações à Carteira Real"):
+                    linhas_validas = df_editado_carteira.dropna(subset=["rotulo"]).copy()
+                    linhas_validas = linhas_validas[linhas_validas["rotulo"].isin(mapa_rotulo_para_ticker)].copy()
+                    linhas_validas["valor_aquisicao"] = linhas_validas["valor_aquisicao"].apply(_parse_valor_kz)
+                    if linhas_validas["valor_aquisicao"].isna().any():
+                        st.error("Há valores de aquisição inválidos ou em branco. Escreva só números (ex.: 362031,48). Nada foi gravado.")
+                        st.stop()
+                    if len(linhas_validas) < len(df_editado_carteira):
+                        st.warning("Algumas linhas sem activo escolhido foram ignoradas — selecciona um activo da lista em cada linha antes de gravar.")
+                    df_para_gravar = pd.DataFrame({
+                        "ticker": linhas_validas["rotulo"].map(mapa_rotulo_para_ticker),
+                        "nome":   linhas_validas["rotulo"].map(mapa_rotulo_para_nome),
+                        "qtd":    linhas_validas["qtd"],
+                        "valor_aquisicao": linhas_validas["valor_aquisicao"],
+                    })
+                    substituir_carteira_real(df_para_gravar)
+                    st.success("Carteira real actualizada. O relatório PDF passa já a reflectir estes valores.")
+                    st.rerun()
+
+            with st.expander("Preços-base do Índice APPO (19/08/2026)"):
+                st.caption("O Índice APPO mede a variação média de todas as acções cotadas desde o dia em que o Clube começou a investir (19/08/2026). "
+                           "Indica o preço de cada acção nesse dia (resumo de mercado da BODIVA, Kitadinvest ou histórico do homebroker). "
+                           "As notas de execução só mostram os teus próprios negócios, não o mercado. Sem preço-base, usa-se o primeiro preço disponível no histórico.")
+                _acoes_adm = df_activos_admin[df_activos_admin["tipo"].apply(_eh_accao)]
+                _bases_df = obter_bases_indice_appo(com_fonte=True)
+                _bases_d = {_tk_norm(r["ticker"]): r for _, r in _bases_df.iterrows()} if not _bases_df.empty else {}
+                _linhas_b = [{"ticker": r["ticker"], "nome": r["nome"],
+                              "preco_base": (float(_bases_d[_tk_norm(r["ticker"])]["preco_base"]) if _tk_norm(r["ticker"]) in _bases_d else None),
+                              "fonte": (str(_bases_d[_tk_norm(r["ticker"])]["fonte"] or "") if _tk_norm(r["ticker"]) in _bases_d else "")}
+                             for _, r in _acoes_adm.iterrows()]
+                if not _linhas_b:
+                    st.info("Ainda não há acções registadas.")
+                else:
+                    _bases_ed = st.data_editor(pd.DataFrame(_linhas_b), key="editor_bases_appo", hide_index=True, disabled=["ticker", "nome"],
+                                               column_config={"ticker": "Ticker", "nome": "Acção",
+                                                              "preco_base": st.column_config.NumberColumn("Preço em 19/08/2026 (Kz)", min_value=0.0, step=0.01, format="%.2f"),
+                                                              "fonte": st.column_config.TextColumn("Fonte")})
+                    if st.button("Guardar preços-base", key="guardar_bases_appo"):
+                        guardar_bases_indice_appo(_bases_ed)
+                        st.success("Preços-base guardados. O Índice APPO foi recalculado.")
+                        st.rerun()
+
+        with aba_aval:
+            st.subheader("Premissas Macro (CAPM)")
+            premissas = obter_premissas_macro()
+            with st.form("form_premissas"):
+                col1, col2, col3 = st.columns(3)
+                infl = col1.number_input("Inflação anual", min_value=0.0, max_value=1.0, value=premissas["inflacao"], step=0.005, format="%.3f")
+                rf   = col2.number_input("Taxa livre de risco (Rf)", min_value=0.0, max_value=1.0, value=premissas["taxa_livre_risco"], step=0.005, format="%.3f")
+                erp  = col3.number_input("Prémio de risco de mercado (ERP)", min_value=0.0, max_value=1.0, value=premissas["premio_risco"], step=0.005, format="%.3f")
+                col4, col5, col6 = st.columns(3)
+                bb = col4.number_input("Beta — Banca",           min_value=0.0, max_value=3.0, value=premissas["beta_banca"],   step=0.05)
+                bt = col5.number_input("Beta — Telecom",         min_value=0.0, max_value=3.0, value=premissas["beta_telecom"], step=0.05)
+                bo = col6.number_input("Beta — Outros sectores", min_value=0.0, max_value=3.0, value=premissas["beta_outros"],  step=0.05)
+                guardar_premissas = st.form_submit_button("Guardar premissas")
+            if guardar_premissas:
+                actualizar_premissas_macro(infl, rf, erp, bb, bt, bo)
+                st.success("Premissas macro actualizadas.")
+                st.rerun()
+
+            st.markdown("**Inflação de Angola (alimenta os relatórios e a análise de rentabilidade real)**")
+            st.caption("Insere as três leituras a partir do INE ou do BNA. Enquanto não o fizeres, os relatórios usam a inflação anual acima como valor por defeito e avisam disso.")
+            with st.form("form_inflacao"):
+                ci1, ci2, ci3 = st.columns(3)
+                _ih = ci1.number_input("Inflação homóloga (YoY, %)", min_value=0.0, max_value=500.0, value=round(premissas["inflacao_homologa"] * 100, 2), step=0.1, format="%.2f")
+                _iv = ci2.number_input("Inflação vigente (variação mensal, %)", min_value=0.0, max_value=50.0, value=round(premissas["inflacao_vigente_m"] * 100, 2), step=0.05, format="%.2f")
+                _ip = ci3.number_input("Inflação projectada (próximos 12 meses, %)", min_value=0.0, max_value=500.0, value=round(premissas["inflacao_projectada"] * 100, 2), step=0.1, format="%.2f")
+                _iref = st.text_input("Fonte e data (ex.: INE, Setembro/2026)", value=premissas["inflacao_ref"])
+                _gi = st.form_submit_button("Guardar inflação")
+            if _gi:
+                actualizar_inflacao_macro(_ih / 100, _iv / 100, _ip / 100, _iref)
+                st.success("Inflação actualizada.")
+                st.rerun()
+
+            st.divider()
+            st.subheader("Dados de Avaliação por Empresa")
+            df_aval_admin = obter_avaliacoes()
+            df_aval_editado = st.data_editor(
+                df_aval_admin[["empresa", "sector", "preco", "acoes_circulacao", "lucro_liquido", "ganho_pontual", "capital_proprio", "dividendo_total", "crescimento_g"]],
+                num_rows="dynamic", key="editor_avaliacoes",
+                column_config={
+                    "empresa": "Empresa", "sector": "Sector",
+                    "preco":             st.column_config.NumberColumn("Preço (Kz)", min_value=0.0, step=0.01, format="%.2f"),
+                    "acoes_circulacao":  st.column_config.NumberColumn("Acções em circulação", min_value=0.0, step=1000.0),
+                    "lucro_liquido":     st.column_config.NumberColumn("Lucro líquido (Kz)", step=1000000.0),
+                    "ganho_pontual":     st.column_config.NumberColumn("Ganho pontual não recorrente (Kz)", step=1000000.0),
+                    "capital_proprio":   st.column_config.NumberColumn("Capital próprio (Kz)", min_value=0.0, step=1000000.0),
+                    "dividendo_total":   st.column_config.NumberColumn("Dividendo total distribuído (Kz)", min_value=0.0, step=1000000.0),
+                    "crescimento_g":     st.column_config.NumberColumn("Crescimento assumido (g)", min_value=0.0, max_value=1.0, step=0.01, format="%.2f"),
+                })
+            if st.button("Guardar alterações às avaliações"):
+                substituir_avaliacoes(df_aval_editado)
+                st.success("Avaliações actualizadas com sucesso.")
+                st.rerun()
+
+        with aba_movimentos:
+            st.subheader("Registar novo movimento")
+            with st.form("form_novo_movimento", clear_on_submit=True):
+                tipo_mov    = st.selectbox("Tipo", ["Entrada de Capital", "Compra de Activo", "Venda de Activo", "Saída/Despesa", "Ajuste de Reserva"])
+                descricao_mov = st.text_input("Descrição")
+                montante_mov  = st.number_input("Montante (Kz)", min_value=0.0, step=1000.0)
+                data_mov      = st.date_input("Data do movimento")
+                registar_mov  = st.form_submit_button("Registar movimento")
+            if registar_mov:
+                inserir_movimento(tipo_mov, descricao_mov, montante_mov, data_mov)
+                st.success("Movimento registado com sucesso.")
+                st.rerun()
+            st.divider()
+            st.subheader("Movimentos existentes")
+            df_mov_admin = obter_movimentos()
+            if not df_mov_admin.empty:
+                df_mov_admin = df_mov_admin.copy()
+                df_mov_admin["montante"] = df_mov_admin["montante"].apply(kz)
+            st.dataframe(df_mov_admin, hide_index=True)
+
+        with aba_biblioteca:
+            st.subheader("Adicionar novo artigo (texto)")
+            st.info("📌 Para publicar um PDF **tal como é** (com gráficos, imagens e formatação), use a secção "
+                    "**\"📄 Publicar documento PDF\"**, mais abaixo nesta página. Este formulário cria um artigo só de texto.")
+            modo = st.radio("Fonte do conteúdo", ["Extrair só o texto de um PDF (perde gráficos e imagens)", "Escrever manualmente"],
+                            horizontal=True, key="modo_artigo")
+            texto_extraido = ""
+            if modo.startswith("Extrair"):
+                ficheiro_pdf = st.file_uploader("Ficheiro PDF (só o texto será aproveitado)", type=["pdf"], key="uploader_pdf")
+                if ficheiro_pdf is not None:
+                    try:
+                        texto_extraido = extrair_texto_pdf(ficheiro_pdf)
+                        st.success("Texto extraído com sucesso. Revê antes de publicar.")
+                    except Exception as erro:
+                        st.error(f"Não foi possível ler o PDF: {erro}")
+            with st.form("form_novo_artigo", clear_on_submit=True):
+                titulo_artigo   = st.text_input("Título do artigo")
+                categoria_artigo= st.selectbox("Categoria", ["Institucional", "Educação", "Análise de Mercado", "Referência"])
+                nivel_artigo    = st.selectbox("Nível", ["Automático (pela categoria)", "Iniciante", "Investidor"])
+                conteudo_artigo = st.text_area("Conteúdo (Markdown suportado)", value=texto_extraido, height=280)
+                publicar        = st.form_submit_button("Publicar artigo")
+            if publicar:
+                if not titulo_artigo or not conteudo_artigo:
+                    st.error("Preenche o título e o conteúdo do artigo.")
+                else:
+                    inserir_artigo(titulo_artigo, categoria_artigo, conteudo_artigo, {"Iniciante": "iniciante", "Investidor": "investidor"}.get(nivel_artigo))
+                    st.success("Artigo publicado.")
+                    st.rerun()
+            st.divider()
+            st.subheader("Artigos existentes")
+            for _, artigo in obter_artigos().iterrows():
+                col_a, col_b, col_c = st.columns([3, 1.5, 1])
+                col_a.write(artigo["titulo"])
+                col_b.write(f"{artigo['categoria']} · {NIVEIS[artigo['nivel_efectivo']]}")
+                if col_c.button("Eliminar", key=f"eliminar_artigo_{artigo['id']}"):
+                    eliminar_artigo(int(artigo["id"]))
+                    st.rerun()
+            with st.expander("Ajustar o nível de um artigo"):
+                _df_art = obter_artigos()
+                if _df_art.empty:
+                    st.info("Sem artigos.")
+                else:
+                    _mapa_art = {f"{r['titulo']} (#{r['id']})": int(r["id"]) for _, r in _df_art.iterrows()}
+                    _esc_art = st.selectbox("Artigo", list(_mapa_art.keys()), key="niv_art_sel")
+                    _esc_niv = st.selectbox("Nível", ["Automático (pela categoria)", "Iniciante", "Investidor"], key="niv_art_niv")
+                    if st.button("Aplicar nível", key="niv_art_aplicar"):
+                        definir_nivel_artigo(_mapa_art[_esc_art], {"Iniciante": "iniciante", "Investidor": "investidor"}.get(_esc_niv))
+                        st.success("Nível actualizado.")
+                        st.rerun()
+
+            st.divider()
+            st.subheader("📄 Publicar documento PDF (com gráficos e imagens)")
+            st.caption("O PDF original é guardado tal como está: os sócios podem lê-lo no ecrã ou descarregá-lo, "
+                       "com gráficos, imagens e formatação. Tamanho máximo: 15 MB.")
+            with st.form("form_doc_pdf", clear_on_submit=True):
+                f_pdf  = st.file_uploader("Ficheiro PDF", type=["pdf"], key="doc_pdf_up")
+                t_doc  = st.text_input("Título do documento")
+                c_doc  = st.selectbox("Categoria", ["Institucional", "Educação", "Análise de Mercado", "Referência"], key="doc_pdf_cat")
+                d_doc  = st.text_area("Descrição curta (opcional)", height=80)
+                pub_doc = st.form_submit_button("Publicar documento")
+            if pub_doc:
+                if f_pdf is None or not t_doc.strip():
+                    st.error("Escolha o ficheiro PDF e escreva o título.")
+                else:
+                    _bytes = f_pdf.getvalue()
+                    if not _bytes.startswith(b"%PDF"):
+                        st.error("O ficheiro não parece ser um PDF válido.")
+                    elif len(_bytes) > PDF_TAMANHO_MAX:
+                        st.error(f"O ficheiro tem {len(_bytes) / 1048576:.1f} MB — o máximo é 15 MB. Comprima o PDF e tente de novo.")
+                    else:
+                        inserir_documento(t_doc.strip(), c_doc, d_doc.strip(), f_pdf.name, _bytes, "biblioteca")
+                        st.success("Documento publicado na Biblioteca Educativa.")
+                        st.rerun()
+            _docs_adm = obter_documentos("biblioteca")
+            if not _docs_adm.empty:
+                st.markdown("**Documentos PDF publicados**")
+                for _, _d in _docs_adm.iterrows():
+                    ca, cb, cc = st.columns([3, 1.5, 1])
+                    ca.write(f"{_d['titulo']}  ·  {_d['tamanho'] / 1048576:.1f} MB")
+                    cb.write(_d["categoria"])
+                    if cc.button("Eliminar", key=f"eliminar_doc_{int(_d['id'])}"):
+                        eliminar_documento(int(_d["id"]))
+                        st.rerun()
+
+            st.divider()
+            st.subheader("📜 Estatuto do Clube (PDF)")
+            _df_est_adm = obter_documentos("estatuto")
+            if not _df_est_adm.empty:
+                _e = _df_est_adm.iloc[0]
+                ce1, ce2 = st.columns([3, 1])
+                ce1.info(f"Estatuto publicado: {_e['nome_ficheiro']} ({_e['tamanho'] / 1048576:.1f} MB, {_e['criado_em']})")
+                if ce2.button("Eliminar estatuto", key="eliminar_estatuto"):
+                    eliminar_documento(int(_e["id"]))
+                    st.rerun()
+            with st.form("form_estatuto_pdf", clear_on_submit=True):
+                f_est   = st.file_uploader("Ficheiro PDF do Estatuto (substitui o anterior)", type=["pdf"], key="estatuto_pdf_up")
+                pub_est = st.form_submit_button("Publicar estatuto")
+            if pub_est:
+                if f_est is None:
+                    st.error("Escolha o ficheiro PDF do Estatuto.")
+                else:
+                    _b = f_est.getvalue()
+                    if not _b.startswith(b"%PDF"):
+                        st.error("O ficheiro não parece ser um PDF válido.")
+                    elif len(_b) > PDF_TAMANHO_MAX:
+                        st.error(f"O ficheiro tem {len(_b) / 1048576:.1f} MB — o máximo é 15 MB.")
+                    else:
+                        executar("DELETE FROM documentos_pdf WHERE tipo = 'estatuto'")
+                        inserir_documento("Estatuto do Clube de Investimento APPO", "Institucional", "", f_est.name, _b, "estatuto")
+                        st.success("Estatuto publicado. Já aparece em Sobre Nós & Estatutos.")
+                        st.rerun()
+
+        with aba_socios:
+            st.subheader("Pedidos de adesão recebidos")
+            df_socios = obter_socios()
+            if df_socios.empty:
+                st.info("Ainda não existem pedidos de adesão.")
+            else:
+                df_socios_exibir = df_socios.copy()
+                df_socios_exibir["contribuicao_inicial"] = df_socios_exibir["contribuicao_inicial"].apply(kz)
+                st.dataframe(df_socios_exibir.rename(columns={"nome": "Nome", "email": "E-mail", "telefone": "Telefone",
+                                                               "bi": "Nº BI", "contribuicao_inicial": "Contribuição Inicial",
+                                                               "criado_em": "Submetido em"}), hide_index=True)
+
+        with aba_contas:
+            painel_contas_pendentes()
+            st.subheader("Criar conta de acesso para um sócio")
+            with st.form("form_nova_conta", clear_on_submit=True):
+                _np_c, _ap_c   = st.columns(2)
+                _nome_c        = _np_c.text_input("Nome próprio")
+                _apelido_c     = _ap_c.text_input("Apelido(s)")
+                nome_conta     = f"{_nome_c.strip()} {_apelido_c.strip()}".strip()
+                email_conta    = st.text_input("E-mail (usado para entrar)")
+                password_conta = st.text_input("Palavra-passe inicial", type="password")
+                admin_conta    = st.checkbox("Esta conta é administradora")
+                criar_conta    = st.form_submit_button("Criar conta")
+            if criar_conta:
+                if not (_nome_c.strip() and _apelido_c.strip()) or not email_conta or not password_conta:
+                    st.error("Preenche todos os campos.")
+                else:
+                    try:
+                        inserir_conta(nome_conta, email_conta.strip().lower(), password_conta, admin_conta)
+                        st.success(f"Conta criada para {email_conta}.")
+                        st.rerun()
+                    except psycopg2.errors.UniqueViolation:
+                        obter_ligacao().rollback()
+                        st.error("Já existe uma conta com este e-mail.")
+            st.divider()
+            st.subheader("Contas existentes")
+            st.caption("Activa o acesso Premium depois de confirmares o pagamento do sócio.")
+            df_contas = listar_contas()
+            for _, conta in df_contas.iterrows():
+                col_a, col_b, col_c, col_d, col_m, col_e = st.columns([2.1, 0.8, 1.0, 1.0, 1.3, 0.9])
+                col_a.write(f"{conta['nome']} — {conta['email']}")
+                col_b.write("Admin" if conta["is_admin"] else "Sócio")
+                if conta["is_premium"]:
+                    if col_c.button("Remover Premium", key=f"despremium_{conta['id']}"):
+                        alternar_premium(int(conta["id"]), False)
+                        st.rerun()
+                else:
+                    if col_c.button("Tornar Premium", key=f"premium_{conta['id']}"):
+                        alternar_premium(int(conta["id"]), True)
+                        st.rerun()
+                if col_d.button("Repor password", key=f"repor_{conta['id']}"):
+                    nova = repor_password(int(conta["id"]))
+                    st.info(f"Nova palavra-passe para {conta['email']}: **{nova}**")
+                if col_m.button("✉️ Enviar nova por e-mail", key=f"mail_{conta['id']}"):
+                    repor_e_enviar_por_email(str(conta["email"]), "", lambda cid=int(conta["id"]): repor_password(cid))
+                pode_eliminar = not (conta["is_admin"] and contar_admins() <= 1)
+                if col_e.button("Eliminar", key=f"eliminar_conta_{conta['id']}", disabled=not pode_eliminar):
+                    eliminar_conta(int(conta["id"]))
+                    st.rerun()
+
+            st.divider()
+            _ped = obter_pedidos_recuperacao()
+            _pend = _ped[_ped["estado"] == "pendente"] if not _ped.empty else _ped
+            st.subheader(f"Pedidos de recuperação de palavra-passe ({len(_pend)} pendente(s))")
+            st.caption(estado_email())
+            st.caption("Confirma a identidade da pessoa (chamada ou WhatsApp) antes de repor. A palavra-passe provisória aparece uma só vez: envia-a por canal seguro e pede à pessoa para a alterar na barra lateral.")
+            if _pend.empty:
+                st.info("Sem pedidos pendentes.")
+            for _, _p in _pend.iterrows():
+                _c1, _c2, _c3, _c4, _c5 = st.columns([2.2, 1.3, 1.9, 1.1, 0.9])
+                _c1.write(f"**{_p['email']}**")
+                _c2.write(str(_p["contacto"] or "—"))
+                if _c3.button("✉️ Enviar nova palavra-passe por e-mail", key=f"rec_mail_{_p['id']}", type="primary"):
+                    try:
+                        repor_e_enviar_por_email(str(_p["email"]), str(_p["contacto"] or ""), lambda pid=int(_p["id"]): resolver_pedido_recuperacao(pid, True))
+                    except ValueError as _err:
+                        st.error(str(_err))
+                if _c4.button("Repor e mostrar", key=f"rec_repor_{_p['id']}"):
+                    try:
+                        _nova = resolver_pedido_recuperacao(int(_p["id"]), True)
+                        st.success(f"Palavra-passe provisória para {_p['email']}: **{_nova}**")
+                        _url_wa = ligacao_whatsapp(str(_p["contacto"] or ""), f"Olá! A tua palavra-passe provisória do APPO é: {_nova}. Entra em {APP_URL} e escolhe logo uma só tua.")
+                        if _url_wa:
+                            botao_ligacao("📲 Enviar por WhatsApp", _url_wa)
+                    except ValueError as _err:
+                        st.error(str(_err))
+                if _c5.button("Ignorar", key=f"rec_ign_{_p['id']}"):
+                    try:
+                        resolver_pedido_recuperacao(int(_p["id"]), False)
+                        st.rerun()
+                    except ValueError as _err:
+                        st.error(str(_err))
+
+            st.divider()
+            st.subheader("Perfis e portais")
+            st.caption("O portal de cada conta resulta do perfil de investidor. Só o administrador pode ajustar um portal, com motivo registado na auditoria.")
+            df_pf = obter_perfis_resumo()
+            if df_pf.empty:
+                st.info("Ainda não há contas.")
+            else:
+                st.dataframe(df_pf.rename(columns={"email": "E-mail", "portal": "Portal", "perfil": "Perfil de risco", "calculado_em": "Perfil calculado em"}), hide_index=True)
+            with st.expander("Ajustar o portal de uma conta (excepção)"):
+                with st.form("form_ajustar_portal", clear_on_submit=True):
+                    alvo = st.selectbox("Conta", df_contas["email"].tolist())
+                    novo_portal = st.selectbox("Novo portal", list(NIVEIS.keys()), format_func=lambda v: NIVEIS[v])
+                    motivo_portal = st.text_input("Motivo (obrigatório)")
+                    aplicar_portal = st.form_submit_button("Aplicar ajuste")
+                if aplicar_portal:
+                    try:
+                        cid = int(df_contas.loc[df_contas["email"] == alvo, "id"].iloc[0])
+                        definir_nivel_conta(cid, novo_portal, motivo_portal)
+                        st.success("Portal ajustado e registado na auditoria.")
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(str(e))
+
+        with aba_seguranca:
+            st.subheader("Registo de tentativas de acesso (últimas 50)")
+            df_log = obter_log_acessos()
+            if df_log.empty:
+                st.info("Ainda não há registos de acesso.")
+            else:
+                st.dataframe(df_log.rename(columns={"email": "E-mail", "sucesso": "Sucesso", "criado_em": "Data/Hora"}), hide_index=True)
+
+except PermissionError:
+    st.info("Esta área é reservada aos participantes dos investimentos ou ao administrador.")
+except (psycopg2.Error, requests.RequestException):
+    traceback.print_exc()
+    st.error("Não foi possível concluir o pedido neste momento (base de dados ou serviço externo). Tente novamente dentro de instantes.")
+    if st.session_state.get("is_admin"):
+        with st.expander("🔧 Diagnóstico técnico (só administradores)"):
+            st.code(traceback.format_exc()[-1800:])
+except Exception:
+    traceback.print_exc()
+    st.error("Ocorreu um erro inesperado nesta página. Tente novamente; se persistir, contacte o administrador.")
+
 import psycopg2
 import psycopg2.extras
 import requests
