@@ -1063,7 +1063,8 @@ div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
 .appo-topbar { display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px; }
 .appo-topbar .appo-marca { height: 24px; width: 24px; border-radius: 50%; background: linear-gradient(135deg, #8E7CC3, #C98BA0 60%, #EFB988); color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; letter-spacing: .3px; }
 .appo-topbar .appo-nome { font-size: 14px; font-weight: 600; color: #334155; }
-.appo-topbar .appo-pagina { font-size: 12px; color: #94A3B8; margin-left: auto; }
+.appo-topbar .appo-pagina { font-size: 13px; font-weight: 600; color: #64748B; margin-left: 4px; }
+:is(div, section):has(> .st-key-appo_topo), [data-testid="stElementContainer"]:has(> .st-key-appo_topo), [data-testid="stLayoutWrapper"]:has(> .st-key-appo_topo) { position: sticky !important; top: 2.875rem; z-index: 990; }
 .appo-topbar + div .appo-ticker-wrap, .appo-ticker-wrap { margin-bottom: 0; }
 /* partilha discreta */
 .appo-share-disc { display: flex; align-items: center; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
@@ -1431,7 +1432,7 @@ def ticker_tape(df_activos: pd.DataFrame):
     render_html(f'<div class="appo-ticker-wrap"><div class="appo-ticker-move"><span>{conteudo}</span></div></div>')
 
 
-def botoes_partilha(texto: str):
+def botoes_partilha(texto: str, topo: int = 14):
     cod = urllib.parse.quote(texto)
     wa  = f"https://wa.me/?text={cod}"
     tw  = f"https://twitter.com/intent/tweet?text={cod}"
@@ -1439,7 +1440,7 @@ def botoes_partilha(texto: str):
     tx  = t()
     render_html(
         f"""
-        <div class="appo-share-disc">
+        <div class="appo-share-disc" style="margin-top:{topo}px;{'padding-top:14px;border-top:1px solid #EEF2F7;' if topo >= 40 else ''}">
             <span>Partilhar</span>
             <a class="wa" href="{wa}" target="_blank" rel="noopener" title="WhatsApp" aria-label="Partilhar no WhatsApp"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></a>
             <a class="tw" href="{tw}" target="_blank" rel="noopener" title="X" aria-label="Partilhar no X"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></a>
@@ -8037,7 +8038,7 @@ def fx_barras(df: pd.DataFrame, height: int = 300, **_):
         if d.shape[1] == 1:
             ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6, color=_COR_BARRA).encode(x=x, y=y, tooltip=tip)
             if n <= 8:
-                ch = ch + alt.Chart(L).mark_text(dy=-9, fontSize=11, fontWeight="bold", color="#64748B").encode(x=x, y=alt.Y("Valor:Q"), text=alt.Text("Valor:Q", format="~s"))
+                ch = ch + alt.Chart(L).mark_text(dy=-9, fontSize=11, fontWeight="bold", color="#1F2937").encode(x=x, y=alt.Y("Valor:Q"), text=alt.Text("Valor:Q", format="~s"))
         else:
             ch = alt.Chart(L).mark_bar(cornerRadiusTopLeft=8, cornerRadiusTopRight=8).encode(
                 x=x, xOffset="Série:N", y=y, tooltip=tip,
@@ -8061,7 +8062,7 @@ def fx_barras_div(df: pd.DataFrame, height: int = 280, formato: str = "+.1f"):
         y = alt.Y("Valor:Q", title=None, axis=alt.Axis(gridColor="#F0EBFA", labelColor="#94A3B8", domain=False, ticks=False))
         cor = alt.condition(alt.datum.Valor >= 0, alt.value("#5B9BE6"), alt.value("#EE6C8A"))
         ch = alt.Chart(L).mark_bar(cornerRadius=8).encode(x=x, y=y, color=cor, tooltip=[alt.Tooltip("Item:N"), alt.Tooltip("Valor:Q", format=formato)])
-        ch = ch + alt.Chart(L).mark_text(dy=-9, fontSize=11, fontWeight="bold", color="#6B5B8C").encode(x=x, y=alt.Y("Valor:Q"), text=alt.Text("Valor:Q", format=formato))
+        ch = ch + alt.Chart(L).mark_text(dy=-9, fontSize=12, fontWeight="bold", color="#1F2937").encode(x=x, y=alt.Y("Valor:Q"), text=alt.Text("Valor:Q", format=formato))
         st.altair_chart(ch.properties(height=height).configure_view(strokeWidth=0), use_container_width=True)
     except Exception:
         traceback.print_exc()
@@ -8094,7 +8095,8 @@ def fx_linhas(df: pd.DataFrame, height: int = 260, **_):
         pontos = linhas.mark_point(size=52, filled=True).encode(opacity=alt.condition(nearest, alt.value(1), alt.value(0)))
         dica = ([alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y")] if temporal else [alt.Tooltip("Data:N", title="Data")]) + \
                [alt.Tooltip(f"s{i}:Q", title=n, format=",.2f") for i, n in enumerate(nomes)]
-        regua = alt.Chart(L).mark_rule(color="#CBD5E1", strokeWidth=1).encode(x=x, tooltip=dica).transform_pivot("Cod", value="Valor", groupby=["Data"]).transform_filter(nearest)
+        W = d.reset_index()
+        regua = alt.Chart(W).mark_rule(color="#CBD5E1", strokeWidth=1).encode(x=x, tooltip=dica).transform_filter(nearest)
         grafico = alt.layer(linhas, sel, pontos, regua).properties(height=height).configure_view(strokeWidth=0)
         try:
             grafico.to_dict()
@@ -8311,7 +8313,8 @@ def pagina_conversor(tx: dict):
         else:
             st.caption(f"{tx['conv_taxa']} 1 {moeda_de} = {taxa:.6f} {moeda_para}. Taxa de mercado indicativa; {tx['conv_actualizado']} {dados_cambio['actualizado']}. "
                        "Pode diferir da taxa oficial do BNA e das praticadas pelos bancos e casas de câmbio.")
-        botoes_partilha(tx["conv_partilha"].format(v=f"{valor:,.2f}", de=moeda_de, r=f"{resultado:,.2f}", para=moeda_para))
+        botoes_partilha(tx["conv_partilha"].format(v=f"{valor:,.2f}", de=moeda_de, r=f"{resultado:,.2f}", para=moeda_para), topo=40)
+        render_html('<div style="height:34px"></div>')
 
     if eh_admin():
         with st.expander("🏦 Taxas oficiais do BNA (administrador)"):
@@ -8439,14 +8442,12 @@ def pagina_avaliacao_activos(tx: dict):
                            index=[f"Ke={k * 100:.1f}%" for k in kes], columns=[f"g={g * 100:.1f}%" for g in gs])
         cor = lambda v: "" if v is None or pd.isna(v) else ("color:#6D28D9;font-weight:700" if v >= av["preco"] else "color:#BE123C;font-weight:700")
         _zebra_bg = lambda i: "background-color:#F5F3FF" if i % 2 == 0 else "background-color:#FFFFFF"
-        sty_sens = (num.style.format(lambda v: "—" if v is None or pd.isna(v) else kz(v))
+        num = num.rename_axis("Ke \\ g").reset_index()
+        _cols_v = [c for c in num.columns if c != "Ke \\ g"]
+        sty_sens = (num.style.format({c: (lambda v: "—" if v is None or pd.isna(v) else kz(v)) for c in _cols_v})
                     .apply(lambda d_: pd.DataFrame([[_zebra_bg(i)] * d_.shape[1] for i in range(d_.shape[0])], index=d_.index, columns=d_.columns), axis=None)
-                    .map(cor))
-        try:
-            sty_sens = sty_sens.apply_index(lambda ix: [_zebra_bg(i) for i in range(len(ix))], axis=0)
-        except Exception:
-            pass
-        st.dataframe(sty_sens)
+                    .map(cor, subset=_cols_v))
+        st.dataframe(sty_sens, hide_index=True)
         st.caption("Roxo: valor justo igual ou acima do preço actual. Vinho: abaixo do preço actual.")
         st.caption("Roxo: valor justo acima do preço actual · rosa: abaixo. Mostra como o valor justo muda se o crescimento (g) ou o custo de capital (Ke) variarem ±2 p.p.")
     rows, xl_rows, nomes, precos, justos, ups = [], [], [], [], [], []
@@ -8850,7 +8851,7 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
-st.sidebar.caption("Versão da app: 2026-10-15 · K (correcção urgente, cores vivas, zebra)")
+st.sidebar.caption("Versão da app: 2026-10-15 · L (cabeçalho v3, tooltip, zebra)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
@@ -8878,8 +8879,7 @@ except TypeError:   # versões antigas do Streamlit sem «key»
     _topo = st.container()
 with _topo:
     render_html('<span class="appo-sticky-anchor"></span><div class="appo-topbar"><div class="appo-marca">APPO</div>'
-                '<div class="appo-nome">Clube de Investimento APPO</div>'
-                f'<div class="appo-pagina">{_esc(tx["nav_map"].get(pagina, pagina))}</div></div>')
+                                f'<div class="appo-pagina">{_esc(tx["nav_map"].get(pagina, pagina))}</div></div>')
     ticker_tape(_df_activos_ticker)
 
 # =========================================================
@@ -9371,7 +9371,7 @@ try:
             st.caption(f"Saldo final em poder de compra de hoje (inflação {inflacao_sim:.1f}%/ano): {kz(saldo_real_f)}")
             nota_indicador(f"Com inflação de {inflacao_sim:.1f}%/ano, o teu saldo nominal de {kz(saldo_c)} equivale apenas a {kz(saldo_real_f)} em poder de compra actual.")
             aviso_discreto("Ambiente de treino pedagógico. As simulações servem para estudo de cenários e não constituem recomendação de compra/venda.")
-            botoes_partilha(f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo_c)} — Clube de Investimento APPO")
+            botoes_partilha(f"Simulei {kz(valor_inicial)} + {kz(contrib_mensal)}/mês durante {anos} anos a {taxa_anual:.1f}%/ano = {kz(saldo_c)} — Clube de Investimento APPO", topo=64)
 
     # =========================================================
     # PÁGINA: REGRA 50/30/20
