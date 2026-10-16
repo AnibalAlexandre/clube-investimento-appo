@@ -1470,8 +1470,6 @@ def logo_activo_html(ticker, nome="", px: int = 18) -> str:
             f'font-size:{max(px // 2 - 1, 7)}px;font-weight:700;color:#FFFFFF;vertical-align:middle;margin-right:6px;'
             f'background:linear-gradient(135deg,#6D28D9,#E11D48 60%,#F97316);">{ini}</span>')    base = str(ticker or "").strip().upper().rstrip("A")
     chave = (base, px)
-    if chave in _CACHE_LOGOS:
-        return _CACHE_LOGOS[chave]
     html_logo = ""
     try:
         import base64 as _b64
@@ -1492,10 +1490,7 @@ def logo_activo_html(ticker, nome="", px: int = 18) -> str:
         html_logo = (f'<span style="display:inline-block;height:{px}px;width:{px}px;line-height:{px}px;text-align:center;border-radius:50%;'
                      f'font-size:{max(px // 2 - 1, 7)}px;font-weight:700;color:#FFFFFF;vertical-align:middle;margin-right:6px;'
                      f'background:linear-gradient(135deg,#6D28D9,#E11D48 60%,#F97316);">{ini}</span>')
-    _CACHE_LOGOS[chave] = html_logo
-    return html_logo
-
-
+       return html_logo
 def ticker_tape(df_activos: pd.DataFrame):
     if df_activos.empty:
         return
