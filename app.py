@@ -1126,9 +1126,9 @@ div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
 .st-key-appo_faq [data-testid="stExpander"]:nth-of-type(3n) { border-left-color: #E8A06A; background: linear-gradient(90deg, #FFF8F1, #FFFFFF); }
 /* FAQ v2 — destaque forte mas contido; não depende da versão do Streamlit (usa um marcador + :has) */
 .appo-faq-cab { display: flex; align-items: center; gap: 16px; background: linear-gradient(115deg, #6D28D9 0%, #E11D48 62%, #F97316 100%); color: #fff; border-radius: 18px; padding: 20px 26px; margin: 14px 0 14px; box-shadow: 0 12px 28px -16px rgba(109, 40, 217, .65); }
-.appo-faq-cab .ic { flex: 0 0 auto; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.22); display: flex; align-items: center; justify-content: center; font-size: 1.9rem; }
-.appo-faq-cab .t { font-size: 1.7rem; font-weight: 800; line-height: 1.15; letter-spacing: -.01em; }
-.appo-faq-cab .s { font-size: 1rem; opacity: .95; margin-top: 4px; }
+.appo-faq-cab .ic { flex: 0 0 auto; width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,.22); display: flex; align-items: center; justify-content: center; font-size: 2.3rem; }
+.appo-faq-cab .t { font-size: 2.1rem; font-weight: 800; line-height: 1.15; letter-spacing: -.01em; }
+.appo-faq-cab .s { font-size: 1.1rem; opacity: .95; margin-top: 4px; }
 [data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"],
 .element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] { border: 1px solid #E4D4FB; border-left: 6px solid #6D28D9; border-radius: 14px; background: linear-gradient(90deg, #F6F1FF, #FFFFFF); margin-bottom: 10px; box-shadow: 0 6px 16px -14px rgba(109, 40, 217, .6); transition: box-shadow .15s, transform .15s; }
 [data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"]:nth-of-type(3n+1) [data-testid="stExpander"],
@@ -1138,10 +1138,20 @@ div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
 [data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"]:hover,
 .element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"]:hover { box-shadow: 0 10px 22px -12px rgba(109, 40, 217, .55); transform: translateY(-1px); }
 [data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"] summary,
-.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] summary { padding-top: 14px; padding-bottom: 14px; }
+.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] summary { padding-top: 16px; padding-bottom: 16px; }
 [data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"] summary p,
-.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] summary p { font-size: 1.12rem !important; font-weight: 700 !important; color: #1B1033 !important; }
-@media (max-width: 576px) { .appo-faq-cab { padding: 16px; gap: 12px; } .appo-faq-cab .t { font-size: 1.35rem; } .appo-faq-cab .ic { width: 44px; height: 44px; font-size: 1.5rem; } }
+[data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"] summary span:not([data-testid="stIconMaterial"]),
+[data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"],
+[data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p,
+.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] summary p,
+.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] summary span:not([data-testid="stIconMaterial"]),
+.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"],
+.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p,
+.st-key-appo_faq [data-testid="stExpander"] summary p,
+.st-key-appo_faq [data-testid="stExpander"] summary span:not([data-testid="stIconMaterial"]),
+.st-key-appo_faq [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"],
+.st-key-appo_faq [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p { font-size: 1.3rem !important; font-weight: 800 !important; color: #1B1033 !important; line-height: 1.35 !important; }
+@media (max-width: 576px) { .appo-faq-cab { padding: 16px; gap: 12px; } .appo-faq-cab .t { font-size: 1.6rem !important; } .appo-faq-cab .ic { width: 44px; height: 44px; font-size: 1.5rem; } }
 .appo-ticker-wrap { overflow: hidden; white-space: nowrap; background: #FFFFFF; border-top: 1px solid var(--appo-borda); border-bottom: 1px solid var(--appo-borda); padding: 8px 0; margin-bottom: 16px; }
 .appo-ticker-move { display: inline-block; padding-left: 100%; animation: appo-scroll 135s linear infinite; font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; font-size: 0.85rem; font-weight: 600; }
 @keyframes appo-scroll { 0% { transform: translate(0,0); } 100% { transform: translate(-100%,0); } }
@@ -8726,8 +8736,8 @@ def pagina_sobre_nos(tx: dict):
             bloco_documento_pdf(int(_est["id"]), _est["nome_ficheiro"], f"estatuto_{int(_est['id'])}", altura=820)
     faqs = blocos[blocos["tipo"] == "faq"]
     if not faqs.empty:
-        render_html('<div class="appo-faq-cab"><div class="ic">💬</div><div><div class="t">Perguntas frequentes</div>'
-                    '<div class="s">Respostas rápidas sobre o Clube. Escreve uma palavra para filtrar as perguntas.</div></div></div>')
+        render_html('<div class="appo-faq-cab"><div class="ic">💬</div><div><div class="t" style="font-size:2.1rem;font-weight:800;line-height:1.15;">Perguntas frequentes</div>'
+                    '<div class="s" style="font-size:1.1rem;">Respostas rápidas sobre o Clube. Escreve uma palavra para filtrar as perguntas.</div></div></div>')
         _busca = st.text_input("Procurar nas perguntas", key="faq_busca", placeholder="🔎  ex.: quotas, risco, adesão…", label_visibility="collapsed")
         _q = (_busca or "").strip().lower()
         _sel = faqs[faqs.apply(lambda r: _q in (str(r["titulo"]) + " " + str(r["texto"])).lower(), axis=1)] if _q else faqs
