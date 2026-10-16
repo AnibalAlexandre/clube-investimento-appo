@@ -9525,14 +9525,33 @@ with st.sidebar:
     _cartao_portal_lateral()
 st.sidebar.divider()
 
-PAGINAS = ["🏠 Início & Análises", "🧭 Perfil de Investidor", "🧠 Capacidade Financeira"]
-if eh_participante():
-    PAGINAS += ["💰 Contabilidade & Finanças", "📊 Histórico & Relatórios"]   # área patrimonial restrita
+# Menu agrupado por blocos (as páginas e as regras de acesso são as mesmas; só muda a ordem e os títulos dos blocos)
+_MENU_GRUPOS = []   # lista de (título do bloco, [páginas visíveis])
+_MENU_GRUPOS.append(("COMEÇAR", ["🏠 Início & Análises", "🧭 Perfil de Investidor", "🧠 Capacidade Financeira"]))
+_MENU_GRUPOS.append(("APRENDER", ["📚 Biblioteca Educativa", "🎓 Educação & Serviços", "🧪 Simulador de Investimento", "🧮 Princípio 50/30/20"]))
 if eh_investidor():   # Portal Investidor (níveis avançados)
-    PAGINAS += ["📈 Cotações & Activos", "🎯 Terminal de Decisão", "📐 Avaliação de Activos", "🧪 Simulador de Investimento", "🧮 Princípio 50/30/20", "💱 Conversor de Moeda"]
-PAGINAS += ["📚 Biblioteca Educativa", "🎓 Educação & Serviços", "🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos"]
+    _MENU_GRUPOS.append(("INVESTIR", ["📈 Cotações & Activos", "🎯 Terminal de Decisão", "📐 Avaliação de Activos", "💱 Conversor de Moeda"]))
+_clube = []
+if eh_participante():
+    _clube += ["💰 Contabilidade & Finanças", "📊 Histórico & Relatórios"]   # área patrimonial restrita
+_clube += ["🧾 Adesão de Sócios", "ℹ️ Sobre Nós & Estatutos"]
+_MENU_GRUPOS.append(("O MEU CLUBE", _clube))
 if st.session_state["is_admin"]:
-    PAGINAS.append("🔐 Painel do Administrador")
+    _MENU_GRUPOS.append(("ADMINISTRAÇÃO", ["🔐 Painel do Administrador"]))
+PAGINAS = [_p for _, _l in _MENU_GRUPOS for _p in _l]
+
+# Títulos dos blocos, desenhados por CSS sobre a posição de cada opção (gerado a partir da lista real, por isso nunca desalinha)
+try:
+    _css_menu, _pos = "", 0
+    for _titulo, _lista in _MENU_GRUPOS:
+        _pos += 1
+        _css_menu += (f'[data-testid="stSidebar"] [role="radiogroup"] > label:nth-child({_pos}) {{ margin-top: 1.7rem !important; position: relative; }}'
+                      f'[data-testid="stSidebar"] [role="radiogroup"] > label:nth-child({_pos})::before {{ content: "{_titulo}"; position: absolute; left: 2px; top: -1.35rem; '
+                      f'font-size: .68rem; font-weight: 800; letter-spacing: .12em; color: #6D28D9; }}')
+        _pos += len(_lista) - 1
+    render_html("<style>" + _css_menu + "</style>")
+except Exception:
+    pass
 if st.session_state.get("nav_pagina") not in PAGINAS:
     st.session_state["nav_pagina"] = PAGINAS[0]
 # Primeira visita sem perfil: aterra no Perfil de Investidor (uma só vez; pode sair quando quiser)
@@ -9542,7 +9561,10 @@ if (not tem_perfil()) and not (eh_admin() or eh_participante()) and not st.sessi
 
 pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibility="collapsed", format_func=lambda k: tx["nav_map"].get(k, k))
 
-st.sidebar.caption("Versão da app: 2026-10-15 · L (cabeçalho v3, tooltip, zebra)")
+if st.session_state.get("autenticado") and not eh_investidor():
+    st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
+                      help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
+st.sidebar.caption("Versão da app: 2026-10-16 · M (menu por blocos, cores home broker, FAQ)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
