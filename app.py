@@ -1310,15 +1310,51 @@ CSS_APPO_FASE3 = """
 """
 
 
+CSS_APPO_FASE4 = """
+/* ---- Cabeçalho fixo (esteira de cotações sempre visível ao rolar) ---- */
+[data-testid="stHeader"] { height: 2.875rem; background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(6px); }
+[data-testid="stMainBlockContainer"], .block-container,
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"], .block-container > [data-testid="stVerticalBlock"] { overflow: visible !important; }
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > :has(.appo-sticky-anchor),
+.block-container > [data-testid="stVerticalBlock"] > :has(.appo-sticky-anchor),
+.stMain [data-testid="stVerticalBlock"] > :has(> .appo-sticky-anchor),
+.st-key-appo_topo, [data-testid="stLayoutWrapper"]:has(> .st-key-appo_topo), [data-testid="stElementContainer"]:has(> .st-key-appo_topo) {
+  position: sticky !important; top: 2.875rem !important; z-index: 990 !important; background: #FFFFFF;
+}
+.st-key-appo_topo { box-shadow: 0 1px 0 #EFE9FA, 0 8px 16px -14px rgba(15, 23, 42, 0.35); }
+
+/* ---- Perguntas frequentes: título de grande destaque ---- */
+.appo-faq-cab { background: linear-gradient(115deg, #5B21B6 0%, #BE185D 55%, #F97316 100%); border-radius: 22px; padding: 30px 34px; margin: 26px 0 20px 0;
+  box-shadow: 0 16px 34px -16px rgba(190, 24, 93, 0.6); border: 0; }
+.appo-faq-cab .t { color: #FFFFFF !important; font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; font-size: 2.3rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.28); }
+.appo-faq-cab .s { color: #FFFFFF !important; font-size: 1.08rem; font-weight: 500; opacity: 0.96; margin-top: 8px; }
+.st-key-appo_faq [data-testid="stExpander"] { border-left-width: 6px; }
+.st-key-appo_faq [data-testid="stExpander"] summary { padding-top: 14px; padding-bottom: 14px; }
+.st-key-appo_faq [data-testid="stExpander"] summary p, .st-key-appo_faq [data-testid="stExpander"] summary span { font-size: 1.1rem !important; font-weight: 700 !important; color: #3B1D8A !important; }
+@media (max-width: 720px) { .appo-faq-cab { padding: 22px 20px; } .appo-faq-cab .t { font-size: 1.7rem; } }
+
+/* ---- Cabeçalhos de página: «foto» (imagem limpa, sem cor por cima) ou «cor» (só o colorido) ---- */
+.appo-hero.fx-hero { min-height: 140px; }
+.appo-hero.fx-hero-foto { background: #FFFFFF !important; border-left: 0 !important; }
+.appo-hero.fx-hero-foto::before, .appo-hero.fx-hero-foto::after { display: none !important; }
+.fx-hero-arte.foto::after { display: none; }
+.fx-hero-arte.foto .fx-hero-img { mix-blend-mode: normal; opacity: 1; object-position: center; }
+.fx-hero-arte.cor::after { background: linear-gradient(115deg, rgba(109, 40, 217, 0.18), rgba(249, 115, 22, 0.08)); }
+.fx-hero-forma { position: absolute; border-radius: 50%; background: rgba(255, 255, 255, 0.16); }
+.fx-hero-forma.f1 { width: 190px; height: 190px; right: -50px; top: -70px; }
+.fx-hero-forma.f2 { width: 120px; height: 120px; right: 90px; bottom: -60px; background: rgba(255, 255, 255, 0.10); }
+"""
+
+
 def _carregar_css() -> str:
     """Usa appo.css (ao lado do app.py) se existir; caso contrário, o CSS incluído acima."""
     try:
         f = Path(__file__).with_name("appo.css")
         if f.exists():
-            return _FONTE_TITULOS + f.read_text(encoding="utf-8") + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3
+            return _FONTE_TITULOS + f.read_text(encoding="utf-8") + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3 + CSS_APPO_FASE4
     except Exception:
         pass
-    return _FONTE_TITULOS + CSS_APPO_BASE + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3
+    return _FONTE_TITULOS + CSS_APPO_BASE + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3 + CSS_APPO_FASE4
 
 
 st.markdown(f"<style>{_carregar_css()}</style>", unsafe_allow_html=True)
@@ -1358,14 +1394,52 @@ _NOME_PARA_TICKER = (("standard", "SBAOAAAA"), ("sba", "SBAOAAAA"), ("unitel", "
                      ("bfa", "BFAAAAAA"), ("caixa", "BCGAAAAA"), ("bcga", "BCGAAAAA"), ("bai", "BAIAAAAA"), ("angolano de invest", "BAIAAAAA"))
 
 
-def hero(titulo: str, subtitulo: str, badge: str = None, arte: str = None):
+# Modo do cabeçalho: «foto» = imagem limpa (sem colorido por cima e sem faixa de cor à esquerda); «cor» = só o colorido vivo.
+_HERO_MODO_FOTO = ("cotações", "home broker", "terminal", "contabilidade", "conversor", "educação", "biblioteca", "histórico")
+_HERO_FUNDO = {"saco": "#FFFFFF", "telemovel": "#05060A", "piramide": "#0B1020"}
+_HERO_AJUSTE = {"saco": "contain", "telemovel": "contain", "piramide": "cover"}
+_EXT_HERO = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _hero_ficheiro(chave: str) -> tuple:
+    """Imagem própria opcional: imagens/hero_<chave>.jpg|png|webp ao lado do app.py (pasta e nome sem distinguir maiúsculas).
+    Devolve (mime, base64) ou ('', '')."""
+    import base64
+    try:
+        base = Path(__file__).resolve().parent
+        for pasta in base.iterdir():
+            if pasta.is_dir() and pasta.name.lower() in ("imagens", "images", "img"):
+                for f in pasta.iterdir():
+                    if f.is_file() and f.stem.lower() == f"hero_{chave}".lower() and f.suffix.lower() in _EXT_HERO and f.stat().st_size <= 2_500_000:
+                        return _EXT_HERO[f.suffix.lower()], base64.b64encode(f.read_bytes()).decode()
+    except Exception:
+        pass
+    return "", ""
+
+
+def hero(titulo: str, subtitulo: str, badge: str = None, arte: str = None, modo: str = None):
     if badge is None:
         badge = t().get("bodiva_badge", "🇦🇴 Kwanzas (Kz)")
-    chave = arte or next((k for p, k in _HERO_ARTE if p in titulo.lower()), "piramide")
-    img = _IMG_HERO.get(chave, "")
-    imagem = f'<img class="fx-hero-img" alt="" src="data:image/jpeg;base64,{img}">' if img else ""
-    render_html(f'<div class="appo-hero fx-hero"><div class="fx-hero-txt">{logo_svg(48, COR_MARCA)}<div><h1>{_esc(titulo)}</h1><p>{_esc(subtitulo)}</p>'
-                f'<span class="appo-badge">{_esc(badge)}</span></div></div><div class="fx-hero-arte">{imagem}</div></div>')
+    baixo = titulo.lower()
+    chave = arte or next((k for p, k in _HERO_ARTE if p in baixo), "piramide")
+    if modo is None:
+        modo = "foto" if any(p in baixo for p in _HERO_MODO_FOTO) else "cor"
+    mime, img = _hero_ficheiro(chave)
+    propria = bool(img)
+    if not propria:
+        mime, img = "image/jpeg", _IMG_HERO.get(chave, "")
+    if modo == "foto" and img:
+        fundo = "#FFFFFF" if propria else _HERO_FUNDO.get(chave, "#FFFFFF")
+        ajuste = "cover" if propria else _HERO_AJUSTE.get(chave, "cover")
+        arte_html = (f'<div class="fx-hero-arte foto" style="background:{fundo};"><img class="fx-hero-img" alt="" '
+                     f'style="object-fit:{ajuste};" src="data:{mime};base64,{img}"></div>')
+        classe = "appo-hero fx-hero fx-hero-foto"
+    else:
+        arte_html = '<div class="fx-hero-arte cor"><span class="fx-hero-forma f1"></span><span class="fx-hero-forma f2"></span></div>'
+        classe = "appo-hero fx-hero fx-hero-cor"
+    render_html(f'<div class="{classe}"><div class="fx-hero-txt">{logo_svg(48, COR_MARCA)}<div><h1>{_esc(titulo)}</h1><p>{_esc(subtitulo)}</p>'
+                f'<span class="appo-badge">{_esc(badge)}</span></div></div>{arte_html}</div>')
 
 
 def ticker_por_nome(nome: str) -> str:
@@ -1627,20 +1701,38 @@ def cor_variacao(v) -> str:
     return "color:#6B7280;"
 
 
+def _estilo_var_viva(v) -> str:
+    """Cor viva + fundo suave consoante o sinal da variação."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return ""
+    if v != v:
+        return ""
+    if v > 0:
+        return f"color:{COR_ALTA}; font-weight:700; background-color:#F0FDF4;"
+    if v < 0:
+        return f"color:{COR_QUEDA}; font-weight:700; background-color:#FFF1F2;"
+    return "color:#6B7280; font-weight:600;"
+
+
 def tabela_cotacoes_estilizada(df_activos: pd.DataFrame):
     tx = t()
     cols = tx["cot_tabela_cols"]
     df_disp = df_activos[["ticker", "nome", "tipo", "preco", "variacao"]].copy()
+    df_disp["preco"] = pd.to_numeric(df_disp["preco"], errors="coerce")
+    df_disp["variacao"] = pd.to_numeric(df_disp["variacao"], errors="coerce")
     df_disp.insert(0, "Logo", [logo_data_uri(tk) for tk in df_disp["ticker"]])
     df_disp["mercado"] = "🇦🇴 BODIVA"
     df_disp = df_disp.rename(columns={"ticker": cols["ticker"], "nome": cols["nome"], "tipo": cols["tipo"],
                                        "preco": cols["preco"], "variacao": cols["variacao"], "mercado": cols["mercado"]})
     df_disp = df_disp[["Logo", cols["ticker"], cols["nome"], cols["tipo"], cols["mercado"], cols["preco"], cols["variacao"]]]
-    sty = df_disp.style.format({cols["preco"]: kz, cols["variacao"]: pct_bruto})
+    sty = df_disp.style.format({cols["preco"]: lambda x: "—" if pd.isna(x) else kz(x),
+                                cols["variacao"]: lambda x: "—" if pd.isna(x) else pct_bruto(x)})
     aplicar_cor = getattr(sty, "map", None) or sty.applymap
-    sty = aplicar_cor(cor_variacao, subset=[cols["variacao"]])
-    return (sty.set_properties(subset=[cols["ticker"]], **{"font-family": "monospace", "letter-spacing": "0.4px"})
-               .set_properties(subset=[cols["preco"]], **{"font-weight": "600"}))
+    sty = aplicar_cor(_estilo_var_viva, subset=[cols["variacao"]])
+    return (sty.set_properties(subset=[cols["ticker"]], **{"font-family": "monospace", "letter-spacing": "0.4px", "font-weight": "700"})
+               .set_properties(subset=[cols["preco"]], **{"font-weight": "700"}))
 
 
 def hash_password(password: str) -> str:
@@ -8286,8 +8378,23 @@ def fx_barras_div(df: pd.DataFrame, height: int = 280, formato: str = "+.1f"):
         getattr(st, "bar_chart")(df, height=height)
 
 
-def fx_linhas(df: pd.DataFrame, height: int = 260, **_):
-    """Linhas suaves; ao encostar o cursor aparece a guia vertical com os valores de TODAS as linhas; legenda por baixo."""
+def _separar_rotulos(valores: dict, vmin: float, vmax: float, altura: int, gap_px: int = 15) -> dict:
+    """Afasta os rótulos finais que ficariam sobrepostos (posição vertical ajustada; o texto mostra sempre o valor real)."""
+    intervalo = (vmax - vmin) or 1.0
+    gap = gap_px / max(altura - 50, 100) * intervalo
+    pos, ant = {}, None
+    for k in sorted(valores, key=lambda s: valores[s]):
+        p = valores[k]
+        if ant is not None and p - ant < gap:
+            p = ant + gap
+        pos[k] = p
+        ant = p
+    return pos
+
+
+def fx_linhas(df: pd.DataFrame, height: int = 260, rotulos: bool = True, **_):
+    """Linhas suaves com valores à vista: rótulo no último ponto de cada linha e, ao encostar o cursor, guia vertical com
+    o valor de TODAS as linhas (etiqueta junto aos pontos + caixa de detalhe com a data). Legenda por baixo."""
     try:
         import altair as alt
         d = df.copy()
@@ -8295,11 +8402,18 @@ def fx_linhas(df: pd.DataFrame, height: int = 260, **_):
         d.index.name = "Data"
         nomes = [str(c) for c in d.columns]
         d.columns = [f"s{i}" for i in range(len(nomes))]
-        L = d.reset_index().melt("Data", var_name="Cod", value_name="Valor").dropna()
+        W = d.reset_index()
+        L = W.melt("Data", var_name="Cod", value_name="Valor").dropna()
+        if L.empty:
+            raise ValueError("sem dados")
         L["Série"] = L["Cod"].map({f"s{i}": n for i, n in enumerate(nomes)})
+        vmax, vmin = float(L["Valor"].max()), float(L["Valor"].min())
+        fmt = ",.0f" if max(abs(vmax), abs(vmin)) >= 1000 else ",.2f"
         x = (alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y", grid=False, labelColor="#64748B")) if temporal
              else alt.X("Data:N", sort=None, title=None, axis=alt.Axis(labelAngle=0, labelColor="#64748B")))
-        cor = alt.Color("Série:N", scale=alt.Scale(domain=nomes, range=_PALETA_SERIES[:len(nomes)]), legend=alt.Legend(orient="bottom", title=None))
+        esc_cor = alt.Scale(domain=nomes, range=_PALETA_SERIES[:len(nomes)])
+        cor = alt.Color("Série:N", scale=esc_cor, legend=alt.Legend(orient="bottom", title=None))
+        cor_sem_leg = alt.Color("Série:N", scale=esc_cor, legend=None)
         y = alt.Y("Valor:Q", title=None, scale=alt.Scale(zero=False), axis=alt.Axis(gridColor="#F0EBFA", labelColor="#94A3B8", domain=False, ticks=False))
         try:
             nearest = alt.selection_point(fields=["Data"], nearest=True, on="mouseover", empty=False)
@@ -8307,19 +8421,34 @@ def fx_linhas(df: pd.DataFrame, height: int = 260, **_):
         except AttributeError:
             nearest = alt.selection(type="single", fields=["Data"], nearest=True, on="mouseover", empty="none")
             juntar = lambda ch: ch.add_selection(nearest)
-        linhas = alt.Chart(L).mark_line(strokeWidth=2.2, interpolate="monotone").encode(x=x, y=y, color=cor)
-        sel = juntar(alt.Chart(L).mark_point().encode(x=x, opacity=alt.value(0)))
-        pontos = linhas.mark_point(size=52, filled=True).encode(opacity=alt.condition(nearest, alt.value(1), alt.value(0)))
         dica = ([alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y")] if temporal else [alt.Tooltip("Data:N", title="Data")]) + \
-               [alt.Tooltip(f"s{i}:Q", title=n, format=",.2f") for i, n in enumerate(nomes)]
-        W = d.reset_index()
-        regua = alt.Chart(W).mark_rule(color="#CBD5E1", strokeWidth=1).encode(x=x, tooltip=dica).transform_filter(nearest)
-        grafico = alt.layer(linhas, sel, pontos, regua).properties(height=height).configure_view(strokeWidth=0)
+               [alt.Tooltip(f"s{i}:Q", title=n, format=fmt) for i, n in enumerate(nomes)]
+        dica_ponto = ([alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y")] if temporal else [alt.Tooltip("Data:N", title="Data")]) + \
+                     [alt.Tooltip("Série:N", title="Série"), alt.Tooltip("Valor:Q", title="Valor", format=fmt)]
+        linhas = alt.Chart(L).mark_line(strokeWidth=2.2, interpolate="monotone").encode(x=x, y=y, color=cor)
+        # faixas verticais invisíveis (uma por data): dão a selecção «mais próximo» e a caixa de detalhe com TODAS as séries
+        larg = int(max(6, min(160, 900 / max(len(W), 1))))
+        faixas = juntar(alt.Chart(W).mark_rule(strokeWidth=larg, opacity=0).encode(x=x, tooltip=dica))
+        regua = alt.Chart(W).mark_rule(color="#CBD5E1", strokeWidth=1).encode(x=x).transform_filter(nearest)
+        pontos = linhas.mark_point(size=60, filled=True).encode(opacity=alt.condition(nearest, alt.value(1), alt.value(0)), tooltip=dica_ponto)
+        etiquetas = linhas.mark_text(align="left", dx=9, dy=-9, fontSize=12, fontWeight="bold").encode(
+            text=alt.Text("Valor:Q", format=fmt), color=cor_sem_leg, opacity=alt.condition(nearest, alt.value(1), alt.value(0)))
+        camadas = [linhas, faixas, regua, pontos, etiquetas]
+        extra = {}
+        if rotulos and 1 <= len(nomes) <= 6:
+            ult = L.sort_values("Data").groupby("Série", as_index=False).tail(1).copy()
+            pos = _separar_rotulos({r["Série"]: float(r["Valor"]) for _, r in ult.iterrows()}, vmin, vmax, height)
+            ult["Pos"] = ult["Série"].map(pos)
+            finais = alt.Chart(ult).mark_text(align="left", dx=8, fontSize=12, fontWeight="bold").encode(
+                x=x, y=alt.Y("Pos:Q", title=None, scale=alt.Scale(zero=False)), text=alt.Text("Valor:Q", format=fmt), color=cor_sem_leg)
+            camadas.append(finais)
+            extra = {"padding": {"left": 5, "right": 58, "top": 8, "bottom": 5}}
+        grafico = alt.layer(*camadas).properties(height=height, **extra).configure_view(strokeWidth=0)
         try:
             grafico.to_dict()
         except Exception:
             traceback.print_exc()
-            grafico = linhas.properties(height=height).configure_view(strokeWidth=0)
+            grafico = alt.layer(linhas.encode(tooltip=dica_ponto), pontos).properties(height=height).configure_view(strokeWidth=0)
         st.altair_chart(grafico, use_container_width=True)
     except Exception:
         traceback.print_exc()
