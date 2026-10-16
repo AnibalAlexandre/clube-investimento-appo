@@ -1335,15 +1335,46 @@ body:has([data-testid="stSidebar"][aria-expanded="true"]) .appo-fixo { left: 21r
 """
 
 
+CSS_APPO_FASE9 = """
+/* ---- Barra superior (marca + secção + cotações) e cabeçalho colorido: no topo, com a mesma largura, sem sombra, compactos ---- */
+:root { --appo-lado: 3.5rem; --appo-barra: 2.5rem; --appo-topo: 0.5rem; --appo-sidebar: 21rem; }
+[data-testid="stMainBlockContainer"], section.main .block-container, .block-container {
+  padding-top: calc(var(--appo-topo) + var(--appo-barra) + 0.6rem) !important; padding-left: var(--appo-lado) !important;
+  padding-right: var(--appo-lado) !important; max-width: none !important; }
+.appo-fixo { position: fixed; top: var(--appo-topo); left: var(--appo-lado); right: var(--appo-lado); z-index: 990; height: var(--appo-barra);
+  display: flex; align-items: center; background: #FFFFFF; border: 1px solid #EFE9FA; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 -0.75rem 0 0 var(--appo-cinza, #F8FAFC); }
+body:has([data-testid="stSidebar"][aria-expanded="true"]) .appo-fixo { left: calc(var(--appo-sidebar) + var(--appo-lado)); }
+@media (max-width: 992px) { body:has([data-testid="stSidebar"][aria-expanded="true"]) .appo-fixo { left: var(--appo-lado); } }
+.appo-fixo .appo-topbar { flex: 0 0 auto; display: flex; align-items: center; height: 100%; padding: 0 14px 0 10px; border-right: 1px solid #EFE9FA; }
+.appo-fixo .appo-pagina { max-width: 14rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.appo-fixo .appo-ticker-wrap { flex: 1 1 0; min-width: 0; border: 0 !important; padding: 0 !important; margin: 0 !important; background: transparent; }
+.appo-fixo .appo-tk { margin-right: 34px; }
+.appo-fixo .appo-ticker-move { padding-left: 0; animation-name: appo-scroll2; animation-timing-function: linear; animation-iteration-count: infinite; }
+@keyframes appo-scroll2 { from { transform: translateX(0); } to { transform: translateX(calc(-100% / var(--rep, 3))); } }
+@media (prefers-reduced-motion: reduce) { .appo-fixo .appo-ticker-move { animation: none; } }
+:is(.element-container, [data-testid="stElementContainer"]):has(.appo-fixo) { height: 0; min-height: 0; margin: 0 0 -1rem 0; }
+@media (max-width: 576px) { :root { --appo-lado: 1rem; } .appo-fixo .appo-pagina { display: none; } }
+
+/* cabeçalho colorido compacto: liberta espaço para o conteúdo */
+.appo-hero.fx-hero { min-height: 88px; margin-bottom: 0.6rem; }
+.appo-hero.fx-hero .fx-hero-txt { padding: 10px 20px 10px 24px; gap: 14px; }
+.appo-hero.fx-hero .fx-hero-txt > svg { width: 38px; height: 38px; flex: 0 0 auto; }
+.appo-hero.fx-hero h1 { font-size: 1.5rem; margin: 0; padding: 0 !important; line-height: 1.2; }
+.appo-hero.fx-hero p { margin: 2px 0 6px 0; font-size: 0.88rem; }
+.appo-hero.fx-hero .appo-badge { font-size: 0.72rem; padding: 2px 10px; }
+"""
+
+
 def _carregar_css() -> str:
     """Usa appo.css (ao lado do app.py) se existir; caso contrário, o CSS incluído acima."""
     try:
         f = Path(__file__).with_name("appo.css")
         if f.exists():
-            return _FONTE_TITULOS + f.read_text(encoding="utf-8") + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3 + CSS_APPO_FASE8
+            return _FONTE_TITULOS + f.read_text(encoding="utf-8") + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3 + CSS_APPO_FASE8 + CSS_APPO_FASE9
     except Exception:
         pass
-    return _FONTE_TITULOS + CSS_APPO_BASE + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3 + CSS_APPO_FASE8
+    return _FONTE_TITULOS + CSS_APPO_BASE + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3 + CSS_APPO_FASE8 + CSS_APPO_FASE9
 
 
 st.markdown(f"<style>{_carregar_css()}</style>", unsafe_allow_html=True)
@@ -1563,10 +1594,14 @@ def ticker_tape_html(df_activos: pd.DataFrame) -> str:
         v = _num_seguro(a["variacao"])
         cor, seta = (COR_ALTA, "▲") if v > 0 else ((COR_QUEDA, "▼") if v < 0 else (COR_ZERO, "●"))
         itens.append(
-            f'<span class="appo-tk" style="color:{cor};">{logo_activo_html(a["ticker"], a["nome"], 30)}'
+            f'<span class="appo-tk" style="color:{cor};">{logo_activo_html(a["ticker"], a["nome"], 24)}'
             f'<b>{_esc(a["ticker"] or a["nome"])}</b>&nbsp; {kz(a["preco"])} &nbsp;<b>{seta} {pct_bruto(v)}</b></span>')
-    conteudo = "".join(itens) * 3
-    return f'<div class="appo-ticker-wrap"><div class="appo-ticker-move"><span>{conteudo}</span></div></div>'
+    n = len(itens)
+    rep = max(3, -(-2200 // max(n * 215, 1)) + 1)      # conjuntos repetidos: a fita nunca fica com buracos
+    dur = max(24, round(5.2 * n))                       # velocidade constante, qualquer que seja o número de títulos
+    conteudo = "".join(itens) * rep
+    return (f'<div class="appo-ticker-wrap"><div class="appo-ticker-move" style="--rep:{rep};animation-duration:{dur}s;">'
+            f'<span>{conteudo}</span></div></div>')
 
 
 def ticker_tape(df_activos: pd.DataFrame):
@@ -8506,8 +8541,23 @@ def fx_barras_div(df: pd.DataFrame, height: int = 280, formato: str = "+.1f"):
         getattr(st, "bar_chart")(df, height=height)
 
 
-def fx_linhas(df: pd.DataFrame, height: int = 260, **_):
-    """Linhas suaves. Ao encostar o cursor: guia vertical, ponto em cada curva e o VALOR de cada curva escrito junto ao ponto (mais a data na dica)."""
+def _separar_rotulos(valores: dict, vmin: float, vmax: float, altura: int, gap_px: int = 15) -> dict:
+    """Afasta os rótulos finais que ficariam sobrepostos (posição vertical ajustada; o texto mostra sempre o valor real)."""
+    intervalo = (vmax - vmin) or 1.0
+    gap = gap_px / max(altura - 50, 100) * intervalo
+    pos, ant = {}, None
+    for k in sorted(valores, key=lambda s: valores[s]):
+        p = valores[k]
+        if ant is not None and p - ant < gap:
+            p = ant + gap
+        pos[k] = p
+        ant = p
+    return pos
+
+
+def fx_linhas(df: pd.DataFrame, height: int = 260, rotulos: bool = True, **_):
+    """Linhas suaves com valores à vista: rótulo no último ponto de cada linha e, ao encostar o cursor, guia vertical com
+    o valor de TODAS as linhas (etiqueta junto aos pontos + caixa de detalhe com a data). Legenda por baixo."""
     try:
         import altair as alt
         d = df.copy()
@@ -8515,12 +8565,18 @@ def fx_linhas(df: pd.DataFrame, height: int = 260, **_):
         d.index.name = "Data"
         nomes = [str(c) for c in d.columns]
         d.columns = [f"s{i}" for i in range(len(nomes))]
-        W = d.reset_index()                                           # formato largo: Data, s0, s1, ...
+        W = d.reset_index()
         L = W.melt("Data", var_name="Cod", value_name="Valor").dropna()
+        if L.empty:
+            raise ValueError("sem dados")
         L["Série"] = L["Cod"].map({f"s{i}": n for i, n in enumerate(nomes)})
+        vmax, vmin = float(L["Valor"].max()), float(L["Valor"].min())
+        fmt = ",.0f" if max(abs(vmax), abs(vmin)) >= 1000 else ",.2f"
         x = (alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y", grid=False, labelColor="#64748B")) if temporal
              else alt.X("Data:N", sort=None, title=None, axis=alt.Axis(labelAngle=0, labelColor="#64748B")))
-        cor = alt.Color("Série:N", scale=alt.Scale(domain=nomes, range=_PALETA_SERIES[:len(nomes)]), legend=alt.Legend(orient="bottom", title=None))
+        esc_cor = alt.Scale(domain=nomes, range=_PALETA_SERIES[:len(nomes)])
+        cor = alt.Color("Série:N", scale=esc_cor, legend=alt.Legend(orient="bottom", title=None))
+        cor_sem_leg = alt.Color("Série:N", scale=esc_cor, legend=None)
         y = alt.Y("Valor:Q", title=None, scale=alt.Scale(zero=False), axis=alt.Axis(gridColor="#F0EBFA", labelColor="#94A3B8", domain=False, ticks=False))
         try:
             nearest = alt.selection_point(fields=["Data"], nearest=True, on="mouseover", empty=False)
@@ -8528,21 +8584,33 @@ def fx_linhas(df: pd.DataFrame, height: int = 260, **_):
         except AttributeError:
             nearest = alt.selection(type="single", fields=["Data"], nearest=True, on="mouseover", empty="none")
             juntar = lambda ch: ch.add_selection(nearest)
-        linhas = alt.Chart(L).mark_line(strokeWidth=2.2, interpolate="monotone").encode(x=x, y=y, color=cor)
-        sel = juntar(alt.Chart(L).mark_point().encode(x=x, opacity=alt.value(0)))
-        pontos = linhas.mark_point(size=52, filled=True).encode(opacity=alt.condition(nearest, alt.value(1), alt.value(0)))
-        # os valores aparecem escritos junto a cada curva (não dependem da dica do rato)
-        valores = linhas.mark_text(align="left", dx=9, dy=-9, fontSize=11, fontWeight="bold").encode(
-            text=alt.condition(nearest, alt.Text("Valor:Q", format=",.1f"), alt.value(" ")))
         dica = ([alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y")] if temporal else [alt.Tooltip("Data:N", title="Data")]) + \
-               [alt.Tooltip(f"s{i}:Q", title=n, format=",.2f") for i, n in enumerate(nomes)]
-        regua = alt.Chart(W).mark_rule(color="#CBD5E1", strokeWidth=1).encode(x=x, tooltip=dica).transform_filter(nearest)   # dados em formato largo: sem pivot
-        grafico = alt.layer(linhas, sel, pontos, valores, regua).properties(height=height).configure_view(strokeWidth=0)
+               [alt.Tooltip(f"s{i}:Q", title=n, format=fmt) for i, n in enumerate(nomes)]
+        dica_ponto = ([alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y")] if temporal else [alt.Tooltip("Data:N", title="Data")]) + \
+                     [alt.Tooltip("Série:N", title="Série"), alt.Tooltip("Valor:Q", title="Valor", format=fmt)]
+        linhas = alt.Chart(L).mark_line(strokeWidth=2.2, interpolate="monotone").encode(x=x, y=y, color=cor)
+        # selector invisível (um ponto por data e série): dá o «ponto mais próximo» ao passar o cursor
+        seletor = juntar(alt.Chart(L).mark_point().encode(x=x, opacity=alt.value(0)))
+        regua = alt.Chart(W).mark_rule(color="#CBD5E1", strokeWidth=1).encode(x=x, tooltip=dica).transform_filter(nearest)
+        pontos = linhas.mark_point(size=60, filled=True).encode(opacity=alt.condition(nearest, alt.value(1), alt.value(0)), tooltip=dica_ponto)
+        etiquetas = linhas.mark_text(align="left", dx=9, dy=-9, fontSize=12, fontWeight="bold").encode(
+            text=alt.Text("Valor:Q", format=fmt), color=cor_sem_leg, opacity=alt.condition(nearest, alt.value(1), alt.value(0)))
+        camadas = [linhas, seletor, regua, pontos, etiquetas]
+        extra = {}
+        if rotulos and 1 <= len(nomes) <= 6:
+            ult = L.sort_values("Data").groupby("Série", as_index=False).tail(1).copy()
+            pos = _separar_rotulos({r["Série"]: float(r["Valor"]) for _, r in ult.iterrows()}, vmin, vmax, height)
+            ult["Pos"] = ult["Série"].map(pos)
+            finais = alt.Chart(ult).mark_text(align="left", dx=8, fontSize=12, fontWeight="bold").encode(
+                x=x, y=alt.Y("Pos:Q", title=None, scale=alt.Scale(zero=False)), text=alt.Text("Valor:Q", format=fmt), color=cor_sem_leg)
+            camadas.append(finais)
+            extra = {"padding": {"left": 5, "right": 58, "top": 8, "bottom": 5}}
+        grafico = alt.layer(*camadas).properties(height=height, **extra).configure_view(strokeWidth=0)
         try:
             grafico.to_dict()
         except Exception:
             traceback.print_exc()
-            grafico = alt.layer(linhas, sel, pontos, valores).properties(height=height).configure_view(strokeWidth=0)
+            grafico = alt.layer(linhas.encode(tooltip=dica_ponto), pontos).properties(height=height).configure_view(strokeWidth=0)
         st.altair_chart(grafico, use_container_width=True)
     except Exception:
         traceback.print_exc()
@@ -9478,7 +9546,7 @@ st.sidebar.caption(f"Última actualização da página: {agora()}")
 
 _df_activos_ticker = obter_activos()
 render_html('<div class="appo-fixo"><div class="appo-topbar"><div class="appo-marca">APPO</div>'
-            f'<div class="appo-pagina">{_esc(tx["nav_map"].get(pagina, pagina))}</div></div>' + ticker_tape_html(_df_activos_ticker) + '</div><div class="appo-fixo-esp"></div>')
+            f'<div class="appo-pagina">{_esc(tx["nav_map"].get(pagina, pagina))}</div></div>' + ticker_tape_html(_df_activos_ticker) + '</div>')
 
 # =========================================================
 # PÁGINA: INÍCIO & ANÁLISES
