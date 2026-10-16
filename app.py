@@ -1124,6 +1124,24 @@ div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
 .st-key-appo_faq [data-testid="stExpander"] summary { font-weight: 600; color: #3B2F63; }
 .st-key-appo_faq [data-testid="stExpander"]:nth-of-type(3n+2) { border-left-color: #C98BA0; background: linear-gradient(90deg, #FFF6F8, #FFFFFF); }
 .st-key-appo_faq [data-testid="stExpander"]:nth-of-type(3n) { border-left-color: #E8A06A; background: linear-gradient(90deg, #FFF8F1, #FFFFFF); }
+/* FAQ v2 — destaque forte mas contido; não depende da versão do Streamlit (usa um marcador + :has) */
+.appo-faq-cab { display: flex; align-items: center; gap: 16px; background: linear-gradient(115deg, #6D28D9 0%, #E11D48 62%, #F97316 100%); color: #fff; border-radius: 18px; padding: 20px 26px; margin: 14px 0 14px; box-shadow: 0 12px 28px -16px rgba(109, 40, 217, .65); }
+.appo-faq-cab .ic { flex: 0 0 auto; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.22); display: flex; align-items: center; justify-content: center; font-size: 1.9rem; }
+.appo-faq-cab .t { font-size: 1.7rem; font-weight: 800; line-height: 1.15; letter-spacing: -.01em; }
+.appo-faq-cab .s { font-size: 1rem; opacity: .95; margin-top: 4px; }
+[data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"],
+.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] { border: 1px solid #E4D4FB; border-left: 6px solid #6D28D9; border-radius: 14px; background: linear-gradient(90deg, #F6F1FF, #FFFFFF); margin-bottom: 10px; box-shadow: 0 6px 16px -14px rgba(109, 40, 217, .6); transition: box-shadow .15s, transform .15s; }
+[data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"]:nth-of-type(3n+1) [data-testid="stExpander"],
+.element-container:has(.appo-faq-marca) ~ .element-container:nth-of-type(3n+1) [data-testid="stExpander"] { border-left-color: #E11D48; background: linear-gradient(90deg, #FFF1F3, #FFFFFF); }
+[data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"]:nth-of-type(3n) [data-testid="stExpander"],
+.element-container:has(.appo-faq-marca) ~ .element-container:nth-of-type(3n) [data-testid="stExpander"] { border-left-color: #F97316; background: linear-gradient(90deg, #FFF3E8, #FFFFFF); }
+[data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"]:hover,
+.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"]:hover { box-shadow: 0 10px 22px -12px rgba(109, 40, 217, .55); transform: translateY(-1px); }
+[data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"] summary,
+.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] summary { padding-top: 14px; padding-bottom: 14px; }
+[data-testid="stElementContainer"]:has(.appo-faq-marca) ~ [data-testid="stElementContainer"] [data-testid="stExpander"] summary p,
+.element-container:has(.appo-faq-marca) ~ .element-container [data-testid="stExpander"] summary p { font-size: 1.12rem !important; font-weight: 700 !important; color: #1B1033 !important; }
+@media (max-width: 576px) { .appo-faq-cab { padding: 16px; gap: 12px; } .appo-faq-cab .t { font-size: 1.35rem; } .appo-faq-cab .ic { width: 44px; height: 44px; font-size: 1.5rem; } }
 .appo-ticker-wrap { overflow: hidden; white-space: nowrap; background: #FFFFFF; border-top: 1px solid var(--appo-borda); border-bottom: 1px solid var(--appo-borda); padding: 8px 0; margin-bottom: 16px; }
 .appo-ticker-move { display: inline-block; padding-left: 100%; animation: appo-scroll 135s linear infinite; font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; font-size: 0.85rem; font-weight: 600; }
 @keyframes appo-scroll { 0% { transform: translate(0,0); } 100% { transform: translate(-100%,0); } }
@@ -8708,8 +8726,8 @@ def pagina_sobre_nos(tx: dict):
             bloco_documento_pdf(int(_est["id"]), _est["nome_ficheiro"], f"estatuto_{int(_est['id'])}", altura=820)
     faqs = blocos[blocos["tipo"] == "faq"]
     if not faqs.empty:
-        render_html('<div class="appo-faq-cab"><div class="t">💬 Perguntas frequentes</div>'
-                    '<div class="s">Respostas rápidas sobre o Clube. Escreve uma palavra para filtrar as perguntas.</div></div>')
+        render_html('<div class="appo-faq-cab"><div class="ic">💬</div><div><div class="t">Perguntas frequentes</div>'
+                    '<div class="s">Respostas rápidas sobre o Clube. Escreve uma palavra para filtrar as perguntas.</div></div></div>')
         _busca = st.text_input("Procurar nas perguntas", key="faq_busca", placeholder="🔎  ex.: quotas, risco, adesão…", label_visibility="collapsed")
         _q = (_busca or "").strip().lower()
         _sel = faqs[faqs.apply(lambda r: _q in (str(r["titulo"]) + " " + str(r["texto"])).lower(), axis=1)] if _q else faqs
@@ -8718,6 +8736,7 @@ def pagina_sobre_nos(tx: dict):
         except TypeError:
             _faq_box = st.container()
         with _faq_box:
+            render_html('<span class="appo-faq-marca"></span>')
             if _sel.empty:
                 st.info("Nenhuma pergunta encontrada. Tenta outra palavra ou escreve-nos.")
             for _n, (_, r) in enumerate(_sel.iterrows(), 1):
@@ -9753,30 +9772,31 @@ try:
 
         import html as _html
 
-        # Estilo "home broker" claro, nas cores do Clube (bordeaux / cinzento avermelhado) — só nesta página
+        # Estilo "home broker" claro, nas cores vivas do Clube (violeta / carmim / laranja, em tons claros) — só nesta página
         render_html("""<style>
-    .bfa-wrap{background:#FFFFFF;border:1px solid #ECDEE3;border-radius:8px;overflow-x:auto;margin-bottom:12px;}
+    .bfa-wrap{background:#FFFFFF;border:1px solid #E4D4FB;border-radius:12px;overflow-x:auto;box-shadow:0 8px 20px -16px rgba(109,40,217,.55);margin-bottom:12px;}
     .bfa-tbl{width:100%;border-collapse:collapse;font-size:0.8rem;color:#1A1A2E;}
-    .bfa-tbl th{color:#7C1F3E;font-weight:700;text-align:right;padding:9px 10px;background:#F4ECEF;border-bottom:2px solid #7C1F3E;font-size:0.7rem;white-space:nowrap;text-transform:uppercase;letter-spacing:0.4px;}
-    .bfa-tbl td{padding:10px;text-align:right;border-bottom:1px solid #F0E6EA;background:#FFFFFF;white-space:nowrap;}
-    .bfa-tbl tr:nth-child(even) td{background:#FBF8F6;}
-    .bfa-tbl tr.sel td{background:#F1E2E7;}
-    .bfa-tbl tr.tot td{background:#F4ECEF;font-weight:700;border-top:2px solid #7C1F3E;}
+    .bfa-tbl th{color:#6D28D9;font-weight:800;text-align:right;padding:10px 10px;background:#F3EBFF;border-bottom:3px solid #E11D48;font-size:0.7rem;white-space:nowrap;text-transform:uppercase;letter-spacing:0.4px;}
+    .bfa-tbl td{padding:10px;text-align:right;border-bottom:1px solid #F1E9FB;background:#FFFFFF;white-space:nowrap;}
+    .bfa-tbl tr:nth-child(even) td{background:#FFF8F3;}
+    .bfa-tbl tr.sel td{background:#FFE4E9;box-shadow:inset 0 0 0 0 #E11D48;}
+    .bfa-tbl tr.sel td:first-child{border-left:4px solid #E11D48;}
+    .bfa-tbl tr.tot td{background:#F3EBFF;font-weight:700;border-top:2px solid #6D28D9;}
     .bfa-tbl th.l,.bfa-tbl td.l{text-align:left;}
-    .bfa-up{color:#0D9488;}.bfa-dn{color:#DC2626;}.bfa-fl{color:#6B7280;}
-    .bfa-bar{background:#FBF8F6;border:1px solid #ECDEE3;border-radius:8px;padding:12px 20px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
+    .bfa-up{color:#059669;font-weight:700;}.bfa-dn{color:#E11D48;font-weight:700;}.bfa-fl{color:#6B7280;}
+    .bfa-bar{background:linear-gradient(120deg,#FFFFFF,#F6F1FF 55%,#FFF1EA);border:1px solid #E4D4FB;border-radius:12px;padding:12px 20px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
     .bfa-bar .k{font-size:0.62rem;color:#8A7B80;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:3px;}
-    .bfa-bar .v{font-size:1.02rem;color:#1A1A2E;font-weight:700;background:#F4ECEF;padding:4px 10px;border-radius:4px;display:inline-block;}
-    .bfa-ticket{background:#FBF8F6;border:1px solid #ECDEE3;border-left:4px solid #7C1F3E;border-radius:8px;padding:16px 22px;margin:10px 0;display:flex;gap:40px;flex-wrap:wrap;align-items:center;}
+    .bfa-bar .v{font-size:1.02rem;color:#1A1A2E;font-weight:700;background:#FFFFFF;border:1px solid #E4D4FB;padding:4px 10px;border-radius:8px;display:inline-block;}
+    .bfa-ticket{background:linear-gradient(120deg,#FFFFFF,#F6F1FF 55%,#FFF1EA);border:1px solid #E4D4FB;border-left:6px solid #E11D48;border-radius:12px;padding:16px 22px;margin:10px 0;display:flex;gap:40px;flex-wrap:wrap;align-items:center;}
     .bfa-ticket .nome{font-size:1.25rem;font-weight:800;color:#1A1A2E;}
     .bfa-ticket .sub{font-size:0.7rem;color:#8A7B80;margin-top:3px;}
     .bfa-ticket .k{font-size:0.62rem;color:#8A7B80;text-transform:uppercase;display:block;}
-    .bfa-ticket .big{font-size:1.7rem;font-weight:800;color:#7C1F3E;}
+    .bfa-ticket .big{font-size:1.7rem;font-weight:800;color:#E11D48;}
     .bfa-ticket .m{font-size:1.0rem;font-weight:700;color:#1A1A2E;}
-    button[kind="primary"],button[data-testid="stBaseButton-primary"]{background:#6E3B4A !important;border-color:#6E3B4A !important;color:#FFFFFF !important;}
-    button[kind="primary"]:hover,button[data-testid="stBaseButton-primary"]:hover{background:#592E3B !important;border-color:#592E3B !important;}
-    button[kind="secondary"],button[data-testid="stBaseButton-secondary"]{background:#E9D6DB !important;border-color:#D9BCC4 !important;color:#4A2A33 !important;}
-    button[kind="secondary"]:hover,button[data-testid="stBaseButton-secondary"]:hover{background:#DEC4CB !important;}
+    button[kind="primary"],button[data-testid="stBaseButton-primary"]{background:linear-gradient(120deg,#6D28D9,#E11D48) !important;border-color:transparent !important;color:#FFFFFF !important;}
+    button[kind="primary"]:hover,button[data-testid="stBaseButton-primary"]:hover{filter:brightness(.92);border-color:transparent !important;}
+    button[kind="secondary"],button[data-testid="stBaseButton-secondary"]{background:#F3EBFF !important;border-color:#E4D4FB !important;color:#4C1D95 !important;}
+    button[kind="secondary"]:hover,button[data-testid="stBaseButton-secondary"]:hover{background:#E9DDFB !important;}
     </style>""")
 
         # título → preço / variação actuais (chave = ticker, ou nome se não houver ticker)
