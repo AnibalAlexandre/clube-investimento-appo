@@ -988,6 +988,47 @@ if "idioma" not in st.session_state:
     st.session_state["idioma"] = "Português"
 
 
+_NOVAS_TRADUCOES = {
+    "aval_preco_fecho": ("Preço de fecho", "Closing price", "Cours de clôture", "Precio de cierre", "收盘价"),
+    "aval_preco_fonte": ("Fonte", "Source", "Source", "Fuente", "来源"),
+    "aval_fonte_cotacoes": ("Cotações & Activos", "Quotes & Assets", "Cotations & Actifs", "Cotizaciones y Activos", "行情与资产"),
+    "aval_fonte_mercado": ("Mercado BODIVA", "BODIVA market", "Marché BODIVA", "Mercado BODIVA", "BODIVA 市场"),
+    "aval_fonte_manual": ("Manual (folha de avaliação)", "Manual (valuation sheet)", "Manuel (feuille d'évaluation)", "Manual (hoja de valoración)", "手动（估值表）"),
+    "aval_bvps": ("Valor contabilístico por acção", "Book value per share", "Valeur comptable par action", "Valor contable por acción", "每股账面价值"),
+    "aval_bvps_curto": ("Valor contab./acção", "Book value/share", "Val. comptable/action", "Valor contable/acción", "每股账面值"),
+    "aval_bv_total": ("capital próprio total", "total shareholders' equity", "capitaux propres totaux", "patrimonio neto total", "股东权益总额"),
+    "aval_diferenca": ("Diferença face ao valor justo", "Difference vs fair value", "Écart vs juste valeur", "Diferencia vs valor razonable", "与公允价值之差"),
+    "aval_dif_kz": ("Diferença (Kz)", "Difference (Kz)", "Écart (Kz)", "Diferencia (Kz)", "差额 (Kz)"),
+    "aval_premio_bv": ("Prémio/desconto vs valor contabilístico", "Premium/discount to book value", "Prime/décote vs valeur comptable", "Prima/descuento vs valor contable", "相对账面价值的溢价/折价"),
+    "aval_alinhar": ("🔄 Alinhar preços com as cotações", "🔄 Align prices with quotes", "🔄 Aligner les prix sur les cotations", "🔄 Alinear precios con las cotizaciones", "🔄 将价格与行情对齐"),
+    "aval_alinhar_ajuda": ("Grava na folha de avaliação o preço de fecho das cotações. A página já usa sempre o fecho mais recente; isto actualiza também o valor guardado.",
+                           "Saves the latest closing price from the quotes into the valuation sheet. The page already uses the latest close; this also updates the stored value.",
+                           "Enregistre dans la feuille d'évaluation le dernier cours de clôture. La page utilise déjà le dernier cours; ceci met aussi à jour la valeur enregistrée.",
+                           "Guarda en la hoja de valoración el último precio de cierre. La página ya usa siempre el cierre más reciente; esto actualiza también el valor guardado.",
+                           "将最新收盘价保存到估值表。页面已始终使用最新收盘价；此操作同时更新已保存的值。"),
+    "aval_alinhado_ok": ("{n} preço(s) alinhado(s) com as cotações.", "{n} price(s) aligned with quotes.", "{n} prix aligné(s) sur les cotations.", "{n} precio(s) alineado(s) con las cotizaciones.", "已将 {n} 个价格与行情对齐。"),
+    "aval_preco_desfasado": ("O preço manual da folha ({manual}) difere do fecho das cotações em {pct}.", "The sheet's manual price ({manual}) differs from the quoted close by {pct}.",
+                             "Le prix manuel de la feuille ({manual}) diffère du cours de clôture de {pct}.", "El precio manual de la hoja ({manual}) difiere del cierre cotizado en {pct}.",
+                             "表中手动价格（{manual}）与行情收盘价相差 {pct}。"),
+    "term_dy": ("Dividend yield", "Dividend yield", "Rendement du dividende", "Rentabilidad por dividendo", "股息率"),
+    "term_fv": ("Fair value", "Fair value", "Juste valeur", "Valor razonable", "公允价值"),
+    "term_nota_indic": ("Preço de fecho das cotações. P/E, dividend yield, valor contabilístico por acção e P/BV vêm da Avaliação de Activos. Sem fair value do analista, usa-se o valor justo (DDM), marcado com (DDM). Diferença = fair value − preço de fecho.",
+                        "Closing price from the quotes. P/E, dividend yield, book value per share and P/BV come from the Asset Valuation. Without an analyst fair value, the DDM fair value is used, marked (DDM). Difference = fair value − closing price.",
+                        "Cours de clôture des cotations. P/E, rendement du dividende, valeur comptable par action et P/BV viennent de l'Évaluation des actifs. Sans juste valeur de l'analyste, on utilise la juste valeur (DDM), marquée (DDM). Écart = juste valeur − cours de clôture.",
+                        "Precio de cierre de las cotizaciones. P/E, rentabilidad por dividendo, valor contable por acción y P/BV vienen de la Valoración de Activos. Sin valor razonable del analista, se usa el valor razonable (DDM), marcado (DDM). Diferencia = valor razonable − precio de cierre.",
+                        "行情收盘价。市盈率、股息率、每股账面价值和市净率来自资产估值。若无分析师公允价值，则使用 DDM 公允价值（标记为 DDM）。差额 = 公允价值 − 收盘价。"),
+}
+for _i, _lg in enumerate(("Português", "English", "Français", "Español", "中文 (Mandarim)")):
+    if _lg in TRADUCOES:
+        for _k, _v in _NOVAS_TRADUCOES.items():
+            TRADUCOES[_lg].setdefault(_k, _v[_i])
+
+
+def L(tx: dict, chave: str) -> str:
+    """Texto traduzido; se faltar no idioma actual, usa o Português."""
+    return tx.get(chave) or TRADUCOES["Português"].get(chave, chave)
+
+
 def t() -> dict:
     return TRADUCOES[st.session_state["idioma"]]
 
@@ -3411,16 +3452,16 @@ def gerar_xlsx_cotacoes(df) -> bytes:
 
 
 def gerar_xlsx_comparacao(linhas) -> bytes:
-    """linhas: [empresa, sector, pe, pbv, roe, dy_nominal, upside] com valores numéricos (fracções) ou None."""
+    """linhas: [empresa, sector, preço de fecho, pe, dy, valor contab./acção, pbv, roe, valor justo, diferença (Kz), upside]; fracções ou None."""
     from datetime import datetime as _dt
-    colunas = ["Empresa", "Sector", "P/E (x)", "P/BV (x)", "ROE", "Dividend Yield nominal", "Upside DDM"]
-    verde_verm = '+0.00%;-0.00%;0.00%'
+    colunas = ["Empresa", "Sector", "Preço de fecho (Kz)", "P/E (x)", "Dividend Yield nominal", "Valor contabilístico/acção (Kz)", "P/BV (x)", "ROE", "Valor justo DDM (Kz)", "Diferença (Kz)", "Upside DDM"]
+    pct_sinal = '+0.00%;-0.00%;0.00%'
     return gerar_xlsx_tabela(
         "Comparação Sectorial - Avaliação de Activos", f"Gerado em {_dt.now():%d/%m/%Y %H:%M}  |  Modelo de avaliação do Clube (DDM)",
-        colunas, linhas, [26, 30, 12, 12, 14, 20, 16],
-        [None, None, '0.00"x"', '0.00"x"', verde_verm, '0.00%', verde_verm], folha="Comparação sectorial", cor_cond=(5, 7),
-        nota="P/E = preço sobre lucro; P/BV = preço sobre valor contabilístico; ROE = rentabilidade do capital próprio; "
-             "Upside DDM = diferença entre o valor justo estimado e o preço de mercado. O DDM depende das premissas "
+        colunas, linhas, [26, 26, 16, 10, 18, 22, 10, 12, 18, 16, 14],
+        [None, None, '#,##0.00', '0.00"x"', '0.00%', '#,##0.00', '0.00"x"', pct_sinal, '#,##0.00', '+#,##0;-#,##0;0', pct_sinal], folha="Comparação sectorial", cor_cond=(8, 10, 11),
+        nota="P/E = preço sobre lucro; P/BV = preço sobre valor contabilístico; ROE = rentabilidade do capital próprio; Diferença = valor justo menos preço de fecho; "
+             "Upside DDM = diferença percentual entre o valor justo estimado e o preço. O preço de fecho vem das cotações. O DDM depende das premissas "
              "de crescimento (g) e custo de capital (Ke): use-o como referência, não como verdade absoluta.")
 
 
@@ -4934,7 +4975,94 @@ def calcular_metricas_avaliacao(av: dict, premissas: dict) -> dict:
     upside = ((valor_justo - preco) / preco) if (valor_justo is not None and preco) else None
     return {"cap_mercado": preco * acoes, "eps": eps, "pe": pe, "pbv": pbv, "dps": dps,
             "payout": payout, "dy_nominal": dy_nominal, "dy_real": dy_real, "roe": roe,
-            "ke": ke, "valor_justo": valor_justo, "upside": upside}
+            "ke": ke, "valor_justo": valor_justo, "upside": upside,
+            # novos: valor contabilístico (por acção e total), preço de fecho usado, diferença e prémio/desconto
+            "bvps": bvps if bvps and bvps > 0 else None, "valor_contabilistico": av["capital_proprio"] or None, "preco_fecho": preco,
+            "diferenca_kz": (valor_justo - preco) if valor_justo is not None else None,
+            "premio_bv": (preco / bvps - 1) if bvps and bvps > 0 and preco else None}
+
+
+# ---------- Preço de fecho alinhado com as cotações (sem alterar a base de dados) ----------
+FONTE_PRECO_COTACOES, FONTE_PRECO_MERCADO, FONTE_PRECO_MANUAL = "cotacoes", "mercado", "manual"
+
+
+def _preco_fecho_para(empresa: str, activos: pd.DataFrame, mercado: pd.DataFrame):
+    """(preço, fonte, data) do último fecho conhecido da empresa. Ordem: Cotações & Activos, feed do Mercado BODIVA, folha manual."""
+    tk = ticker_por_nome(empresa)
+    alvo = _chave_ticker(tk) if tk else ""
+    emp = str(empresa or "").strip().lower()
+
+    def casa(tk_linha, nome_linha) -> bool:
+        if alvo and _chave_ticker(tk_linha) == alvo:
+            return True
+        n = str(nome_linha or "").strip().lower()
+        return bool(n) and (n == emp or (len(emp) >= 4 and emp in n) or (len(n) >= 4 and n in emp))
+
+    for fonte, df in ((FONTE_PRECO_COTACOES, activos), (FONTE_PRECO_MERCADO, mercado)):
+        if df is None or df.empty:
+            continue
+        for _, r in df.iterrows():
+            p = pd.to_numeric(r.get("preco"), errors="coerce")
+            if casa(r.get("ticker"), r.get("nome")) and pd.notna(p) and float(p) > 0:
+                return float(p), fonte, r.get("actualizado_em")
+    return None, FONTE_PRECO_MANUAL, None
+
+
+def obter_avaliacoes_alinhadas() -> pd.DataFrame:
+    """Avaliações com o preço de fecho vindo das cotações (preco_manual guarda o valor da folha; fonte_preco e data_preco dizem de onde vem)."""
+    df = obter_avaliacoes()
+    if df.empty:
+        return df
+    try:
+        act = obter_activos()
+    except Exception:
+        act = pd.DataFrame()
+    try:
+        mk = ler_mercado_guardado()
+    except Exception:
+        mk = pd.DataFrame()
+    df = df.copy()
+    df["preco_manual"] = pd.to_numeric(df["preco"], errors="coerce").fillna(0.0)
+    precos, fontes, datas = [], [], []
+    for _, r in df.iterrows():
+        p, f, d = _preco_fecho_para(str(r["empresa"]), act, mk)
+        precos.append(p if p is not None else float(r["preco_manual"]))
+        fontes.append(f)
+        datas.append(d if d is not None else r.get("actualizado_em"))
+    df["preco"], df["fonte_preco"], df["data_preco"] = precos, fontes, datas
+    return df
+
+
+def sincronizar_precos_avaliacoes() -> int:
+    """Grava na folha de avaliação o preço de fecho das cotações (só onde diferem). Devolve quantas linhas actualizou."""
+    exigir_admin()
+    df = obter_avaliacoes_alinhadas()
+    n = 0
+    for _, r in df.iterrows():
+        if r["fonte_preco"] != FONTE_PRECO_MANUAL and abs(float(r["preco"]) - float(r["preco_manual"])) > 0.005:
+            executar("UPDATE avaliacoes SET preco = %s, actualizado_em = NOW() WHERE empresa = %s", (float(r["preco"]), str(r["empresa"])))
+            n += 1
+    registar_auditoria("sync_precos_avaliacoes", "avaliacoes", "todas", depois={"actualizadas": n})
+    return n
+
+
+def indicadores_por_ticker() -> dict:
+    """chave_ticker -> indicadores da avaliação (P/E, DY, valor contabilístico/acção, P/BV, valor justo, preço de fecho). Reutiliza calcular_metricas_avaliacao."""
+    out = {}
+    df = obter_avaliacoes_alinhadas()
+    if df.empty:
+        return out
+    prem = obter_premissas_macro()
+    for _, r in df.iterrows():
+        tk = ticker_por_nome(str(r["empresa"]))
+        if not tk:
+            continue
+        av = {"sector": r["sector"], "preco": float(r["preco"]), "acoes_circulacao": float(r["acoes_circulacao"]), "lucro_liquido": float(r["lucro_liquido"]),
+              "ganho_pontual": float(r["ganho_pontual"]), "capital_proprio": float(r["capital_proprio"]), "dividendo_total": float(r["dividendo_total"]), "crescimento_g": float(r["crescimento_g"])}
+        m = calcular_metricas_avaliacao(av, prem)
+        m.update({"empresa": str(r["empresa"]), "fonte_preco": r["fonte_preco"], "data_preco": r["data_preco"]})
+        out[_chave_ticker(tk)] = m
+    return out
 
 
 @st.cache_resource(show_spinner="A preparar a base de dados…")
@@ -7967,6 +8095,7 @@ def _pct_sinal(x) -> str:
 
 
 def pagina_terminal_decisao():
+    tx = t()
     socio = eh_participante()
     hero("🎯 Terminal de Decisão",
          "As decisões do Clube sobre a carteira real, com teses e fair value." if socio else "Lista de acompanhamento do mercado BODIVA: preço, fair value e sinal de valorização.",
@@ -7978,6 +8107,11 @@ def pagina_terminal_decisao():
         return
     teses = obter_teses()
     por_tk = {_chave_ticker(r["ticker"]): r for _, r in teses.iterrows()} if not teses.empty else {}
+    try:
+        ind = indicadores_por_ticker()
+    except Exception:
+        traceback.print_exc()
+        ind = {}
 
     pos = {}
     total = 0.0
@@ -7998,9 +8132,19 @@ def pagina_terminal_decisao():
         k = _chave_ticker(a["ticker"])
         t_ = por_tk.get(k)
         fv = float(t_["fair_value"]) if t_ is not None and t_["fair_value"] is not None and pd.notna(t_["fair_value"]) else None
-        sinal, pot = _sinal_valor(float(a["preco"]), fv)
-        linha = {"Logo": logo_data_uri(a["ticker"]), "Ticker": str(a["ticker"]), "Activo": str(a["nome"]), "Preço": kz(float(a["preco"])),
-                 "Variação": pct_bruto(a["variacao"]), "Fair value": kz(fv) if fv else "—", "Potencial": _pct_sinal(pot), "Sinal": sinal}
+        ii = ind.get(k)
+        preco_f = float(a["preco"])
+        usa_ddm = fv is None and ii is not None and ii.get("valor_justo")
+        fv_ef = fv if fv else (ii["valor_justo"] if usa_ddm else None)
+        sinal, pot = _sinal_valor(preco_f, fv_ef)
+        dif_kz = (fv_ef - preco_f) if fv_ef else None
+        linha = {"Logo": logo_data_uri(a["ticker"]), "Ticker": str(a["ticker"]), "Activo": str(a["nome"]), L(tx, "aval_preco_fecho"): kz(preco_f),
+                 "Variação": pct_bruto(a["variacao"]),
+                 "P/E": multiplo(ii["pe"]) if ii and ii["pe"] is not None else "—", L(tx, "term_dy"): pct(ii["dy_nominal"]) if ii else "—",
+                 L(tx, "aval_bvps_curto"): kz(ii["bvps"]) if ii and ii["bvps"] else "—", "P/BV": multiplo(ii["pbv"]) if ii and ii["pbv"] is not None else "—",
+                 L(tx, "term_fv"): (kz(fv_ef) + (" (DDM)" if usa_ddm else "")) if fv_ef else "—",
+                 L(tx, "aval_dif_kz"): ((("+" if dif_kz > 0 else "") + kz(dif_kz)) if dif_kz is not None else "—"),
+                 "Potencial": _pct_sinal(pot), "Sinal": sinal, "_i": len(linhas)}
         if socio:
             p = pos.get(k)
             peso = (p["valor"] / total) if p and total > 0 else None
@@ -8013,7 +8157,10 @@ def pagina_terminal_decisao():
     if socio:
         df["_p"] = df["Peso na carteira"].map(lambda v: -1.0 if v == "—" else -float(v.replace("%", "").replace(",", ".")))
         df = df.sort_values("_p").drop(columns="_p")
-    st.dataframe(df, hide_index=True, column_config=cfg_logo())
+    base = act.reset_index(drop=True).iloc[df["_i"].tolist()].reset_index(drop=True)   # mesma ordem da tabela, para a janela do activo
+    df = df.drop(columns="_i")
+    tabela_activos_clicavel(df, base, "tb_terminal")
+    st.caption(L(tx, "term_nota_indic"))
     if socio:
         st.caption("O peso e o limite são calculados com a carteira real e os preços actuais; o limite de 10% por activo é a regra do Clube. O sinal compara o preço com o fair value (subvalorizado acima de +15%, sobrevalorizado abaixo de −10%).")
         st.markdown("#### Teses do Clube")
@@ -8451,15 +8598,24 @@ def _tom(v, bom, mau):
 
 def pagina_avaliacao_activos(tx: dict):
     premissas = obter_premissas_macro()
-    df_aval = obter_avaliacoes()
+    df_aval = obter_avaliacoes_alinhadas()
     if df_aval.empty:
         st.info(tx["aval_sem_dados"])
         return
+    if eh_admin():
+        with st.expander(L(tx, "aval_alinhar")):
+            st.caption(L(tx, "aval_alinhar_ajuda"))
+            if st.button(L(tx, "aval_alinhar"), key="aval_btn_alinhar"):
+                st.success(L(tx, "aval_alinhado_ok").format(n=sincronizar_precos_avaliacoes()))
+                st.rerun()
     empresa_sel = st.selectbox(tx["aval_empresa"], df_aval["empresa"].tolist())
     l = df_aval[df_aval["empresa"] == empresa_sel].iloc[0]
     av = {"sector": l["sector"], "preco": float(l["preco"]), "acoes_circulacao": float(l["acoes_circulacao"]), "lucro_liquido": float(l["lucro_liquido"]),
           "ganho_pontual": float(l["ganho_pontual"]), "capital_proprio": float(l["capital_proprio"]), "dividendo_total": float(l["dividendo_total"]), "crescimento_g": float(l["crescimento_g"])}
     m = calcular_metricas_avaliacao(av, premissas)
+    _nome_fonte = {FONTE_PRECO_COTACOES: L(tx, "aval_fonte_cotacoes"), FONTE_PRECO_MERCADO: L(tx, "aval_fonte_mercado")}.get(l["fonte_preco"], L(tx, "aval_fonte_manual"))
+    _dp = l["data_preco"]
+    sub_preco = f"{L(tx, 'aval_preco_fonte')}: {_nome_fonte}" + (f" · {pd.Timestamp(_dp):%d/%m %H:%M}" if _dp is not None and pd.notna(_dp) else "")
     tk = ticker_por_nome(empresa_sel)
     uri = logo_data_uri(tk) if tk else None
     logo = f'<img src="{uri}" alt="">' if uri else ""
@@ -8468,7 +8624,7 @@ def pagina_avaliacao_activos(tx: dict):
     infl = float(premissas["inflacao"])
     pe, pbv, dy = m["pe"], m["pbv"], m["dy_nominal"]
     kpi_linha([
-        kpi_card("💰", tx["aval_preco"], kz(av["preco"]), "Preço de mercado", destaque=True),
+        kpi_card("💰", L(tx, "aval_preco_fecho"), kz(av["preco"]), sub_preco, destaque=True),
         kpi_card("🔢", tx["aval_pe"], multiplo(pe), "barato (<8x)" if pe is not None and pe < 8 else "caro (>15x)" if pe is not None and pe > 15 else "zona justa (8–15x)",
                  tom=_tom(pe, lambda v: v is not None and v < 8, lambda v: v is not None and v > 15)),
         kpi_card("📚", tx["aval_pbv"], multiplo(pbv), "abaixo do valor contabilístico" if pbv is not None and pbv < 1 else "acima de 2x: exige ROE alto" if pbv is not None and pbv > 2 else "razoável (1–2x)",
@@ -8482,6 +8638,17 @@ def pagina_avaliacao_activos(tx: dict):
                  tom=("up" if up and up > 0 else "down" if up is not None and up < 0 else None)),
         kpi_card("🏦", tx["aval_ke"], pct(m["ke"]), "custo de capital exigido"),
     ])
+    dk, pb = m["diferenca_kz"], m["premio_bv"]
+    kpi_linha([
+        kpi_card("📚", L(tx, "aval_bvps"), kz(m["bvps"]) if m["bvps"] else "n/d",
+                 (f"{L(tx, 'aval_bv_total')}: {kz(m['valor_contabilistico'])}" if m["valor_contabilistico"] else None)),
+        kpi_card("↔️", L(tx, "aval_diferenca"), (("+" if dk > 0 else "") + kz(dk)) if dk is not None else "n/d", (f"{up * 100:+.1f}%" if up is not None else None),
+                 tom=("up" if dk is not None and dk > 0 else "down" if dk is not None and dk < 0 else None)),
+        kpi_card("⚖️", L(tx, "aval_premio_bv"), f"{pb * 100:+.1f}%" if pb is not None else "n/d", None,
+                 tom=("up" if pb is not None and pb < 0 else "down" if pb is not None and pb > 1 else None)),
+    ])
+    if l["fonte_preco"] != FONTE_PRECO_MANUAL and float(l["preco_manual"]) > 0 and abs(float(l["preco"]) / float(l["preco_manual"]) - 1) > 0.01:
+        st.caption("⚠️ " + L(tx, "aval_preco_desfasado").format(manual=kz(float(l["preco_manual"])), pct=f"{(float(l['preco']) / float(l['preco_manual']) - 1) * 100:+.1f}%"))
     if vj is None:
         st.warning("Premissas inválidas para o modelo: o crescimento assumido (g) tem de ser inferior ao custo de capital (Ke). Ajusta as premissas no painel do administrador.")
     else:
@@ -8525,9 +8692,10 @@ def pagina_avaliacao_activos(tx: dict):
         a = {"sector": r["sector"], "preco": float(r["preco"]), "acoes_circulacao": float(r["acoes_circulacao"]), "lucro_liquido": float(r["lucro_liquido"]),
              "ganho_pontual": float(r["ganho_pontual"]), "capital_proprio": float(r["capital_proprio"]), "dividendo_total": float(r["dividendo_total"]), "crescimento_g": float(r["crescimento_g"])}
         ml = calcular_metricas_avaliacao(a, premissas)
-        rows.append({"Empresa": r["empresa"], "Sector": r["sector"], "P/E": ml["pe"], "P/BV": ml["pbv"], "ROE": (ml["roe"] * 100) if ml["roe"] is not None else None,
-                     "DY": ml["dy_nominal"] * 100, "Upside DDM": (ml["upside"] * 100) if ml["upside"] is not None else None})
-        xl_rows.append([r["empresa"], r["sector"], ml["pe"], ml["pbv"], ml["roe"], ml["dy_nominal"], ml["upside"]])
+        rows.append({"Empresa": r["empresa"], "Sector": r["sector"], L(tx, "aval_preco_fecho"): a["preco"], "P/E": ml["pe"], "DY": ml["dy_nominal"] * 100,
+                     L(tx, "aval_bvps_curto"): ml["bvps"], "P/BV": ml["pbv"], "ROE": (ml["roe"] * 100) if ml["roe"] is not None else None,
+                     tx["aval_vj"]: ml["valor_justo"], L(tx, "aval_dif_kz"): ml["diferenca_kz"], "Upside DDM": (ml["upside"] * 100) if ml["upside"] is not None else None})
+        xl_rows.append([r["empresa"], r["sector"], a["preco"], ml["pe"], ml["dy_nominal"], ml["bvps"], ml["pbv"], ml["roe"], ml["valor_justo"], ml["diferenca_kz"], ml["upside"]])
         nomes.append(str(r["empresa"]))
         precos.append(a["preco"])
         justos.append(ml["valor_justo"])
@@ -8535,7 +8703,9 @@ def pagina_avaliacao_activos(tx: dict):
     num = pd.DataFrame(rows)
     with st.expander("🏁 " + tx["aval_comparacao"].replace("#", "").replace("*", "").strip(), expanded=True):
         f = lambda s: (lambda v: "n/d" if v is None or pd.isna(v) else s.format(v))
-        sty = num.style.format({"P/E": f("{:.1f}x"), "P/BV": f("{:.2f}x"), "ROE": f("{:.1f}%"), "DY": f("{:.1f}%"), "Upside DDM": f("{:+.1f}%")}).map(cor_variacao, subset=["Upside DDM"])
+        _c_dif = L(tx, "aval_dif_kz")
+        sty = num.style.format({L(tx, "aval_preco_fecho"): f("{:,.0f}"), "P/E": f("{:.1f}x"), "DY": f("{:.1f}%"), L(tx, "aval_bvps_curto"): f("{:,.0f}"), "P/BV": f("{:.2f}x"),
+                                "ROE": f("{:.1f}%"), tx["aval_vj"]: f("{:,.0f}"), _c_dif: f("{:+,.0f}"), "Upside DDM": f("{:+.1f}%")}).map(cor_variacao, subset=[_c_dif, "Upside DDM"])
         st.dataframe(sty, hide_index=True)
         g1, g2 = st.columns(2)
         with g1:
@@ -8557,6 +8727,13 @@ def pagina_avaliacao_activos(tx: dict):
 
 **Dividend Yield (DY):** retorno em dividendos ao preço actual.
 - Com a inflação em vigor, um DY abaixo da inflação significa retorno real negativo em dividendos
+
+**Valor contabilístico por acção:** capital próprio dividido pelo número de acções (o que sobraria por acção se a empresa fosse liquidada ao valor dos livros). O P/BV compara o preço com este valor.
+- Preço abaixo do valor contabilístico → desconto sobre os livros · muito acima → o mercado paga pelo crescimento e pela rentabilidade futura
+
+**Preço de fecho:** vem das cotações (Cotações & Activos ou Mercado BODIVA), por isso acompanha o mercado; a fonte e a hora aparecem no cartão.
+
+**Diferença:** valor justo menos preço de fecho, em Kz e em %. Positiva → o preço está abaixo do valor justo estimado.
 
 **Upside DDM:** diferença entre o valor justo do modelo de dividendos e o preço de mercado.
 - Positivo → possível subvalorização; negativo → possível sobrevalorização. ⚠️ O DDM é muito sensível a g e Ke: usa-o como referência, não como verdade absoluta.
@@ -8606,7 +8783,7 @@ def _conteudo_activo(info: dict):
         st.caption("O histórico de preços deste título ainda não está disponível.")
     # indicadores de avaliação (se o título estiver avaliado)
     try:
-        df_aval = obter_avaliacoes()
+        df_aval = obter_avaliacoes_alinhadas()
         alvo = None
         for _, r in df_aval.iterrows():
             t_ = ticker_por_nome(r["empresa"])
@@ -8622,6 +8799,12 @@ def _conteudo_activo(info: dict):
                        kpi_card("🎯", "Valor justo (DDM)", kz(m["valor_justo"]) if m["valor_justo"] is not None else "n/d",
                                 (f"{m['upside'] * 100:+.1f}% face ao preço" if m["upside"] is not None else None), None,
                                 ("up" if m["upside"] and m["upside"] > 0 else "down" if m["upside"] is not None and m["upside"] < 0 else None))])
+            _tx = t()
+            kpi_linha([kpi_card("📚", L(_tx, "aval_bvps"), kz(m["bvps"]) if m["bvps"] else "n/d", (f"{L(_tx, 'aval_bv_total')}: {kz(m['valor_contabilistico'])}" if m["valor_contabilistico"] else None)),
+                       kpi_card("↔️", L(_tx, "aval_diferenca"), (("+" if m["diferenca_kz"] > 0 else "") + kz(m["diferenca_kz"])) if m["diferenca_kz"] is not None else "n/d", None, None,
+                                ("up" if m["diferenca_kz"] and m["diferenca_kz"] > 0 else "down" if m["diferenca_kz"] and m["diferenca_kz"] < 0 else None)),
+                       kpi_card("⚖️", L(_tx, "aval_premio_bv"), f"{m['premio_bv'] * 100:+.1f}%" if m["premio_bv"] is not None else "n/d", None, None,
+                                ("up" if m["premio_bv"] is not None and m["premio_bv"] < 0 else None))])
             if m["valor_justo"]:
                 render_html(html_medidor_valor(av["preco"], m["valor_justo"]))
     except Exception:
