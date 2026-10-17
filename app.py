@@ -1712,35 +1712,7 @@ def botoes_partilha(texto: str, topo: int = 14):
 # =========================================================
 # CONSTANTES E SEGREDOS
 # =========================================================
-def _normalizar_database_url(bruto) -> str:
-    """Limpa o DATABASE_URL: tira aspas, espaços e o prefixo «psql», codifica símbolos da palavra-passe (@ / # ? %) e garante SSL (a Neon exige)."""
-    import re as _re
-    from urllib.parse import quote, unquote
-    u = (bruto or "").strip().strip("'\"").strip()
-    if u.lower().startswith("psql "):
-        u = u[5:].strip().strip("'\"").strip()
-    m = _re.match(r"^(postgres(?:ql)?)://([^:/?#@]+):(.*)@([^@/?#]+)(/[^?]*)?(\?.*)?$", u)
-    if not m:
-        return u
-    esq, utilizador, senha, host, caminho, consulta = m.groups()
-    u = f"{esq}://{quote(unquote(utilizador), safe='')}:{quote(unquote(senha), safe='')}@{host}{caminho or ''}{consulta or ''}"
-    if "sslmode=" not in u:
-        u += ("&" if "?" in u else "?") + "sslmode=require"
-    return u
-
-
-def _diagnostico_url(u: str) -> dict:
-    """Resumo da ligação SEM a palavra-passe (só o tamanho dela), para comparar com o que a Neon mostra."""
-    from urllib.parse import urlsplit, unquote, parse_qsl
-    try:
-        p = urlsplit(u)
-        return {"utilizador": unquote(p.username or ""), "host": p.hostname or "", "porta": p.port or 5432, "base_de_dados": (p.path or "").lstrip("/"),
-                "sslmode": dict(parse_qsl(p.query)).get("sslmode", "(não definido)"), "tamanho_da_palavra_passe": len(unquote(p.password or ""))}
-    except Exception:
-        return {}
-
-
-DATABASE_URL = _normalizar_database_url(os.environ.get("DATABASE_URL"))
+DATABASE_URL = os.environ.get("DATABASE_URL")
 ADMIN_EMAIL_INICIAL    = os.environ.get("ADMIN_EMAIL", "admin@appo.co.ao")
 ADMIN_PASSWORD_INICIAL = os.environ.get("ADMIN_PASSWORD_INICIAL", "MudarAgora123!")
 TEMPO_LIMITE_SESSAO_SEGUNDOS = 60 * 60
@@ -5265,24 +5237,7 @@ def _arranque_bd():
 try:
     _arranque_bd()
 except Exception as _erro_bd:
-    _msg_bd = str(_erro_bd)
-    _diag_bd = _diagnostico_url(DATABASE_URL)
-    print(f"[APPO] Falha ao ligar à base de dados: {type(_erro_bd).__name__}: {_msg_bd.strip()[:300]} | ligação usada: {_diag_bd}", flush=True)   # fica nos registos da Render
-    if "authentication failed" in _msg_bd:
-        _causa_bd = "A palavra-passe do DATABASE_URL já não é aceite (mudou na Neon, ou é de outro branch/projecto)."
-    elif "could not translate host name" in _msg_bd or "Name or service not known" in _msg_bd:
-        _causa_bd = "O endereço (host) do DATABASE_URL não existe: confirma-o na Neon."
-    elif "timeout" in _msg_bd.lower() or "could not connect" in _msg_bd.lower():
-        _causa_bd = "A base de dados não respondeu: pode estar a acordar, suspensa, ou o host está errado."
-    elif "ssl" in _msg_bd.lower():
-        _causa_bd = "Problema de SSL: o URL deve incluir sslmode=require."
-    else:
-        _causa_bd = "Erro ao ligar à base de dados."
-    st.error("A app não conseguiu ligar-se à base de dados neste momento. Os dados estão seguros; é um problema de ligação, e o detalhe está nos registos do serviço.")
-    if os.environ.get("APPO_DIAG") == "1":      # painel técnico: só aparece se o administrador definir APPO_DIAG=1 na Render
-        st.warning(_causa_bd)
-        st.json(_diag_bd)
-        st.caption("Compara o host, o utilizador e a base com o «Connect» da Neon. Remove a variável APPO_DIAG quando acabares.")
+    st.error(f"Não foi possível preparar a base de dados: {type(_erro_bd).__name__}: {_erro_bd}")
     st.stop()
 
 # =========================================================
@@ -8913,6 +8868,188 @@ def sincronizar_activos_auto():
         traceback.print_exc()
 
 
+# =========================================================
+# ANÁLISE TÉCNICA (fechos diários) — médias móveis, RSI, MACD, Bollinger, volatilidade e liquidez
+# =========================================================
+def calcular_indicadores(fecho: pd.Series) -> pd.DataFrame:
+    """Indicadores clássicos sobre fechos diários. Cada um só aparece quando há sessões suficientes (antes disso fica vazio, nunca inventa)."""
+    s = pd.to_numeric(fecho, errors="coerce").astype(float)
+    d = pd.DataFrame({"Fecho": s})
+    d["SMA 20"] = s.rolling(20).mean()
+    d["SMA 50"] = s.rolling(50).mean()
+    e12, e26 = s.ewm(span=12, adjust=False, min_periods=12).mean(), s.ewm(span=26, adjust=False, min_periods=26).mean()
+    d["MACD"] = e12 - e26
+    d["Sinal"] = d["MACD"].ewm(span=9, adjust=False, min_periods=9).mean()
+    delta = s.diff()
+    ganho, perda = delta.clip(lower=0), (-delta).clip(lower=0)
+    mg, mp = ganho.ewm(alpha=1 / 14, adjust=False, min_periods=14).mean(), perda.ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
+    rsi = 100 - 100 / (1 + mg / mp.where(mp != 0))
+    d["RSI"] = rsi.where(~((mp == 0) & mg.notna()), 100.0)
+    dp = s.rolling(20).std(ddof=0)
+    d["Banda sup."] = d["SMA 20"] + 2 * dp
+    d["Banda inf."] = d["SMA 20"] - 2 * dp
+    d["Volatilidade 20"] = s.pct_change().rolling(20).std() * 100
+    return d
+
+
+def leitura_tecnica(d: pd.DataFrame) -> list:
+    """Lista de (título, estado, tom, explicação). tom: 'up' | 'down' | 'flat'. Descreve condições observadas — não é recomendação."""
+    out = []
+    u = d.iloc[-1]
+    ok = lambda c: c in d.columns and pd.notna(u.get(c))
+    if ok("SMA 20"):
+        acima = u["Fecho"] >= u["SMA 20"]
+        out.append(("Preço vs média de 20 sessões", "Acima" if acima else "Abaixo", "up" if acima else "down",
+                    f"Fecho {fmt_milhares(u['Fecho'], 0)} Kz; média {fmt_milhares(u['SMA 20'], 0)} Kz."))
+    if ok("SMA 20") and ok("SMA 50"):
+        alta = u["SMA 20"] >= u["SMA 50"]
+        out.append(("Média 20 vs média 50", "Tendência de alta" if alta else "Tendência de baixa", "up" if alta else "down",
+                    "A média curta acima da longa indica força recente; abaixo, fraqueza."))
+    if ok("RSI"):
+        r = float(u["RSI"])
+        est, tom = ("Sobrecompra (>70)", "down") if r > 70 else (("Sobrevenda (<30)", "up") if r < 30 else ("Zona neutra", "flat"))
+        out.append(("RSI (14)", f"{est} · {r:.0f}", tom, "Mede a velocidade das subidas e quedas; acima de 70 o preço pode estar esticado, abaixo de 30 pressionado."))
+    if ok("MACD") and ok("Sinal"):
+        pos = u["MACD"] >= u["Sinal"]
+        out.append(("MACD", "Momento positivo" if pos else "Momento negativo", "up" if pos else "down",
+                    "MACD acima da linha de sinal sugere ganho de impulso; abaixo, perda."))
+    if ok("Banda sup.") and ok("Banda inf."):
+        if u["Fecho"] > u["Banda sup."]:
+            est, tom = "Acima da banda superior", "down"
+        elif u["Fecho"] < u["Banda inf."]:
+            est, tom = "Abaixo da banda inferior", "up"
+        else:
+            est, tom = "Dentro das bandas", "flat"
+        out.append(("Bandas de Bollinger", est, tom, "Fora das bandas o preço está num extremo face às últimas 20 sessões."))
+    if ok("Volatilidade 20"):
+        out.append(("Volatilidade (20 sessões)", f"{u['Volatilidade 20']:.2f}% por sessão", "flat", "Desvio-padrão das variações diárias. Quanto maior, mais o preço oscila."))
+    return out
+
+
+def _lista_tickers_tecnica() -> dict:
+    """{ticker normalizado: nome} dos títulos com histórico guardado (Clube + todo o mercado)."""
+    _tabela_historico_mercado()
+    a = consultar_df("SELECT DISTINCT RTRIM(ticker, 'A') AS tk FROM historico_cotacoes WHERE ticker IS NOT NULL")
+    b = consultar_df("SELECT DISTINCT RTRIM(ticker, 'A') AS tk FROM historico_mercado_bodiva")
+    tks = sorted({str(x).strip().upper() for x in list(a["tk"]) + list(b["tk"]) if str(x).strip()})
+    nomes = {}
+    try:
+        for _, r in obter_activos().iterrows():
+            nomes[_tk_norm(r["ticker"])] = str(r["nome"])
+        for _, r in ler_mercado_guardado().iterrows():
+            nomes.setdefault(_tk_norm(r["ticker"]), str(r["nome"] or ""))
+    except Exception:
+        pass
+    return {t_: nomes.get(t_, "") for t_ in tks}
+
+
+def serie_tecnica(tk: str) -> pd.DataFrame:
+    """Fecho diário de um título: histórico do Clube + histórico do mercado (este tem prioridade) e, quando existir, negócios e valor negociado."""
+    _tabela_historico_mercado()
+    a = consultar_df("SELECT DISTINCT ON (dia) dia, preco FROM historico_cotacoes WHERE RTRIM(ticker, 'A') = %s ORDER BY dia, LENGTH(ticker) DESC", (tk,))
+    b = consultar_df("SELECT dia, fecho, variacao, negocios, quantidade, valor_negociado FROM historico_mercado_bodiva WHERE RTRIM(ticker, 'A') = %s ORDER BY dia", (tk,))
+    sa = pd.Series(pd.to_numeric(a["preco"], errors="coerce").values, index=pd.to_datetime(a["dia"])) if not a.empty else pd.Series(dtype=float)
+    d = pd.DataFrame(index=pd.DatetimeIndex(sorted(set(sa.index) | set(pd.to_datetime(b["dia"])))))
+    d["Fecho"] = sa
+    if not b.empty:
+        b = b.assign(dia=pd.to_datetime(b["dia"])).drop_duplicates("dia", keep="last").set_index("dia")
+        d["Fecho"] = pd.to_numeric(b["fecho"], errors="coerce").combine_first(d["Fecho"])
+        for c in ("variacao", "negocios", "quantidade", "valor_negociado"):
+            d[c] = pd.to_numeric(b[c], errors="coerce")
+    for c in ("variacao", "negocios", "quantidade", "valor_negociado"):
+        if c not in d.columns:
+            d[c] = float("nan")
+    return d.dropna(subset=["Fecho"]).sort_index()
+
+
+_COR_TOM = {"up": "#00A84F", "down": "#F0142F", "flat": "#6D28D9"}
+
+
+def pagina_analise_tecnica():
+    if not eh_investidor():
+        st.warning("Esta página faz parte do portal Investidor. Faz o teu perfil em «🧭 Perfil de Investidor» para a desbloquear.")
+        return
+    render_html('<div class="fx-aviso-risco"><b>⚠️ Aviso importante.</b> Esta página é uma ferramenta analítica e educativa. As leituras mostram condições '
+                'observadas nos preços passados e <b>não constituem aconselhamento, recomendação nem pedido de compra ou venda</b> de valores mobiliários. '
+                'Usa fechos <b>diários</b> da BODIVA, um mercado com poucos negócios, onde os indicadores técnicos dão sinais menos fiáveis do que em mercados líquidos. '
+                'O desempenho passado não garante resultados futuros. Decide sempre com a tua própria análise.</div>')
+    tickers = _lista_tickers_tecnica()
+    if not tickers:
+        st.info("Ainda não há histórico de preços. A app começa a guardá-lo sozinha, uma vez por sessão da BODIVA; volta daqui a alguns dias.")
+        return
+    c1, c2 = st.columns([3, 2])
+    tk = c1.selectbox("Título", list(tickers.keys()), key="tec_tk", format_func=lambda t_: f"{tickers[t_]} ({t_})" if tickers[t_] else t_)
+    per = c2.radio("Período", ["3 meses", "6 meses", "1 ano", "Tudo"], index=3, horizontal=True, key="tec_per")
+    dados = serie_tecnica(tk)
+    n = len(dados)
+    if n < 2:
+        st.info(f"Só há {n} sessão guardada para este título. São precisas pelo menos 2 para o gráfico e cerca de 20 para as médias e bandas.")
+        return
+    st.caption(f"📚 Histórico: {n} sessão(ões), de {dados.index.min():%d/%m/%Y} a {dados.index.max():%d/%m/%Y}. "
+               "Indicadores aparecem à medida que há sessões: médias de 20 (20), RSI (15), MACD (35), média de 50 (50).")
+    ind = calcular_indicadores(dados["Fecho"])
+    dias = {"3 meses": 92, "6 meses": 183, "1 ano": 366, "Tudo": None}[per]
+    vis = ind if dias is None else ind[ind.index >= ind.index.max() - pd.Timedelta(days=dias)]
+    vis_d = dados.loc[vis.index]
+
+    st.markdown("#### 🔎 Leitura técnica")
+    leit = leitura_tecnica(ind)
+    if len(leit) < 2:
+        st.info("Ainda há poucas sessões para uma leitura técnica completa. Já aparece o gráfico de preços; os indicadores vão surgindo com o tempo.")
+    else:
+        pos, neg = sum(1 for x in leit if x[2] == "up"), sum(1 for x in leit if x[2] == "down")
+        resumo = "equilibrada" if pos == neg else ("com mais condições positivas" if pos > neg else "com mais condições negativas")
+        st.caption(f"Resumo: {pos} condição(ões) positiva(s), {neg} negativa(s). Leitura global {resumo}. É um retrato do passado recente, não uma previsão.")
+        cols = st.columns(2)
+        for i, (tit, est, tom, expl) in enumerate(leit):
+            with cols[i % 2]:
+                render_html(f'<div style="border:1px solid #E4D4FB;border-left:6px solid {_COR_TOM[tom]};border-radius:12px;padding:10px 14px;margin-bottom:10px;background:#FFFFFF;">'
+                            f'<div style="font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#6D28D9;">{_esc(tit)}</div>'
+                            f'<div style="font-size:1.05rem;font-weight:800;color:{_COR_TOM[tom]};">{_esc(est)}</div>'
+                            f'<div style="font-size:.82rem;color:#475569;">{_esc(expl)}</div></div>')
+
+    st.markdown("#### 📈 Preço e médias móveis")
+    bandas = st.toggle("Mostrar bandas de Bollinger", value=False, key="tec_bb")
+    cols_preco = ["Fecho", "SMA 20", "SMA 50"] + (["Banda sup.", "Banda inf."] if bandas else [])
+    graf1 = vis[cols_preco].dropna(how="all", axis=1)
+    fx_linhas(graf1, height=320)
+    ampliar_grafico(graf1, f"{tickers[tk] or tk}: preço e médias móveis", "tec_preco")
+
+    if vis["RSI"].notna().any():
+        st.markdown("#### 🌡️ RSI (14)")
+        g2 = vis[["RSI"]].copy()
+        g2["Sobrecompra (70)"], g2["Sobrevenda (30)"] = 70.0, 30.0
+        fx_linhas(g2, height=200)
+    if vis["MACD"].notna().any():
+        st.markdown("#### 🌊 MACD")
+        fx_linhas(vis[["MACD", "Sinal"]], height=200)
+
+    liq = vis_d[["negocios", "valor_negociado"]].dropna(how="all")
+    if not liq.empty:
+        st.markdown("#### 💧 Liquidez (negócios por sessão)")
+        ultimas = liq.tail(30)
+        graf_liq = pd.DataFrame({"Valor negociado (Kz)": ultimas["valor_negociado"].values}, index=[x.strftime("%d/%m") for x in ultimas.index])
+        if graf_liq["Valor negociado (Kz)"].notna().any():
+            fx_barras(graf_liq, height=220)
+        st.caption(f"Média das últimas {min(20, len(liq))} sessões: {fmt_milhares(liq['negocios'].tail(20).mean(), 0)} negócios e "
+                   f"{fmt_milhares(liq['valor_negociado'].tail(20).mean(), 0)} Kz por sessão. Poucos negócios significam preços que se movem com pouco volume.")
+
+    with st.expander("📋 Últimas sessões"):
+        t = dados.tail(30).iloc[::-1].copy()
+        t.index = [x.strftime("%d/%m/%Y") for x in t.index]
+        t = t.rename(columns={"variacao": "Var. %", "negocios": "Negócios", "quantidade": "Quantidade", "valor_negociado": "Valor negociado (Kz)"})
+        st.dataframe(t.style.format({"Fecho": lambda v: fmt_milhares(v, 2), "Var. %": lambda v: "—" if pd.isna(v) else f"{v:+.2f}%".replace(".", ","),
+                                     "Negócios": lambda v: "—" if pd.isna(v) else fmt_milhares(v, 0), "Quantidade": lambda v: "—" if pd.isna(v) else fmt_milhares(v, 0),
+                                     "Valor negociado (Kz)": lambda v: "—" if pd.isna(v) else fmt_milhares(v, 0)}), use_container_width=True)
+    with st.expander("📖 O que significa cada indicador"):
+        st.markdown("- **Média móvel (SMA)**: média dos últimos N fechos. Suaviza o ruído e mostra a tendência.\n"
+                    "- **RSI**: de 0 a 100. Acima de 70 sugere subida acelerada; abaixo de 30, queda acelerada.\n"
+                    "- **MACD**: diferença entre duas médias rápidas; quando cruza a linha de sinal indica mudança de impulso.\n"
+                    "- **Bandas de Bollinger**: faixa de 2 desvios-padrão em torno da média de 20; fora dela o preço está num extremo.\n"
+                    "- **Volatilidade**: quanto o preço oscila por sessão.\n"
+                    "- **Liquidez**: número de negócios e valor negociado; sem liquidez, qualquer indicador perde fiabilidade.")
+
+
 def ampliar_grafico(df: pd.DataFrame, titulo: str, chave: str, **kw):
     """Botão «Ampliar» que abre o gráfico de linhas numa janela grande (st.dialog). Sem st.dialog na versão do Streamlit, não mostra nada."""
     if not hasattr(st, "dialog"):
@@ -10521,7 +10658,7 @@ _MENU_GRUPOS = []   # lista de (título do bloco, [páginas visíveis])
 _MENU_GRUPOS.append(("COMEÇAR", ["🏠 Início & Análises", "🧭 Perfil de Investidor", "🧠 Capacidade Financeira"]))
 _MENU_GRUPOS.append(("APRENDER", ["📚 Biblioteca Educativa", "🎓 Educação & Serviços", "🧪 Simulador de Investimento", "🧮 Princípio 50/30/20"]))
 if eh_investidor():   # Portal Investidor (níveis avançados)
-    _MENU_GRUPOS.append(("INVESTIR", ["📈 Cotações & Activos", "🎯 Terminal de Decisão", "📐 Avaliação de Activos", "💱 Conversor de Moeda"]))
+    _MENU_GRUPOS.append(("INVESTIR", ["📈 Cotações & Activos", "📉 Análise Técnica", "🎯 Terminal de Decisão", "📐 Avaliação de Activos", "💱 Conversor de Moeda"]))
 _clube = []
 if eh_participante():
     _clube += ["💰 Contabilidade & Finanças", "📊 Histórico & Relatórios"]   # área patrimonial restrita
@@ -10555,7 +10692,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 if st.session_state.get("autenticado") and not eh_investidor():
     st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
                       help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
-st.sidebar.caption("Versão da app: 2026-10-17 · R (histórico diário do mercado BODIVA)")
+st.sidebar.caption("Versão da app: 2026-10-17 · S (Análise Técnica)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
@@ -10724,6 +10861,14 @@ try:
     # =========================================================
     # PÁGINA: CONTABILIDADE & FINANÇAS
     # =========================================================
+    elif pagina == "📉 Análise Técnica":
+        hero("📉 Análise Técnica", "Médias móveis, RSI, MACD e bandas de Bollinger sobre os fechos diários da BODIVA", badge="🇦🇴 Fechos diários · Kwanzas (Kz)")
+        try:
+            pagina_analise_tecnica()
+        except Exception:
+            traceback.print_exc()
+            st.error("Não foi possível abrir a análise técnica neste momento. Tenta de novo dentro de instantes.")
+
     elif pagina == "🎯 Terminal de Decisão":
         pagina_terminal_decisao()
 
