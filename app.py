@@ -1712,7 +1712,35 @@ def botoes_partilha(texto: str, topo: int = 14):
 # =========================================================
 # CONSTANTES E SEGREDOS
 # =========================================================
-DATABASE_URL = os.environ.get("DATABASE_URL")
+def _normalizar_database_url(bruto) -> str:
+    """Limpa o DATABASE_URL: tira aspas, espaços e o prefixo «psql», codifica símbolos da palavra-passe (@ / # ? %) e garante SSL (a Neon exige)."""
+    import re as _re
+    from urllib.parse import quote, unquote
+    u = (bruto or "").strip().strip("'\"").strip()
+    if u.lower().startswith("psql "):
+        u = u[5:].strip().strip("'\"").strip()
+    m = _re.match(r"^(postgres(?:ql)?)://([^:/?#@]+):(.*)@([^@/?#]+)(/[^?]*)?(\?.*)?$", u)
+    if not m:
+        return u
+    esq, utilizador, senha, host, caminho, consulta = m.groups()
+    u = f"{esq}://{quote(unquote(utilizador), safe='')}:{quote(unquote(senha), safe='')}@{host}{caminho or ''}{consulta or ''}"
+    if "sslmode=" not in u:
+        u += ("&" if "?" in u else "?") + "sslmode=require"
+    return u
+
+
+def _diagnostico_url(u: str) -> dict:
+    """Resumo da ligação SEM a palavra-passe (só o tamanho dela), para comparar com o que a Neon mostra."""
+    from urllib.parse import urlsplit, unquote, parse_qsl
+    try:
+        p = urlsplit(u)
+        return {"utilizador": unquote(p.username or ""), "host": p.hostname or "", "porta": p.port or 5432, "base_de_dados": (p.path or "").lstrip("/"),
+                "sslmode": dict(parse_qsl(p.query)).get("sslmode", "(não definido)"), "tamanho_da_palavra_passe": len(unquote(p.password or ""))}
+    except Exception:
+        return {}
+
+
+DATABASE_URL = _normalizar_database_url(os.environ.get("DATABASE_URL"))
 ADMIN_EMAIL_INICIAL    = os.environ.get("ADMIN_EMAIL", "admin@appo.co.ao")
 ADMIN_PASSWORD_INICIAL = os.environ.get("ADMIN_PASSWORD_INICIAL", "MudarAgora123!")
 TEMPO_LIMITE_SESSAO_SEGUNDOS = 60 * 60
@@ -5237,7 +5265,24 @@ def _arranque_bd():
 try:
     _arranque_bd()
 except Exception as _erro_bd:
-    st.error(f"Não foi possível preparar a base de dados: {type(_erro_bd).__name__}: {_erro_bd}")
+    _msg_bd = str(_erro_bd)
+    _diag_bd = _diagnostico_url(DATABASE_URL)
+    print(f"[APPO] Falha ao ligar à base de dados: {type(_erro_bd).__name__}: {_msg_bd.strip()[:300]} | ligação usada: {_diag_bd}", flush=True)   # fica nos registos da Render
+    if "authentication failed" in _msg_bd:
+        _causa_bd = "A palavra-passe do DATABASE_URL já não é aceite (mudou na Neon, ou é de outro branch/projecto)."
+    elif "could not translate host name" in _msg_bd or "Name or service not known" in _msg_bd:
+        _causa_bd = "O endereço (host) do DATABASE_URL não existe: confirma-o na Neon."
+    elif "timeout" in _msg_bd.lower() or "could not connect" in _msg_bd.lower():
+        _causa_bd = "A base de dados não respondeu: pode estar a acordar, suspensa, ou o host está errado."
+    elif "ssl" in _msg_bd.lower():
+        _causa_bd = "Problema de SSL: o URL deve incluir sslmode=require."
+    else:
+        _causa_bd = "Erro ao ligar à base de dados."
+    st.error("A app não conseguiu ligar-se à base de dados neste momento. Os dados estão seguros; é um problema de ligação, e o detalhe está nos registos do serviço.")
+    if os.environ.get("APPO_DIAG") == "1":      # painel técnico: só aparece se o administrador definir APPO_DIAG=1 na Render
+        st.warning(_causa_bd)
+        st.json(_diag_bd)
+        st.caption("Compara o host, o utilizador e a base com o «Connect» da Neon. Remove a variável APPO_DIAG quando acabares.")
     st.stop()
 
 # =========================================================
@@ -8759,10 +8804,111 @@ def _sync_activos_cache() -> dict:
     return res
 
 
+# ---------------- Histórico diário do mercado BODIVA (fecho, variação, nº de negócios, quantidade e valor negociados) ----------------
+# A BODIVA (GetAllMarketSummary) só dá o resumo da sessão: NÃO traz abertura, máximo nem mínimo. Guardamos tudo o que traz, um registo por título e por dia
+# de sessão (a data vem da própria BODIVA, por isso repetir o pedido durante o dia não duplica nada).
+_HIST_MERCADO_PRONTO = False
+
+
+def _tabela_historico_mercado():
+    global _HIST_MERCADO_PRONTO
+    if _HIST_MERCADO_PRONTO:
+        return
+    executar("""CREATE TABLE IF NOT EXISTS historico_mercado_bodiva (
+                    dia DATE NOT NULL, ticker TEXT NOT NULL, tipo TEXT, fecho NUMERIC, variacao NUMERIC,
+                    negocios INTEGER, quantidade NUMERIC, valor_negociado NUMERIC, capturado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (dia, ticker))""")
+    _HIST_MERCADO_PRONTO = True
+
+
+def _num_simples(v):
+    try:
+        x = float(str(v).strip().replace(" ", "").replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    return None if x != x else x
+
+
+def extrair_snapshot_bodiva(dados) -> list:
+    """Percorre o JSON da BODIVA e devolve [(dia, ticker, tipo, fecho, variacao, negocios, quantidade, valor)] dos registos com SYMBOL + CLOSE_PRICE + TRANS_DATE."""
+    saida, vistos = [], set()
+
+    def _ve(x, prof=0):
+        if prof > 6:
+            return
+        if isinstance(x, dict):
+            chaves = {str(k).upper(): k for k in x}
+            if "SYMBOL" in chaves and "CLOSE_PRICE" in chaves and "TRANS_DATE" in chaves:
+                tk = str(x[chaves["SYMBOL"]] or "").strip().upper()
+                fecho = _num_simples(x[chaves["CLOSE_PRICE"]])
+                try:
+                    dia = datetime.strptime(str(x[chaves["TRANS_DATE"]])[:10], "%Y-%m-%d").date()
+                except ValueError:
+                    dia = None
+                if tk and dia and fecho and fecho > 0 and (dia, tk) not in vistos:
+                    vistos.add((dia, tk))
+                    neg = _num_simples(x.get(chaves.get("TRADES_COUNT")))
+                    saida.append((dia, tk, str(x.get(chaves.get("TYPOLOGY")) or "").strip(), fecho, _num_simples(x.get(chaves.get("CHANGE_PRICE"))),
+                                  int(neg) if neg is not None else None, _num_simples(x.get(chaves.get("TURNOVER"))),
+                                  _num_simples(x.get(chaves.get("TURNOVER_VALUE")))))
+            for v in x.values():
+                if isinstance(v, (dict, list)):
+                    _ve(v, prof + 1)
+        elif isinstance(x, list):
+            for v in x:
+                if isinstance(v, (dict, list)):
+                    _ve(v, prof + 1)
+    _ve(dados)
+    return saida
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _snapshot_mercado_cache() -> dict:
+    """No máximo de 15 em 15 minutos: guarda no histórico o resumo da sessão da BODIVA (todos os títulos cotados)."""
+    res = {"ok": False, "n": 0, "ts": datetime.now(), "erro": None, "dia": None}
+    try:
+        _tabela_historico_mercado()
+        linhas = extrair_snapshot_bodiva(_pedido_bodiva().json())
+        if not linhas:
+            res["erro"] = "A resposta da BODIVA não trouxe registos com SYMBOL, CLOSE_PRICE e TRANS_DATE (o formato pode ter mudado)."
+            return res
+
+        def _run(conn):
+            with conn.cursor() as cur:
+                psycopg2.extras.execute_batch(
+                    cur, "INSERT INTO historico_mercado_bodiva (dia, ticker, tipo, fecho, variacao, negocios, quantidade, valor_negociado) "
+                         "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (dia, ticker) DO UPDATE SET tipo = EXCLUDED.tipo, fecho = EXCLUDED.fecho, "
+                         "variacao = EXCLUDED.variacao, negocios = EXCLUDED.negocios, quantidade = EXCLUDED.quantidade, "
+                         "valor_negociado = EXCLUDED.valor_negociado, capturado_em = NOW()", linhas)
+        _com_reconexao(_run)
+        res.update(ok=True, n=len(linhas), dia=max(l[0] for l in linhas))
+    except Exception as e:
+        traceback.print_exc()
+        res["erro"] = f"{type(e).__name__}: {e}"
+    return res
+
+
+def obter_historico_mercado(ticker: str = None) -> pd.DataFrame:
+    """Histórico guardado (um registo por título e dia). Base do futuro painel de análise técnica."""
+    _tabela_historico_mercado()
+    if ticker:
+        df = consultar_df("SELECT dia, ticker, tipo, fecho, variacao, negocios, quantidade, valor_negociado FROM historico_mercado_bodiva "
+                          "WHERE ticker = %s ORDER BY dia", (str(ticker).strip().upper(),))
+    else:
+        df = consultar_df("SELECT dia, ticker, tipo, fecho, variacao, negocios, quantidade, valor_negociado FROM historico_mercado_bodiva ORDER BY ticker, dia")
+    for c in ("fecho", "variacao", "quantidade", "valor_negociado"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+
 def sincronizar_activos_auto():
     """Chamada em cada visita; o trabalho real só acontece quando a cache expira (5 min)."""
     try:
         _sync_activos_cache()
+    except Exception:
+        traceback.print_exc()
+    try:
+        _snapshot_mercado_cache()
     except Exception:
         traceback.print_exc()
 
@@ -10409,7 +10555,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 if st.session_state.get("autenticado") and not eh_investidor():
     st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
                       help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
-st.sidebar.caption("Versão da app: 2026-10-17 · Q (preços BODIVA automáticos, orçamento simples, vídeos)")
+st.sidebar.caption("Versão da app: 2026-10-17 · R (histórico diário do mercado BODIVA)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
@@ -11546,7 +11692,19 @@ try:
                 st.caption(f"🟠 Última tentativa às {_est['ts']:%H:%M:%S} falhou ({_est['erro']}). Mantêm-se os últimos preços; a app tenta de novo dentro de minutos.")
             if st.button("🔄 Verificar agora", key="adm_auto_agora"):
                 _sync_activos_cache.clear()
+                _snapshot_mercado_cache.clear()
                 st.rerun()
+            try:
+                _hm = obter_historico_mercado()
+                if _hm.empty:
+                    st.caption("📚 Histórico de mercado: ainda sem registos (começa a encher na próxima verificação).")
+                else:
+                    st.caption(f"📚 Histórico de mercado guardado: {_hm['dia'].nunique()} dia(s) de sessão, de {_hm['dia'].min():%d/%m/%Y} a {_hm['dia'].max():%d/%m/%Y}, "
+                               f"{_hm['ticker'].nunique()} títulos. A BODIVA fornece fecho, variação, nº de negócios e volumes (não fornece abertura, máximo nem mínimo).")
+                    st.download_button("⬇️ Descarregar histórico de mercado (CSV)", _hm.to_csv(index=False).encode("utf-8-sig"),
+                                       file_name="historico_mercado_bodiva.csv", mime="text/csv", key="adm_hist_mercado_csv")
+            except Exception:
+                traceback.print_exc()
             st.markdown("**Actualização directa a partir da BODIVA**")
             st.caption("Vai buscar as cotações à BODIVA para os tickers registados acima (gravados). "
                        "Nada é gravado até confirmar na pré-visualização.")
