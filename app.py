@@ -10207,6 +10207,75 @@ def _tom(v, bom, mau):
     return "up" if bom(v) else "down" if mau(v) else None
 
 
+def cenarios_avaliacao(av: dict, m: dict) -> list:
+    """Três cenários do modelo de dividendos: pessimista, base e optimista. Devolve [(nome, g, ke, valor, upside, peso)]."""
+    g0, ke0, dps, preco = float(av["crescimento_g"]), float(m["ke"]), float(m["dps"]), float(av["preco"])
+    defs = [("Pessimista", max(0.0, g0 - 0.03), ke0 + 0.02, 0.25), ("Base", g0, ke0, 0.50), ("Optimista", g0 + 0.02, max(ke0 - 0.01, 0.0), 0.25)]
+    out = []
+    for nome, g, ke, w in defs:
+        v = (dps * (1 + g) / (ke - g)) if ke > g and dps > 0 else None
+        out.append((nome, g, ke, v, ((v - preco) / preco) if v is not None and preco else None, w))
+    return out
+
+
+def pontuacao_fundamental(m: dict, av: dict, infl: float) -> list:
+    """Folha de pontuação: cada critério vale 0, 1 ou 2 pontos. Devolve [(critério, valor_texto, pontos, leitura)]; critérios sem dados ficam de fora."""
+    L_ = []
+    up = m.get("upside")
+    if up is not None:
+        L_.append(("Valor justo (DDM) vs preço", f"{up * 100:+.1f}%", 2 if up > 0.15 else (1 if up > -0.15 else 0), "Acima de +15%: preço abaixo do valor justo."))
+    pe = m.get("pe")
+    if pe is not None:
+        L_.append(("P/E", f"{pe:.1f}x", 2 if pe < 8 else (1 if pe <= 15 else 0), "Abaixo de 8x barato; acima de 15x caro."))
+    pb = m.get("pbv")
+    if pb is not None:
+        L_.append(("P/BV", f"{pb:.2f}x", 2 if pb <= 1 else (1 if pb <= 2 else 0), "Até 1x: preço não excede o valor contabilístico."))
+    dy = m.get("dy_nominal")
+    if dy is not None and av.get("dividendo_total", 0) > 0:
+        L_.append(("Dividendo vs inflação", f"{dy * 100:.1f}% (inflação {infl * 100:.1f}%)", 2 if dy >= infl else (1 if dy >= infl / 2 else 0), "O dividendo deve, no mínimo, acompanhar a inflação."))
+    roe = m.get("roe")
+    if roe is not None and m.get("ke"):
+        L_.append(("ROE vs custo de capital (Ke)", f"{roe * 100:.1f}% (Ke {m['ke'] * 100:.1f}%)", 2 if roe >= m["ke"] else (1 if roe >= m["ke"] * 0.7 else 0), "A empresa deve render mais do que o capital exige."))
+    po = m.get("payout")
+    if po is not None:
+        L_.append(("Pagamento de dividendos (payout)", f"{po * 100:.0f}%", 2 if 0.3 <= po <= 0.7 else (1 if 0 < po <= 1.0 else 0), "Entre 30% e 70% do lucro é equilibrado; acima de 100% é insustentável."))
+    return L_
+
+
+def painel_cenarios_pontuacao(av: dict, m: dict, infl: float):
+    sc = cenarios_avaliacao(av, m)
+    st.markdown("##### 🎭 Cenários do valor justo")
+    dfc = pd.DataFrame([{"Cenário": n, "Crescimento (g)": g * 100, "Custo de capital (Ke)": k * 100, "Valor justo (Kz)": v, "Potencial": (u * 100) if u is not None else None, "Peso": w * 100}
+                        for n, g, k, v, u, w in sc])
+    fm = lambda f_: (lambda x: "n/d" if x is None or pd.isna(x) else f_.format(x))
+    st.dataframe(dfc.style.format({"Crescimento (g)": "{:.1f}%", "Custo de capital (Ke)": "{:.1f}%", "Valor justo (Kz)": fm("{:,.0f}"), "Potencial": fm("{:+.1f}%"), "Peso": "{:.0f}%"})
+                 .map(cor_variacao, subset=["Potencial"]), hide_index=True, use_container_width=True)
+    val = [(v, w) for _, _, _, v, _, w in sc if v is not None]
+    if len(val) == 3:
+        esp = sum(v * w for v, w in val)
+        st.caption(f"Valor esperado ponderado (25% / 50% / 25%): {kz(esp)} · {((esp / av['preco'] - 1) * 100):+.1f}% face ao preço de {kz(av['preco'])}. "
+                   f"Intervalo: {kz(val[0][0])} a {kz(val[2][0])}.")
+    else:
+        st.caption("Algum cenário não é calculável (sem dividendo registado, ou g igual ou superior ao Ke). Revê as premissas no Painel do Administrador.")
+    st.markdown("##### 🧾 Folha de pontuação fundamental")
+    crit = pontuacao_fundamental(m, av, infl)
+    if len(crit) < 3:
+        st.info("Faltam dados (lucro, capital próprio ou dividendos) para pontuar este título.")
+    else:
+        tot, mx = sum(c[2] for c in crit), 2 * len(crit)
+        nota = tot / mx * 10
+        etiqueta, tom = ("Fundamentos fortes", "up") if nota >= 7 else (("Fundamentos intermédios", "flat") if nota >= 4 else ("Fundamentos fracos", "down"))
+        cor = _COR_TOM[tom]
+        render_html(f'<div style="border:1px solid #E4D4FB;border-left:6px solid {cor};border-radius:12px;padding:10px 14px;margin-bottom:10px;background:#FFFFFF;">'
+                    f'<div style="font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#6D28D9;">Pontuação</div>'
+                    f'<div style="font-size:1.4rem;font-weight:800;color:{cor};">{nota:.1f} / 10 · {etiqueta}</div>'
+                    f'<div style="font-size:.82rem;color:#475569;">{tot} de {mx} pontos em {len(crit)} critérios.</div></div>')
+        sim = {2: "● ● Favorável", 1: "● Neutro", 0: "○ Desfavorável"}
+        st.dataframe(pd.DataFrame([{"Critério": c[0], "Valor": c[1], "Leitura": sim[c[2]], "Como se lê": c[3]} for c in crit]), hide_index=True, use_container_width=True)
+    st.markdown('<div class="fx-aviso-risco"><b>⚠️ Aviso.</b> Cenários e pontuação são estimativas simplificadas a partir dos dados registados (modelo de dividendos e múltiplos). '
+                'Servem de apoio à discussão do Clube e não constituem aconselhamento nem recomendação de compra ou venda.</div>', unsafe_allow_html=True)
+
+
 def pagina_avaliacao_activos(tx: dict):
     premissas = obter_premissas_macro()
     df_aval = obter_avaliacoes_alinhadas()
@@ -10298,6 +10367,12 @@ def pagina_avaliacao_activos(tx: dict):
         st.dataframe(sty_sens, hide_index=True)
         st.caption("Roxo: valor justo igual ou acima do preço actual. Vinho: abaixo do preço actual.")
         st.caption("Roxo: valor justo acima do preço actual · rosa: abaixo. Mostra como o valor justo muda se o crescimento (g) ou o custo de capital (Ke) variarem ±2 p.p.")
+    with st.expander("🎭 Cenários e pontuação fundamental", expanded=False):
+        try:
+            painel_cenarios_pontuacao(av, m, infl)
+        except Exception:
+            traceback.print_exc()
+            st.error("Não foi possível calcular os cenários para esta empresa.")
     rows, xl_rows, nomes, precos, justos, ups = [], [], [], [], [], []
     for _, r in df_aval.iterrows():
         a = {"sector": r["sector"], "preco": float(r["preco"]), "acoes_circulacao": float(r["acoes_circulacao"]), "lucro_liquido": float(r["lucro_liquido"]),
@@ -10871,7 +10946,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 if st.session_state.get("autenticado") and not eh_investidor():
     st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
                       help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
-st.sidebar.caption("Versão da app: 2026-10-17 · U (Risco da carteira)")
+st.sidebar.caption("Versão da app: 2026-10-17 · V (Cenários e pontuação)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
