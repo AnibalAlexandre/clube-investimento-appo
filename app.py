@@ -1363,6 +1363,27 @@ body:has([data-testid="stSidebar"][aria-expanded="true"]) .appo-fixo { left: 21r
 """
 
 
+CSS_APPO_FASE11 = """
+/* FASE 11 — entrada suave dos cartões e relevo elegante ao passar o rato (respeita "reduzir movimento") */
+@keyframes appo-entra { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+.fx-kpi, .fx-servico, .fx-emp, .fx-quem, .fx-cta, .appo-capa, .bfa-ticket, .bfa-bar {
+  animation: appo-entra .55s cubic-bezier(.2, .7, .2, 1) both;
+  transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease; }
+[data-testid="stColumn"]:nth-child(2) .fx-kpi, [data-testid="stColumn"]:nth-child(2) .fx-servico { animation-delay: .07s; }
+[data-testid="stColumn"]:nth-child(3) .fx-kpi, [data-testid="stColumn"]:nth-child(3) .fx-servico { animation-delay: .14s; }
+[data-testid="stColumn"]:nth-child(4) .fx-kpi, [data-testid="stColumn"]:nth-child(4) .fx-servico { animation-delay: .21s; }
+[data-testid="stColumn"]:nth-child(5) .fx-kpi, [data-testid="stColumn"]:nth-child(5) .fx-servico { animation-delay: .28s; }
+.fx-kpi:hover, .fx-servico:hover, .fx-emp:hover, .fx-cta:hover, .fx-quem:hover {
+  transform: translateY(-4px);
+  border-color: #D9C6F7;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .95) inset, 0 16px 30px -16px rgba(76, 29, 149, .42), 0 5px 10px -6px rgba(225, 29, 72, .18); }
+div[data-testid="stDialog"] [role="dialog"] { border-radius: 18px; border-top: 5px solid #6D28D9; }
+@media (prefers-reduced-motion: reduce) {
+  .fx-kpi, .fx-servico, .fx-emp, .fx-quem, .fx-cta, .appo-capa, .bfa-ticket, .bfa-bar { animation: none; transition: none; }
+  .fx-kpi:hover, .fx-servico:hover, .fx-emp:hover, .fx-cta:hover, .fx-quem:hover { transform: none; } }
+"""
+
+
 CSS_APPO_FASE9 = """
 /* ---- Barra superior (marca + secção + cotações) e cabeçalho colorido: no topo, com a mesma largura, sem sombra, compactos ---- */
 :root { --appo-lado: 3.5rem; --appo-barra: 2.5rem; --appo-topo: 0.5rem; --appo-sidebar: 21rem; }
@@ -1399,10 +1420,10 @@ def _carregar_css() -> str:
     try:
         f = Path(__file__).with_name("appo.css")
         if f.exists():
-            return _FONTE_TITULOS + f.read_text(encoding="utf-8") + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3 + CSS_APPO_FASE8 + CSS_APPO_FASE9
+            return _FONTE_TITULOS + f.read_text(encoding="utf-8") + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3 + CSS_APPO_FASE8 + CSS_APPO_FASE9 + CSS_APPO_FASE11
     except Exception:
         pass
-    return _FONTE_TITULOS + CSS_APPO_BASE + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3 + CSS_APPO_FASE8 + CSS_APPO_FASE9
+    return _FONTE_TITULOS + CSS_APPO_BASE + CSS_APPO_FINCITE + CSS_APPO_FASE1 + CSS_APPO_FASE3 + CSS_APPO_FASE8 + CSS_APPO_FASE9 + CSS_APPO_FASE11
 
 
 st.markdown(f"<style>{_carregar_css()}</style>", unsafe_allow_html=True)
@@ -7586,6 +7607,7 @@ def _aba_rentabilidade(a: dict, tx):
         comp = comp[comp.index >= ini].dropna()
         if len(comp) >= 2:
             fx_linhas(comp / comp.iloc[0] * 100)
+            ampliar_grafico(comp / comp.iloc[0] * 100, "Carteira vs índices (base 100)", "hist_cart")
 
 
 def _aba_inflacao(a: dict):
@@ -8063,7 +8085,9 @@ def render_rentabilidade():
 def pagina_contabilidade(tx: dict):
     import datetime as _dt
     hoje = _dt.date.today()
-    ano = st.selectbox("Exercício (ano) das demonstrações", list(range(hoje.year, 2023, -1)), key="cont_ano")
+    _anos = list(range(hoje.year + 2, 2023, -1))   # gerado do ano do sistema: 2 anos futuros, o corrente e os passados até 2024
+    ano = st.selectbox("Exercício (ano) das demonstrações", _anos, index=_anos.index(hoje.year), key="cont_ano",
+                       help="A lista actualiza-se sozinha todos os anos. Os anos futuros servem para preparar orçamentos; só mostram dados quando existirem lançamentos.")
     aba_res, aba_bal, aba_dr, aba_fc, aba_liv, aba_rent = st.tabs(["📋 Resumo", "⚖️ Balanço", "📉 Demonstração de Resultados", "💧 Fluxos de Caixa", "📒 Livro de Transacções", "📈 Rentabilidade"])
     with aba_res:
             resumo   = obter_resumo_patrimonial()
@@ -8643,6 +8667,22 @@ def fx_linhas(df: pd.DataFrame, height: int = 260, rotulos: bool = True, **_):
     except Exception:
         traceback.print_exc()
         getattr(st, "line_chart")(df, height=height)
+
+
+def ampliar_grafico(df: pd.DataFrame, titulo: str, chave: str, **kw):
+    """Botão «Ampliar» que abre o gráfico de linhas numa janela grande (st.dialog). Sem st.dialog na versão do Streamlit, não mostra nada."""
+    if not hasattr(st, "dialog"):
+        return
+
+    def _corpo():
+        fx_linhas(df, height=520, **kw)
+
+    try:
+        _dlg = st.dialog(titulo, width="large")(_corpo)
+    except TypeError:
+        _dlg = st.dialog(titulo)(_corpo)
+    if st.button("🔍 Ampliar gráfico", key=f"amp_{chave}"):
+        _dlg()
 
 
 ORC_GRUPOS = [
@@ -9233,12 +9273,12 @@ def _painel_inicio_aluno():
     st.markdown("##### Atalhos")
     b1, b2, b3 = st.columns(3)
     b1.button("📚 Biblioteca", on_click=_ir_para, args=("📚 Biblioteca Educativa",), key="ini_bib")
-    if eh_investidor():
-        b2.button("🧮 Princípio 50/30/20", on_click=_ir_para, args=("🧮 Princípio 50/30/20",), key="ini_r50")
-        b3.button("🧪 Simulador", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key="ini_sim")
-    else:
-        b2.button("🧭 O meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="ini_rev")
-        b3.button("🎓 Educação & Serviços", on_click=_ir_para, args=("🎓 Educação & Serviços",), key="ini_edu")
+    b2.button("🧮 Princípio 50/30/20", on_click=_ir_para, args=("🧮 Princípio 50/30/20",), key="ini_r50")
+    b3.button("🧪 Simulador", on_click=_ir_para, args=("🧪 Simulador de Investimento",), key="ini_sim")
+    if not eh_investidor():
+        c1_, c2_, _c3 = st.columns(3)
+        c1_.button("🧭 O meu perfil", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="ini_rev")
+        c2_.button("🎓 Educação & Serviços", on_click=_ir_para, args=("🎓 Educação & Serviços",), key="ini_edu")
     with st.expander("📈 Cotações de referência"):
         if not _df_activos_ticker.empty:
             tabela_activos_clicavel(tabela_cotacoes_estilizada(_df_activos_ticker), _df_activos_ticker, "tb_clic_a")
@@ -9531,6 +9571,12 @@ render_html(f'<div class="appo-sidebar-header">{logo_svg(50)}<div><p class="appo
 st.sidebar.selectbox("🌐 Idioma / Language", LISTA_IDIOMAS, key="idioma")
 selo_premium = " · ⭐ Premium" if st.session_state["is_premium"] else ""
 st.sidebar.caption(f"{tx['sessao']}: {st.session_state['conta_nome']} ({st.session_state['conta_email']}){selo_premium}")
+try:
+    _rot_portal = "Administrador" if st.session_state.get("is_admin") else NIVEIS.get(nivel_actual(), "")
+    if _rot_portal:
+        st.sidebar.markdown(f'<span style="display:inline-block;background:linear-gradient(120deg,#6D28D9,#E11D48);color:#fff;font-size:.72rem;font-weight:700;padding:3px 11px;border-radius:99px;">Portal {_rot_portal}</span>', unsafe_allow_html=True)
+except Exception:
+    pass
 with st.sidebar:
     _cartao_portal_lateral()
 st.sidebar.divider()
@@ -9574,7 +9620,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 if st.session_state.get("autenticado") and not eh_investidor():
     st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
                       help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
-st.sidebar.caption("Versão da app: 2026-10-16 · M (menu por blocos, cores home broker, FAQ)")
+st.sidebar.caption("Versão da app: 2026-10-17 · N (menu por blocos, animações, ampliar gráfico, anos dinâmicos)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
