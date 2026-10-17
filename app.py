@@ -2114,6 +2114,7 @@ def painel_grafico(titulo: str, subtitulo: str, serie: pd.DataFrame, unidade: st
                 align="left", dx=6, dy=-7, color="#6B6B6B", fontSize=11).encode(
                 y=alt.Y("y:Q", title=None, scale=esc_y, axis=eixo_ref), text="txt:N", x=alt.value(2))
         st.altair_chart(camadas.properties(height=340), use_container_width=True)
+        botao_ampliar(f"cot_{titulo}_{periodo}", titulo, lambda h, _c=camadas: st.altair_chart(_c.properties(height=h), use_container_width=True))
     if referencia:
         var_ref = (ultimo / referencia[1] - 1) * 100 if referencia[1] else 0.0
         st.markdown(f"🏷️ **{referencia[0]}** · variação desde a OPV: **{pct_bruto(var_ref)}**")
@@ -7634,6 +7635,24 @@ def _aba_rentabilidade(a: dict, tx):
     st.caption("Alpha = retorno da carteira − retorno do índice na mesma janela (p.p.). Janelas sem histórico completo aparecem como n/d. "
                + (f"A coluna de longo prazo é acumulada desde {a['inicio_comum']:%d/%m/%Y} (data comum às três séries). " if a.get("acumulado") else "")
                + "Rentabilidade de preço: não inclui dividendos nem custos. Índice BODIVA = cotação média encadeada.")
+    _al = pd.DataFrame({"vs Índice APPO": [a["alpha_appo"].get(p_) for p_ in ps], "vs Índice BODIVA": [a["alpha_bodiva"].get(p_) for p_ in ps]},
+                       index=[_rotulo_horiz(a, p_, curto=True) for p_ in ps]).astype(float).dropna(how="all")
+    if not _al.empty:
+        st.markdown("##### Alpha da carteira por horizonte (p.p.)")
+        _alm = _al.reset_index().melt("index", var_name="Índice", value_name="p.p.").dropna()
+        try:
+            import altair as alt
+            _ch = alt.Chart(_alm).mark_bar(cornerRadius=5).encode(
+                x=alt.X("index:N", sort=None, title=None, axis=alt.Axis(labelAngle=0, domain=False, ticks=False)),
+                xOffset="Índice:N", y=alt.Y("p.p.:Q", title=None, axis=alt.Axis(gridColor="#EEF1F6", domain=False, ticks=False)),
+                color=alt.Color("Índice:N", scale=alt.Scale(range=["#7C3AED", "#FB923C"]), legend=alt.Legend(orient="top", title=None)),
+                tooltip=[alt.Tooltip("index:N", title="Horizonte"), alt.Tooltip("Índice:N"), alt.Tooltip("p.p.:Q", format="+.2f")])
+            _txt = alt.Chart(_alm).mark_text(dy=-8, fontSize=11, fontWeight="bold").encode(x=alt.X("index:N", sort=None), xOffset="Índice:N", y="p.p.:Q", text=alt.Text("p.p.:Q", format="+.1f"))
+            st.altair_chart((_ch + _txt).properties(height=260).configure_view(strokeWidth=0), use_container_width=True)
+        except Exception:
+            traceback.print_exc()
+            st.bar_chart(_al, height=260)
+        st.caption("Acima de zero: a carteira bateu o índice nesse horizonte. Abaixo de zero: ficou atrás.")
     st.markdown("##### Rentabilidade multitemporal por título")
     tab = pd.DataFrame([{"Título": _pdf_nome_curto(t_["nome"]), "Peso": t_["peso"] * 100, **{_rotulo_horiz(a, p_, curto=False): t_["ret"].get(p_) for p_ in ps}} for t_ in a["titulos"]])
     cols_ret = [c for c in tab.columns if c not in ("Título", "Peso")]
@@ -11062,7 +11081,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 if st.session_state.get("autenticado") and not eh_investidor():
     st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
                       help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
-st.sidebar.caption("Versão da app: 2026-10-17 · W (Diário e votação)")
+st.sidebar.caption("Versão da app: 2026-10-17 · X (Alpha e ampliar)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
