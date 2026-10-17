@@ -8707,6 +8707,66 @@ def fx_linhas(df: pd.DataFrame, height: int = 260, rotulos: bool = True, **_):
         getattr(st, "line_chart")(df, height=height)
 
 
+# ---------------- Actualização AUTOMÁTICA dos preços dos activos a partir da BODIVA ----------------
+@st.cache_data(ttl=300, show_spinner=False)
+def _sync_activos_cache() -> dict:
+    """Corre no máximo uma vez de 5 em 5 minutos (cache partilhada por todos os utilizadores). Não precisa do administrador.
+    Só faz UPDATE linha a linha (nunca apaga nem recria a tabela). Protecções: ignora preços em falta/≤0 e saltos >50%."""
+    res = {"ok": False, "n": 0, "ts": datetime.now(), "erro": None, "ligado": True}
+    try:
+        if cfg_mercado_get("auto_activos", "1") != "1":
+            res.update(ligado=False, ok=True)
+            return res
+        df = obter_activos()
+        tks = [str(x or "").strip().upper() for x in df["ticker"] if str(x or "").strip()]
+        if not tks:
+            res["ok"] = True
+            return res
+        novos = buscar_cotacoes_bodiva(tks)
+        hoje = datetime.now().date()
+        for _, r in df.iterrows():
+            tk = str(r["ticker"] or "").strip().upper()
+            p = novos.get(tk)
+            if not tk or p is None or not p > 0:
+                continue
+            atual = _num_seguro(r["preco"], 0.0)
+            if atual > 0 and abs(p / atual - 1) > 0.5:
+                continue
+            ab = _num_seguro(r.get("preco_abertura_dia"), None)
+            da = r.get("data_abertura_dia")
+            da = da.date() if hasattr(da, "date") and callable(da.date) else da
+            novo_dia = (da != hoje) or not ab
+            if not novo_dia and abs(p - atual) < 1e-9:
+                continue
+            if novo_dia:
+                ab, da = (atual if atual > 0 else p), hoje
+            var = round((p - ab) / ab * 100, 2) if ab else 0.0
+            executar("UPDATE activos SET preco = %s, variacao = %s, preco_abertura_dia = %s, data_abertura_dia = %s, actualizado_em = NOW() WHERE id = %s",
+                     (float(p), float(var), float(ab), da, int(r["id"])))
+            res["n"] += 1
+        if res["n"]:
+            novos_activos = obter_activos()
+            try:
+                registar_historico_indice(calcular_indice_mercado(novos_activos))
+            except Exception:
+                traceback.print_exc()
+            registar_cotacoes_hoje(novos_activos, sobrepor=True)
+            registar_vup_hoje()
+        res["ok"] = True
+    except Exception as e:
+        traceback.print_exc()
+        res["erro"] = f"{type(e).__name__}: {e}"
+    return res
+
+
+def sincronizar_activos_auto():
+    """Chamada em cada visita; o trabalho real só acontece quando a cache expira (5 min)."""
+    try:
+        _sync_activos_cache()
+    except Exception:
+        traceback.print_exc()
+
+
 def ampliar_grafico(df: pd.DataFrame, titulo: str, chave: str, **kw):
     """Botão «Ampliar» que abre o gráfico de linhas numa janela grande (st.dialog). Sem st.dialog na versão do Streamlit, não mostra nada."""
     if not hasattr(st, "dialog"):
@@ -10349,7 +10409,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 if st.session_state.get("autenticado") and not eh_investidor():
     st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
                       help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
-st.sidebar.caption("Versão da app: 2026-10-17 · P (orçamento simples, vídeos recolhidos e geridos pelo Admin)")
+st.sidebar.caption("Versão da app: 2026-10-17 · Q (preços BODIVA automáticos, orçamento simples, vídeos)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
@@ -10370,6 +10430,7 @@ if st.sidebar.button(tx["terminar_sessao"]):
 
 st.sidebar.caption(f"Última actualização da página: {agora()}")
 
+sincronizar_activos_auto()   # preços dos activos a partir da BODIVA, sozinhos, de 5 em 5 minutos
 _df_activos_ticker = obter_activos()
 render_html('<div class="appo-fixo"><div class="appo-topbar"><div class="appo-marca">APPO</div>'
             f'<div class="appo-pagina">{_esc(tx["nav_map"].get(pagina, pagina))}</div></div>' + ticker_tape_html(_df_activos_ticker) + '</div>')
@@ -11468,6 +11529,24 @@ try:
                 })
             st.dataframe(df_admin_display[["ticker", "Var.% (auto)"]], hide_index=True)
             # ---- Actualização directa a partir da BODIVA (com pré-visualização) ----
+            st.markdown("**Actualização automática**")
+            _auto_on = cfg_mercado_get("auto_activos", "1") == "1"
+            _auto_novo = st.toggle("Actualizar os preços sozinhos a partir da BODIVA (de 5 em 5 minutos, enquanto a app estiver a ser usada)",
+                                   value=_auto_on, key="adm_auto_activos")
+            if _auto_novo != _auto_on:
+                cfg_mercado_set("auto_activos", "1" if _auto_novo else "0")
+                _sync_activos_cache.clear()
+                st.rerun()
+            _est = _sync_activos_cache()
+            if not _est["ligado"]:
+                st.caption("⏸️ Actualização automática desligada: os preços só mudam quando o administrador os guarda.")
+            elif _est["ok"]:
+                st.caption(f"🟢 Última verificação às {_est['ts']:%H:%M:%S}: {_est['n']} preço(s) alterado(s). Salta preços em falta e variações acima de 50%.")
+            else:
+                st.caption(f"🟠 Última tentativa às {_est['ts']:%H:%M:%S} falhou ({_est['erro']}). Mantêm-se os últimos preços; a app tenta de novo dentro de minutos.")
+            if st.button("🔄 Verificar agora", key="adm_auto_agora"):
+                _sync_activos_cache.clear()
+                st.rerun()
             st.markdown("**Actualização directa a partir da BODIVA**")
             st.caption("Vai buscar as cotações à BODIVA para os tickers registados acima (gravados). "
                        "Nada é gravado até confirmar na pré-visualização.")
