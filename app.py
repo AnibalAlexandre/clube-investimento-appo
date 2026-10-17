@@ -5628,7 +5628,9 @@ def decidir_despesa_admin(did: int, aprovar: bool, motivo: str):
 
 def painel_educacao_servicos_admin():
     exigir_admin()
-    sub_ped, sub_man, sub_cat = st.tabs(["Pedidos e inscrições", "Manifestações de interesse", "Catálogo"])
+    sub_ped, sub_man, sub_cat, sub_vid = st.tabs(["Pedidos e inscrições", "Manifestações de interesse", "Catálogo", "🎬 Vídeos"])
+    with sub_vid:
+        painel_videos_admin()
     with sub_ped:
         df = consultar_df("SELECT id, criado_em, servico_nome, nome, email, telefone, participantes, mensagem, estado_servico, estado_pagamento, "
                           "pagamento_confirmado_por, pagamento_confirmado_em, pagamento_nota FROM pedidos_servicos ORDER BY id DESC LIMIT 500")
@@ -8812,25 +8814,98 @@ def _abrir_video(v: dict):
         _corpo_video(v)
 
 
+_VIDEOS_TABELA_PRONTA = False
+_GRUPOS_VIDEO = {"bodiva": "🎓 Educação & Serviços", "carteira": "📚 Biblioteca Educativa"}
+
+
+def _tabela_videos():
+    """Cria a tabela dos vídeos e, na primeira vez, carrega os 8 vídeos iniciais (idempotente; nunca apaga nada)."""
+    global _VIDEOS_TABELA_PRONTA
+    if _VIDEOS_TABELA_PRONTA:
+        return
+    executar("""CREATE TABLE IF NOT EXISTS videos_educativos (
+                    id SERIAL PRIMARY KEY, url TEXT NOT NULL, titulo TEXT NOT NULL, descricao TEXT, duracao TEXT,
+                    grupo TEXT NOT NULL DEFAULT 'bodiva', activo BOOLEAN NOT NULL DEFAULT TRUE, ordem INTEGER NOT NULL DEFAULT 100,
+                    criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    if not consultar_um("SELECT 1 FROM videos_educativos LIMIT 1"):
+        for i, v in enumerate(VIDEOS_EDUCATIVOS):
+            executar("INSERT INTO videos_educativos (url, titulo, descricao, duracao, grupo, ordem) VALUES (%s, %s, %s, %s, %s, %s)",
+                     (v["url"], v["titulo"], v.get("descricao", ""), v.get("duracao", ""), v["grupo"], i))
+    _VIDEOS_TABELA_PRONTA = True
+
+
+def obter_videos(grupo: str) -> list:
+    """Vídeos activos do grupo, na ordem definida. Se a base de dados falhar, usa a lista inicial (a página nunca quebra)."""
+    try:
+        _tabela_videos()
+        df = consultar_df("SELECT url, titulo, descricao, duracao, grupo FROM videos_educativos WHERE activo AND grupo = %s ORDER BY ordem, id", (grupo,))
+        return [{"url": r["url"], "titulo": r["titulo"], "descricao": r["descricao"] or "", "duracao": r["duracao"] or "", "grupo": r["grupo"]} for _, r in df.iterrows()]
+    except Exception:
+        traceback.print_exc()
+        return [v for v in VIDEOS_EDUCATIVOS if v["grupo"] == grupo]
+
+
 def secao_videos(grupo: str, titulo: str, chave: str, colunas: int = 3):
-    """Grelha de cartões de vídeo (miniatura, título, duração, descrição e botão ▶). O vídeo abre numa janela por cima da página."""
-    lista = [v for v in VIDEOS_EDUCATIVOS if v["grupo"] == grupo and _yt_id(v["url"])]
+    """Bloco recolhido (só abre ao clicar) com a grelha de vídeos. O vídeo reproduz-se numa janela por cima da página."""
+    lista = [v for v in obter_videos(grupo) if _yt_id(v["url"])]
     if not lista:
         return
-    st.subheader(titulo)
-    st.caption("Vídeos escolhidos para aprender ao seu ritmo. Conteúdo de terceiros, alojado no YouTube, apenas educativo.")
-    for i in range(0, len(lista), colunas):
-        cols = st.columns(colunas)
-        for col, v in zip(cols, lista[i:i + colunas]):
-            with col:
-                vid = _yt_id(v["url"])
-                dur = f'<span class="fx-vid-dur">{_esc(v["duracao"])}</span>' if v.get("duracao") else ""
-                render_html(
-                    f'<div class="fx-vid"><div class="fx-vid-img"><img loading="lazy" alt="" src="https://i.ytimg.com/vi/{vid}/hqdefault.jpg">'
-                    f'<span class="fx-vid-play">▶</span>{dur}</div><div class="fx-vid-t">{_esc(v["titulo"])}</div>'
-                    f'<div class="fx-vid-d">{_esc(v["descricao"])}</div></div>')
-                if st.button("▶ Reproduzir", key=f"vid_{chave}_{vid}", use_container_width=True):
-                    _abrir_video(v)
+    with st.expander(f"{titulo}  ·  {len(lista)} vídeo(s)", expanded=False):
+        st.caption("Vídeos escolhidos para aprender ao seu ritmo. Conteúdo de terceiros, alojado no YouTube, apenas educativo.")
+        for i in range(0, len(lista), colunas):
+            cols = st.columns(colunas)
+            for col, v in zip(cols, lista[i:i + colunas]):
+                with col:
+                    vid = _yt_id(v["url"])
+                    dur = f'<span class="fx-vid-dur">{_esc(v["duracao"])}</span>' if v.get("duracao") else ""
+                    render_html(
+                        f'<div class="fx-vid"><div class="fx-vid-img"><img loading="lazy" alt="" src="https://i.ytimg.com/vi/{vid}/hqdefault.jpg">'
+                        f'<span class="fx-vid-play">▶</span>{dur}</div><div class="fx-vid-t">{_esc(v["titulo"])}</div>'
+                        f'<div class="fx-vid-d">{_esc(v["descricao"])}</div></div>')
+                    if st.button("▶ Reproduzir", key=f"vid_{chave}_{vid}", use_container_width=True):
+                        _abrir_video(v)
+
+
+def painel_videos_admin():
+    """Administrador › Educação & Serviços › Vídeos: acrescentar, ocultar/mostrar e apagar vídeos (ligações do YouTube)."""
+    exigir_admin()
+    _tabela_videos()
+    st.caption("Cole a ligação de um vídeo do YouTube e escolha onde aparece. Os vídeos ficam recolhidos nas páginas e só abrem quando o utilizador clica.")
+    with st.form("form_video_novo", clear_on_submit=True):
+        url = st.text_input("Ligação do vídeo (YouTube)", placeholder="https://www.youtube.com/watch?v=...")
+        titulo = st.text_input("Título", max_chars=160)
+        descricao = st.text_area("Descrição curta (opcional)", height=70, max_chars=300)
+        c1, c2 = st.columns(2)
+        onde = c1.selectbox("Onde aparece", list(_GRUPOS_VIDEO.keys()), format_func=lambda g: _GRUPOS_VIDEO[g])
+        duracao = c2.text_input("Duração (opcional, ex.: 12 min)", max_chars=20)
+        gravar = st.form_submit_button("➕ Adicionar vídeo", type="primary")
+    if gravar:
+        if not _yt_id(url):
+            st.error("A ligação não parece ser de um vídeo do YouTube. Copie-a da barra de endereços ou do botão «Partilhar».")
+        elif not titulo.strip():
+            st.error("Escreva um título.")
+        else:
+            executar("INSERT INTO videos_educativos (url, titulo, descricao, duracao, grupo, ordem) VALUES (%s, %s, %s, %s, %s, "
+                     "COALESCE((SELECT MAX(ordem) FROM videos_educativos), 0) + 1)",
+                     (url.strip(), titulo.strip(), descricao.strip(), duracao.strip(), onde))
+            st.success("Vídeo adicionado.")
+            st.rerun()
+    df = consultar_df("SELECT id, titulo, grupo, activo, url FROM videos_educativos ORDER BY grupo, ordem, id")
+    if df.empty:
+        st.info("Ainda não há vídeos.")
+        return
+    mostrar = df.assign(Onde=df["grupo"].map(_GRUPOS_VIDEO), Visível=df["activo"].map({True: "Sim", False: "Não"}))[["id", "titulo", "Onde", "Visível", "url"]]
+    st.dataframe(mostrar.rename(columns={"titulo": "Título"}), hide_index=True, use_container_width=True)
+    ids = [int(i) for i in df["id"].tolist()]
+    vid = st.selectbox("Vídeo a gerir", ids, key="adm_vid_sel", format_func=lambda i: f"#{i} · {df.loc[df['id'] == i, 'titulo'].iloc[0]}")
+    activo = bool(df.loc[df["id"] == vid, "activo"].iloc[0])
+    b1, b2 = st.columns(2)
+    if b1.button("🙈 Ocultar" if activo else "👁️ Mostrar", key=f"adm_vid_vis_{vid}", use_container_width=True):
+        executar("UPDATE videos_educativos SET activo = %s WHERE id = %s", (not activo, int(vid)))
+        st.rerun()
+    if b2.button("🗑️ Apagar", key=f"adm_vid_del_{vid}", use_container_width=True):
+        executar("DELETE FROM videos_educativos WHERE id = %s", (int(vid),))
+        st.rerun()
 
 
 # ---------------- Gráficos em modal («Ampliar») ----------------
@@ -9149,9 +9224,9 @@ def pagina_folha_orcamento(email: str):
         anos.append(st.session_state["orc_ano"])
     ver = st.session_state.get("orc_folha_ver", 0)
 
-    st.subheader("🗓️ Folha de orçamento mensal")
-    st.caption("Como numa folha de cálculo: escolha o mês, lance as despesas do dia a dia e veja os totais mudarem logo. "
-               "Os anos seguintes ficam disponíveis automaticamente. Não esqueça de guardar a folha.")
+    st.subheader("🗓️ O meu orçamento do mês")
+    st.caption("Escolha o mês, registe o que gastou ou recebeu e veja logo quanto sobrou. Cada registo fica guardado na sua conta. "
+               "Os anos seguintes ficam disponíveis automaticamente.")
     n1, n2, n3, n4 = st.columns([1, 2, 2, 1])
     n1.button("◀ Anterior", on_click=_orc_mover, args=(-1,), use_container_width=True, key="orc_prev")
     ano = int(n2.selectbox("Ano", anos, key="orc_ano"))
@@ -9164,6 +9239,84 @@ def pagina_folha_orcamento(email: str):
     if st.session_state.get("orc_folha_msg"):
         st.success(st.session_state.pop("orc_folha_msg"))
 
+    _folha_simples(email, ano, mes, mes_nome, ini, ultimo)
+    st.divider()
+    if st.toggle("⚙️ Mostrar o modo avançado (folha estilo Excel, repetições diárias e resumo do ano)", key="orc_avancado"):
+        _folha_avancada(email, ano, mes, mes_nome, ini, ultimo, ver, hoje)
+
+
+def _lanc_com_id(email: str, ano: int, mes: int) -> pd.DataFrame:
+    _tabela_lancamentos()
+    ini, fim = _limites_mes(ano, mes)
+    df = consultar_df("SELECT id, data, tipo, categoria, descricao, valor FROM orcamento_lancamentos "
+                      "WHERE conta_email = %s AND data >= %s AND data < %s ORDER BY data DESC, id DESC", (email, ini, fim))
+    if df.empty:
+        return pd.DataFrame(columns=["id", "data", "tipo", "categoria", "descricao", "valor"])
+    df["data"] = pd.to_datetime(df["data"]).dt.date
+    df["valor"] = pd.to_numeric(df["valor"], errors="coerce").astype(float)
+    return df
+
+
+_ROT_CAT_SIMPLES = {"Consumo (50%)": "Gastos do dia a dia (50%)", "Investimento (30%)": "Investir (30%)", "Entesouramento (20%)": "Poupar / reserva (20%)"}
+
+
+def _folha_simples(email: str, ano: int, mes: int, mes_nome: str, ini, ultimo):
+    """Vista simples, para toda a gente: três totais, um formulário curto e a lista do mês com opção de apagar."""
+    hoje = _date.today()
+    lista = _lanc_com_id(email, ano, mes)
+    rec = float(lista.loc[lista["tipo"] == "Receita", "valor"].sum()) if not lista.empty else 0.0
+    desp = float(lista.loc[lista["tipo"] != "Receita", "valor"].sum()) if not lista.empty else 0.0
+    k1, k2, k3 = st.columns(3)
+    k1.metric("💰 Entrou", fmt_kz_exec(rec))
+    k2.metric("💸 Saiu", fmt_kz_exec(desp))
+    k3.metric("✅ Sobrou" if rec - desp >= 0 else "⚠️ Faltou", fmt_kz_exec(rec - desp))
+
+    st.markdown("##### ➕ Registar um movimento")
+    with st.form(f"orc_simples_{ano}_{mes}", clear_on_submit=True):
+        tipo = st.radio("O que foi?", ["💸 Gastei", "💰 Recebi"], horizontal=True)
+        c1, c2 = st.columns(2)
+        desc = c1.text_input("Em quê?", placeholder="ex.: pão, táxi, salário")
+        valor_txt = c2.text_input("Quanto? (Kz)", placeholder="ex.: 500   (aceita contas: 150*22)")
+        c3, c4 = st.columns(2)
+        dia = c3.date_input("Dia", value=min(max(hoje, ini), ultimo), min_value=ini, max_value=ultimo, format="DD/MM/YYYY")
+        cat = c4.selectbox("Tipo de gasto (só para gastos)", ORC_CATEGORIAS, format_func=lambda c: _ROT_CAT_SIMPLES.get(c, c))
+        ok = st.form_submit_button("➕ Adicionar", type="primary", use_container_width=True)
+    if ok:
+        valor = avaliar_formula(valor_txt)
+        if valor is None or valor <= 0:
+            st.error("Escreva quanto foi, só com números (ex.: 500).")
+        elif not desc.strip():
+            st.error("Diga em quê (ex.: pão).")
+        else:
+            recebi = tipo.startswith("💰")
+            adicionar_lancamentos(email, [(dia, "Receita" if recebi else "Despesa", "Receita" if recebi else cat, desc.strip(), valor)])
+            st.session_state["orc_folha_ver"] = st.session_state.get("orc_folha_ver", 0) + 1
+            st.session_state["orc_folha_msg"] = f"Registado: {desc.strip()} · {fmt_kz_exec(valor)}."
+            st.rerun()
+
+    st.markdown(f"##### 📒 Registos de {mes_nome} de {ano}")
+    if lista.empty:
+        st.caption("Ainda não registou nada neste mês.")
+        return
+    vista = pd.DataFrame({"🗑️": False, "Dia": lista["data"], "O quê": lista["descricao"].fillna(""),
+                          "Tipo": lista["tipo"].apply(lambda t_: "Recebi" if t_ == "Receita" else "Gastei"),
+                          "Valor (Kz)": lista["valor"]})
+    ed = st.data_editor(vista, hide_index=True, use_container_width=True, key=f"orc_lista_{ano}_{mes}_{st.session_state.get('orc_folha_ver', 0)}",
+                        disabled=["Dia", "O quê", "Tipo", "Valor (Kz)"],
+                        column_config={"🗑️": st.column_config.CheckboxColumn("Apagar", help="Marque as linhas a apagar e carregue em «Apagar marcados»"),
+                                       "Dia": st.column_config.DateColumn("Dia", format="DD/MM/YYYY"),
+                                       "Valor (Kz)": st.column_config.NumberColumn("Valor (Kz)", format=_FMT_MILHARES)})
+    marcados = [int(i) for i, m in zip(lista["id"].tolist(), ed["🗑️"].tolist()) if bool(m)]
+    if marcados and st.button(f"🗑️ Apagar marcados ({len(marcados)})", key=f"orc_apagar_{ano}_{mes}"):
+        executar("DELETE FROM orcamento_lancamentos WHERE conta_email = %s AND id = ANY(%s)", (email, marcados))
+        st.session_state["orc_folha_ver"] = st.session_state.get("orc_folha_ver", 0) + 1
+        st.session_state["orc_folha_msg"] = f"{len(marcados)} registo(s) apagado(s)."
+        st.rerun()
+
+
+def _folha_avancada(email: str, ano: int, mes: int, mes_nome: str, ini, ultimo, ver: int, hoje):
+    """Modo avançado: folha estilo Excel, lançamentos repetidos (ex.: pão todos os dias) e resumo do ano."""
+    st.markdown("#### ⚙️ Modo avançado")
     with st.expander("⚡ Lançamento rápido ou recorrente (ex.: pão todos os dias, transporte)", expanded=False):
         st.caption("Se já editou a folha em baixo, guarde-a primeiro: um lançamento rápido recarrega a folha a partir do que está guardado.")
         with st.form(f"orc_form_rapido_{ver}", clear_on_submit=True):
@@ -10196,7 +10349,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 if st.session_state.get("autenticado") and not eh_investidor():
     st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
                       help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
-st.sidebar.caption("Versão da app: 2026-10-17 · O (folha de orçamento, vídeos, destaques, cadeado)")
+st.sidebar.caption("Versão da app: 2026-10-17 · P (orçamento simples, vídeos recolhidos e geridos pelo Admin)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
