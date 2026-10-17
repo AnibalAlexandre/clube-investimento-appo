@@ -8992,6 +8992,8 @@ def pagina_analise_tecnica():
     vis = ind if dias is None else ind[ind.index >= ind.index.max() - pd.Timedelta(days=dias)]
     vis_d = dados.loc[vis.index]
 
+    painel_eventos(tk, "📅 Dividendos e eventos deste título", "tec_ev")
+
     st.markdown("#### 🔎 Leitura técnica")
     leit = leitura_tecnica(ind)
     if len(leit) < 2:
@@ -9048,6 +9050,121 @@ def pagina_analise_tecnica():
                     "- **Bandas de Bollinger**: faixa de 2 desvios-padrão em torno da média de 20; fora dela o preço está num extremo.\n"
                     "- **Volatilidade**: quanto o preço oscila por sessão.\n"
                     "- **Liquidez**: número de negócios e valor negociado; sem liquidez, qualquer indicador perde fiabilidade.")
+
+
+# =========================================================
+# DIVIDENDOS & EVENTOS (registo manual pelo administrador, com ligação à fonte oficial)
+# =========================================================
+TIPOS_EVENTO = ["Dividendo", "Assembleia Geral", "Resultados", "Aumento de capital", "Emissão / Oferta", "Outro"]
+_EVENTOS_PRONTA = False
+
+
+def _tabela_eventos():
+    global _EVENTOS_PRONTA
+    if _EVENTOS_PRONTA:
+        return
+    executar("""CREATE TABLE IF NOT EXISTS eventos_corporativos (
+                    id SERIAL PRIMARY KEY, ticker TEXT NOT NULL, tipo TEXT NOT NULL, data DATE NOT NULL,
+                    valor_por_accao NUMERIC, fonte_url TEXT, nota TEXT, criado_por TEXT, criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    _EVENTOS_PRONTA = True
+
+
+def obter_eventos(ticker: str = None) -> pd.DataFrame:
+    """Eventos registados (todos, ou só de um título). Nunca quebra a página: em caso de erro devolve vazio."""
+    try:
+        _tabela_eventos()
+        if ticker:
+            return consultar_df("SELECT id, ticker, tipo, data, valor_por_accao, fonte_url, nota FROM eventos_corporativos "
+                                "WHERE RTRIM(ticker, 'A') = %s ORDER BY data DESC, id DESC", (_tk_norm(ticker),))
+        return consultar_df("SELECT id, ticker, tipo, data, valor_por_accao, fonte_url, nota FROM eventos_corporativos ORDER BY data DESC, id DESC")
+    except Exception:
+        traceback.print_exc()
+        return pd.DataFrame(columns=["id", "ticker", "tipo", "data", "valor_por_accao", "fonte_url", "nota"])
+
+
+def _linha_evento_html(r) -> str:
+    val = f' · <b>{fmt_milhares(float(r["valor_por_accao"]), 2)} Kz/acção</b>' if pd.notna(r["valor_por_accao"]) and r["tipo"] == "Dividendo" else ""
+    fonte = ""
+    u = str(r["fonte_url"] or "").strip()
+    if u.lower().startswith(("http://", "https://")):
+        fonte = f' · <a href="{_esc(u)}" target="_blank" rel="noopener noreferrer">fonte</a>'
+    nota = f'<div style="font-size:.8rem;color:#475569;">{_esc(r["nota"])}</div>' if str(r["nota"] or "").strip() else ""
+    return (f'<div style="border:1px solid #E4D4FB;border-left:6px solid #6D28D9;border-radius:12px;padding:8px 14px;margin-bottom:8px;background:#FFFFFF;">'
+            f'<div><b>{pd.to_datetime(r["data"]):%d/%m/%Y}</b> · {_esc(r["tipo"])} · <b>{_esc(r["ticker"])}</b>{val}{fonte}</div>{nota}</div>')
+
+
+def painel_eventos(ticker: str = None, titulo: str = "📅 Dividendos e eventos", chave: str = "ev"):
+    """Bloco recolhido para investidores: próximos eventos e histórico recente. Com ticker, mostra só o desse título e o rendimento do dividendo."""
+    df = obter_eventos(ticker)
+    if df.empty:
+        if ticker:
+            st.caption("📅 Sem dividendos ou eventos registados para este título. O administrador regista-os em «🔐 Painel do Administrador › Dividendos & Eventos».")
+        return
+    hoje = pd.Timestamp.today().normalize()
+    df = df.assign(data=pd.to_datetime(df["data"]))
+    prox = df[df["data"] >= hoje].sort_values("data")
+    pass_ = df[df["data"] < hoje].head(8 if not ticker else 20)
+    with st.expander(f"{titulo}  ·  {len(prox)} próximo(s)", expanded=False):
+        if not prox.empty:
+            st.markdown("**Próximos**")
+            render_html("".join(_linha_evento_html(r) for _, r in prox.head(10).iterrows()))
+        if not pass_.empty:
+            st.markdown("**Recentes**")
+            render_html("".join(_linha_evento_html(r) for _, r in pass_.iterrows()))
+        if ticker:
+            divs = df[(df["tipo"] == "Dividendo") & df["valor_por_accao"].notna() & (df["data"] >= hoje - pd.Timedelta(days=366))]
+            if not divs.empty:
+                try:
+                    ultimo = float(serie_tecnica(_tk_norm(ticker))["Fecho"].iloc[-1])
+                    tot = float(divs["valor_por_accao"].astype(float).sum())
+                    st.caption(f"💰 Dividendos dos últimos 12 meses: {fmt_milhares(tot, 2)} Kz por acção, ou {tot / ultimo * 100:.2f}% do último fecho ({fmt_milhares(ultimo, 2)} Kz).")
+                except Exception:
+                    pass
+        st.caption("Informação registada manualmente pelo administrador a partir de comunicados oficiais (BODIVA, CMC, emitente). Confirma sempre na fonte. Não é recomendação de investimento.")
+
+
+def painel_eventos_admin():
+    """Administrador › Dividendos & Eventos."""
+    exigir_admin()
+    _tabela_eventos()
+    st.caption("Regista dividendos e outros eventos a partir de comunicados oficiais. Cola a ligação da fonte para o investidor poder confirmar.")
+    tks = sorted(set(_lista_tickers_tecnica().keys()) | {_tk_norm(x) for x in obter_activos()["ticker"].astype(str) if x.strip()})
+    with st.form("form_evento_novo", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        tk = c1.selectbox("Título", tks) if tks else c1.text_input("Título (ticker)")
+        tipo = c2.selectbox("Tipo", TIPOS_EVENTO)
+        c3, c4 = st.columns(2)
+        data = c3.date_input("Data do evento", value=pd.Timestamp.today().date(), format="DD/MM/YYYY")
+        valor = c4.number_input("Valor por acção (Kz, só para dividendos)", min_value=0.0, step=1.0, format="%.2f")
+        fonte = st.text_input("Ligação da fonte (comunicado)", placeholder="https://...")
+        nota = st.text_area("Nota (opcional)", height=70, max_chars=300)
+        gravar = st.form_submit_button("➕ Registar", type="primary")
+    if gravar:
+        if not str(tk).strip():
+            st.error("Indica o título.")
+        elif tipo == "Dividendo" and valor <= 0:
+            st.error("Para um dividendo, indica o valor por acção.")
+        elif fonte.strip() and not fonte.strip().lower().startswith(("http://", "https://")):
+            st.error("A ligação deve começar por http:// ou https://")
+        else:
+            executar("INSERT INTO eventos_corporativos (ticker, tipo, data, valor_por_accao, fonte_url, nota, criado_por) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                     (_tk_norm(str(tk)), tipo, data, float(valor) if tipo == "Dividendo" else None, fonte.strip(), nota.strip(), utilizador_actual()))
+            st.success("Evento registado.")
+            st.rerun()
+    df = obter_eventos()
+    if df.empty:
+        st.info("Ainda não há eventos registados.")
+        return
+    v = df.copy()
+    v["data"] = pd.to_datetime(v["data"]).dt.strftime("%d/%m/%Y")
+    st.dataframe(v.rename(columns={"ticker": "Título", "tipo": "Tipo", "data": "Data", "valor_por_accao": "Valor/acção", "fonte_url": "Fonte", "nota": "Nota"}),
+                 hide_index=True, use_container_width=True)
+    ids = [int(i) for i in df["id"]]
+    sel = st.selectbox("Evento a apagar", ids, key="adm_ev_sel",
+                       format_func=lambda i: f"#{i} · {df.loc[df['id'] == i, 'ticker'].iloc[0]} · {df.loc[df['id'] == i, 'tipo'].iloc[0]} · {pd.to_datetime(df.loc[df['id'] == i, 'data'].iloc[0]):%d/%m/%Y}")
+    if st.button("🗑️ Apagar evento", key="adm_ev_del"):
+        executar("DELETE FROM eventos_corporativos WHERE id = %s", (int(sel),))
+        st.rerun()
 
 
 def ampliar_grafico(df: pd.DataFrame, titulo: str, chave: str, **kw):
@@ -10692,7 +10809,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 if st.session_state.get("autenticado") and not eh_investidor():
     st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
                       help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
-st.sidebar.caption("Versão da app: 2026-10-17 · S (Análise Técnica)")
+st.sidebar.caption("Versão da app: 2026-10-17 · T (Dividendos & Eventos)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
@@ -10775,6 +10892,10 @@ try:
         hero("📈 " + tx["nav_map"]["📈 Cotações & Activos"].replace("📈 ", ""), tx["cot_hero_sub"], "🇦🇴 Dados BODIVA")
         try:
             painel_destaques()
+        except Exception:
+            traceback.print_exc()
+        try:
+            painel_eventos()
         except Exception:
             traceback.print_exc()
 
@@ -11465,12 +11586,14 @@ try:
     elif pagina == "🔐 Painel do Administrador":
         hero("Painel do Administrador", "Gestão de conteúdo, cotações, movimentos, sócios, contas e avaliações")
 
-        aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca, aba_edu_serv, aba_despesas, aba_site, aba_teses = st.tabs(
-            ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança", "Educação & Serviços", "Despesas do grupo", "Site & Sobre Nós", "Teses & Fair Value"])
+        aba_resumo, aba_unidades, aba_activos, aba_carteira_real, aba_aval, aba_movimentos, aba_biblioteca, aba_socios, aba_contas, aba_seguranca, aba_edu_serv, aba_despesas, aba_site, aba_teses, aba_eventos = st.tabs(
+            ["Resumo Patrimonial", "Unidades (VUP)", "Cotações & Activos", "Carteira Real", "Avaliação", "Movimentos", "Biblioteca", "Sócios", "Contas", "Segurança", "Educação & Serviços", "Despesas do grupo", "Site & Sobre Nós", "Teses & Fair Value", "Dividendos & Eventos"])
         with aba_edu_serv:
             painel_educacao_servicos_admin()
         with aba_despesas:
             painel_despesas_admin()
+        with aba_eventos:
+            painel_eventos_admin()
         with aba_teses:
             st.subheader("Teses e fair value (Terminal de Decisão)")
             _ac = obter_activos()
