@@ -8378,6 +8378,115 @@ def tese_automatica(nome: str, preco: float, fv_ef, usa_ddm: bool, ii, infl: flo
     return " ".join(p)
 
 
+# =========================================================
+# TERMINAL DE DECISÃO — diário de decisões e votação do comité
+# =========================================================
+_DECISOES_PRONTA = False
+
+
+def _tabela_decisoes():
+    global _DECISOES_PRONTA
+    if _DECISOES_PRONTA:
+        return
+    executar("""CREATE TABLE IF NOT EXISTS decisoes_propostas (
+                    id SERIAL PRIMARY KEY, ticker TEXT NOT NULL, decisao TEXT NOT NULL, preco_ref NUMERIC, justificacao TEXT,
+                    autor TEXT, estado TEXT NOT NULL DEFAULT 'Em votação', parecer TEXT, fechado_por TEXT, fechado_em TIMESTAMP,
+                    criado_em TIMESTAMP NOT NULL DEFAULT NOW())""")
+    executar("""CREATE TABLE IF NOT EXISTS decisoes_votos (
+                    proposta_id INTEGER NOT NULL REFERENCES decisoes_propostas(id) ON DELETE CASCADE, votante TEXT NOT NULL,
+                    voto TEXT NOT NULL, atualizado_em TIMESTAMP NOT NULL DEFAULT NOW(), PRIMARY KEY (proposta_id, votante))""")
+    _DECISOES_PRONTA = True
+
+
+def _contagem_votos(pid: int) -> dict:
+    df = consultar_df("SELECT voto, COUNT(*) AS n FROM decisoes_votos WHERE proposta_id = %s GROUP BY voto", (int(pid),))
+    c = {"Sim": 0, "Não": 0, "Abstenção": 0}
+    for _, r in df.iterrows():
+        c[str(r["voto"])] = int(r["n"])
+    return c
+
+
+def diario_votacao(act: pd.DataFrame, por_tk: dict):
+    """Separador «📓 Diário & Votação»: propostas do Clube, voto de cada participante e registo das decisões fechadas."""
+    if not eh_participante():
+        st.info("Esta área é dos participantes do Clube. Fazem aqui propostas, votam e consultam o diário de decisões.")
+        return
+    _tabela_decisoes()
+    st.caption("O diário regista o que o Clube decidiu, porquê e a que preço. A votação é consultiva: serve para medir a opinião do comité; a decisão formal segue os estatutos.")
+    precos = {_chave_ticker(r["ticker"]): float(r["preco"]) for _, r in act.iterrows() if pd.notna(r["preco"])}
+    nomes = {_chave_ticker(r["ticker"]): str(r["nome"]) for _, r in act.iterrows()}
+    tks = sorted(nomes.keys())
+    with st.expander("➕ Nova proposta de decisão", expanded=False):
+        with st.form("form_proposta", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            tk = c1.selectbox("Título", tks, format_func=lambda k: f"{nomes[k]} ({k})")
+            dec_ = c2.selectbox("Proposta", DECISOES_CLUBE)
+            just = st.text_area("Justificação (porquê, e o que pode correr mal)", height=110, max_chars=1500)
+            env = st.form_submit_button("Submeter proposta", type="primary")
+        if env:
+            if len(just.strip()) < 15:
+                st.error("Explica a proposta em pelo menos uma frase.")
+            else:
+                executar("INSERT INTO decisoes_propostas (ticker, decisao, preco_ref, justificacao, autor) VALUES (%s,%s,%s,%s,%s)",
+                         (tk, dec_, precos.get(tk), just.strip(), utilizador_actual()))
+                st.success("Proposta submetida. Os participantes já podem votar.")
+                st.rerun()
+    abertas = consultar_df("SELECT id, ticker, decisao, preco_ref, justificacao, autor, criado_em FROM decisoes_propostas WHERE estado = 'Em votação' ORDER BY id DESC")
+    st.markdown("#### 🗳️ Em votação")
+    if abertas.empty:
+        st.caption("Sem propostas abertas.")
+    me = utilizador_actual()
+    for _, r in abertas.iterrows():
+        pid, k = int(r["id"]), _chave_ticker(r["ticker"])
+        c = _contagem_votos(pid)
+        meu = consultar_um("SELECT voto FROM decisoes_votos WHERE proposta_id = %s AND votante = %s", (pid, me))
+        tese = por_tk.get(k)
+        extra = ""
+        if tese is not None and pd.notna(tese.get("fair_value")) and float(tese["fair_value"]) > 0 and precos.get(k):
+            fv = float(tese["fair_value"])
+            extra = f" · fair value do Clube {fmt_milhares(fv, 0)} Kz ({(fv / precos[k] - 1) * 100:+.1f}% face ao preço)"
+        with st.container(border=True):
+            st.markdown(f"**{nomes.get(k, k)} ({k})** · proposta: **{r['decisao']}** · preço de referência {fmt_milhares(float(r['preco_ref']), 2) if pd.notna(r['preco_ref']) else 'n/d'} Kz{extra}")
+            st.write(str(r["justificacao"] or ""))
+            st.caption(f"Por {r['autor']} em {pd.to_datetime(r['criado_em']):%d/%m/%Y} · votos: ✅ {c['Sim']} · ❌ {c['Não']} · ⚪ {c['Abstenção']}"
+                       + (f" · o teu voto: {meu[0]}" if meu else " · ainda não votaste"))
+            b1, b2, b3 = st.columns(3)
+            for col, v, ic in ((b1, "Sim", "✅"), (b2, "Não", "❌"), (b3, "Abstenção", "⚪")):
+                if col.button(f"{ic} {v}", key=f"voto_{pid}_{v}", use_container_width=True):
+                    executar("INSERT INTO decisoes_votos (proposta_id, votante, voto) VALUES (%s,%s,%s) "
+                             "ON CONFLICT (proposta_id, votante) DO UPDATE SET voto = EXCLUDED.voto, atualizado_em = NOW()", (pid, me, v))
+                    st.rerun()
+            if eh_admin():
+                with st.form(f"form_fecho_{pid}"):
+                    parecer = st.text_area("Parecer do comité (fica no diário)", height=80, max_chars=1000, key=f"par_{pid}")
+                    f1, f2 = st.columns(2)
+                    ap = f1.form_submit_button("Fechar como Aprovada")
+                    rj = f2.form_submit_button("Fechar como Rejeitada")
+                if ap or rj:
+                    executar("UPDATE decisoes_propostas SET estado = %s, parecer = %s, fechado_por = %s, fechado_em = NOW() WHERE id = %s",
+                             ("Aprovada" if ap else "Rejeitada", parecer.strip(), me, pid))
+                    registar_auditoria("decisao_comite", "decisoes_propostas", pid, depois={"estado": "Aprovada" if ap else "Rejeitada", "votos": c})
+                    st.rerun()
+    st.markdown("#### 📓 Diário de decisões")
+    hist = consultar_df("SELECT id, ticker, decisao, preco_ref, estado, parecer, fechado_em FROM decisoes_propostas WHERE estado <> 'Em votação' ORDER BY fechado_em DESC NULLS LAST, id DESC LIMIT 100")
+    if hist.empty:
+        st.caption("Ainda não há decisões fechadas.")
+        return
+    linhas = []
+    for _, r in hist.iterrows():
+        k = _chave_ticker(r["ticker"])
+        c = _contagem_votos(int(r["id"]))
+        ref, hoje = (float(r["preco_ref"]) if pd.notna(r["preco_ref"]) else None), precos.get(k)
+        linhas.append({"Data": pd.to_datetime(r["fechado_em"]).strftime("%d/%m/%Y") if pd.notna(r["fechado_em"]) else "—", "Título": nomes.get(k, k),
+                       "Decisão": r["decisao"], "Resultado": r["estado"], "Votos (S/N/A)": f"{c['Sim']}/{c['Não']}/{c['Abstenção']}",
+                       "Preço então": ref, "Preço hoje": hoje, "Desde então": ((hoje / ref - 1) * 100) if ref and hoje else None, "Parecer": r["parecer"] or ""})
+    d = pd.DataFrame(linhas)
+    fm = lambda f_: (lambda x: "n/d" if x is None or pd.isna(x) else f_.format(x))
+    st.dataframe(d.style.format({"Preço então": fm("{:,.2f}"), "Preço hoje": fm("{:,.2f}"), "Desde então": fm("{:+.1f}%")}).map(cor_variacao, subset=["Desde então"]),
+                 hide_index=True, use_container_width=True)
+    st.caption("«Desde então» compara o preço de hoje com o preço de referência da proposta, sem dividendos nem custos. Serve para aprender com as decisões, não para as julgar a posteriori.")
+
+
 def pagina_terminal_decisao():
     tx = t()
     socio = eh_participante()
@@ -8458,7 +8567,7 @@ def pagina_terminal_decisao():
     n_vend = sum(1 for d in det if d["dec"].startswith("VENDER"))
     n_mant = sum(1 for d in det if d["dec"].startswith("MANTER"))
 
-    abas = st.tabs(["🎯 Painel de decisão", "📚 Fundamentos & Estratégia", "📊 Relatório analítico", "📖 Guia de indicadores"])
+    abas = st.tabs(["🎯 Painel de decisão", "📚 Fundamentos & Estratégia", "📊 Relatório analítico", "📖 Guia de indicadores", "📓 Diário & Votação"])
     with abas[0]:
         cartoes = []
         if socio:
@@ -8581,6 +8690,13 @@ def pagina_terminal_decisao():
         ], columns=["Indicador", "O que significa", "Como explicar de forma simples"])
         st.dataframe(guia, hide_index=True)
         st.caption("Apoio à decisão de investimento do Clube. Não constitui recomendação personalizada; o investimento em acções envolve risco de perda de capital.")
+
+    with abas[4]:
+        try:
+            diario_votacao(act, por_tk)
+        except Exception:
+            traceback.print_exc()
+            st.error("Não foi possível abrir o diário neste momento. Tenta de novo dentro de instantes.")
 
 
 
@@ -10946,7 +11062,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 if st.session_state.get("autenticado") and not eh_investidor():
     st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
                       help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
-st.sidebar.caption("Versão da app: 2026-10-17 · V (Cenários e pontuação)")
+st.sidebar.caption("Versão da app: 2026-10-17 · W (Diário e votação)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
