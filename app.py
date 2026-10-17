@@ -7676,6 +7676,64 @@ def _aba_inflacao(a: dict):
     st.dataframe(pd.DataFrame(linhas), hide_index=True)
 
 
+LIMITE_SECTOR_CLUBE = 0.20   # regra do Clube: máximo 20% do fundo global por sector
+
+
+def _risco_extra(a: dict):
+    """Complementos do separador Risco: limites do Clube, queda desde o máximo e correlações entre títulos."""
+    tits = a.get("titulos") or []
+    if not tits:
+        return
+    st.markdown("##### 🛡️ Limites de concentração do Clube")
+    try:
+        reservas = float(obter_resumo_patrimonial().get("reservas", 0) or 0)
+    except Exception:
+        reservas = 0.0
+    fundo = float(a.get("valor_total") or 0) + reservas
+    if fundo > 0:
+        linhas, por_sec = [], {}
+        for t_ in tits:
+            w = max(t_["valor"], 0) / fundo
+            sec = _pdf_sector({"ticker": t_["ticker"], "nome": t_["nome"]})
+            por_sec[sec] = por_sec.get(sec, 0.0) + w
+            linhas.append({"Título": _pdf_nome_curto(t_["nome"]), "Peso no fundo global": w * 100, "Limite": LIMITE_ACTIVO_CLUBE * 100,
+                           "Estado": "⚠️ Excedido" if w > LIMITE_ACTIVO_CLUBE else ("Perto do limite" if w > LIMITE_ACTIVO_CLUBE * 0.8 else "Dentro do limite")})
+        for sec, w in sorted(por_sec.items(), key=lambda kv: -kv[1]):
+            linhas.append({"Título": f"Sector · {sec}", "Peso no fundo global": w * 100, "Limite": LIMITE_SECTOR_CLUBE * 100,
+                           "Estado": "⚠️ Excedido" if w > LIMITE_SECTOR_CLUBE else ("Perto do limite" if w > LIMITE_SECTOR_CLUBE * 0.8 else "Dentro do limite")})
+        st.dataframe(pd.DataFrame(linhas).style.format({"Peso no fundo global": "{:.1f}%", "Limite": "{:.0f}%"}), hide_index=True, use_container_width=True)
+        exc = [x["Título"] for x in linhas if x["Estado"].startswith("⚠️")]
+        if exc:
+            st.warning("Limite excedido em: " + ", ".join(exc) + ". Cabe ao Clube decidir se reduz a posição ou reforça o resto do fundo.")
+        st.caption(f"Fundo global = carteira de acções ({kz(a['valor_total'])}) + reservas de liquidez ({kz(reservas)}). Sector atribuído pelo nome/ticker do título.")
+    sc = a.get("serie_carteira")
+    if sc is not None and len(sc) >= 3:
+        st.markdown("##### 📉 Queda desde o máximo (carteira)")
+        dd = (sc / sc.cummax() - 1) * 100
+        fx_linhas(pd.DataFrame({"Queda desde o máximo (%)": dd}), height=220)
+        ampliar_grafico(pd.DataFrame({"Queda desde o máximo (%)": dd}), "Queda desde o máximo (carteira)", "risco_dd")
+    cs = [t_ for t_ in tits if t_.get("tem_serie")]
+    if len(cs) >= 2:
+        try:
+            pn = obter_painel_precos({t_["tk"] for t_ in cs})
+            nomes = {t_["tk"]: _pdf_nome_curto(t_["nome"]) for t_ in cs}
+            R = pn[[c for c in pn.columns if c in nomes]].pct_change(fill_method=None).dropna(how="any")
+            if len(R) >= 10:
+                st.markdown("##### 🔗 Correlação entre títulos")
+                C = R.corr().rename(index=nomes, columns=nomes)
+                st.dataframe(C.style.format("{:.2f}").map(lambda v: "background-color:#FDE2E4;color:#9F1239;font-weight:700" if v > 0.7 and v < 0.9999 else ("background-color:#DCFCE7;color:#166534" if v < 0.3 else "")), use_container_width=True)
+                par = [(C.index[i], C.columns[j], C.iloc[i, j]) for i in range(len(C)) for j in range(i + 1, len(C))]
+                alto = [x for x in par if x[2] > 0.7]
+                st.caption(f"Calculada sobre {len(R)} dias com cotação em todos os títulos. Perto de +1 = movem-se juntos (menos diversificação); perto de 0 ou negativa = diversificam. "
+                           + (("Pares muito correlacionados (>0,70): " + "; ".join(f"{x[0]} e {x[1]} ({x[2]:.2f})" for x in alto) + ".") if alto else "Nenhum par acima de 0,70."))
+            else:
+                st.caption("🔗 A correlação entre títulos aparece quando houver pelo menos 10 dias de cotações comuns.")
+        except Exception:
+            traceback.print_exc()
+    st.markdown('<div class="fx-aviso-risco"><b>⚠️ Aviso.</b> Métricas calculadas sobre histórico curto e um mercado pouco líquido; indicam o passado, não preveem o futuro. '
+                'Apoio à decisão do Clube, não é aconselhamento nem recomendação de investimento.</div>', unsafe_allow_html=True)
+
+
 def _aba_risco(a: dict):
     rk = a["risco"]
     cart = rk["carteira"]
@@ -7702,6 +7760,10 @@ def _aba_risco(a: dict):
                "Contribuição para o risco = peso × covariância com a carteira ÷ variância total.")
     if cart.get("n", 0) < 30:
         st.info("Poucas observações: as métricas de risco são indicativas até haver mais histórico de cotações.")
+    try:
+        _risco_extra(a)
+    except Exception:
+        traceback.print_exc()
 
 
 def _aba_composicao(a: dict, resumo: dict):
@@ -10809,7 +10871,7 @@ pagina = st.sidebar.radio("Navegação", PAGINAS, key="nav_pagina", label_visibi
 if st.session_state.get("autenticado") and not eh_investidor():
     st.sidebar.button("🚀 Passar a Investidor", on_click=_ir_para, args=("🧭 Perfil de Investidor",), key="menu_passar_inv", use_container_width=True,
                       help="Faz o diagnóstico de perfil; se o resultado for Investidor, abre-se o bloco INVESTIR.")
-st.sidebar.caption("Versão da app: 2026-10-17 · T (Dividendos & Eventos)")
+st.sidebar.caption("Versão da app: 2026-10-17 · U (Risco da carteira)")
 st.sidebar.divider()
 with st.sidebar.expander("🔑 Alterar palavra-passe"):
     with st.form("form_alterar_pw", clear_on_submit=True):
